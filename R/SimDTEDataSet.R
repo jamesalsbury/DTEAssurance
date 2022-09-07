@@ -13,6 +13,8 @@
 #' @return A data frame consisting of the DTE data.
 #' @export
 #'
+#' @import stats
+#'
 #' @examples SimDTEDataSet(n1 = 100, n2 = 100, gamma1 = 0.8, gamma2 = 1.2,
 #' lambda1 = 0.04, lambda2 = 0.08, bigT = 6, recTime = 6, censTime = 60)
 SimDTEDataSet <- function(n1, n2, gamma1, gamma2, lambda1, lambda2, bigT, recTime, censTime){
