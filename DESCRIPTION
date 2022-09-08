@@ -14,15 +14,14 @@ Suggests:
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
 Imports: 
-    stats,
-    SHELF,
-    dplyr,
-    ggfortify,
-    ggplot2,
-    nleqslv,
-    pbapply,
-    readxl,
-    shiny,
-    shinydashboard,
-    shinyjs,
-    survival
+  SHELF,
+  ggplot2,
+  nleqslv,
+  pbapply,
+  readxl,
+  shiny,
+  shinydashboard,
+  shinyjs,
+  stats,
+  survMisc,
+  survival

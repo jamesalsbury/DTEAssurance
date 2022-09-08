@@ -1,67 +1,66 @@
 #' App to calculate assurance for when DTE are likely to be present
 #'
 #' @export
+#'
 #' @import SHELF
-#' @import shiny
-#' @import survival
-#' @import shinydashboard
-#' @import readxl
-#' @import ggplot2
-#' @import ggfortify
-#' @import dplyr
-#' @import shinyjs
+#' @importFrom survMisc autoplot
+#' @rawNamespace import(ggplot2, except = autoplot)
 #' @import nleqslv
 #' @import pbapply
+#' @import readxl
+#' @import shiny
+#' @import shinydashboard
+#' @import survival
 #'
 
 DTEAssuranceApp <- function(){
-  ui <- fluidPage(
+  ui <- shiny::fluidPage(
 
-    # Application title
-    titlePanel("Delayed Treatment Effects - Weibull parameterisation"),
+    # Applicatison title
+    shiny::titlePanel("Delayed Treatment Effects - Weibull parameterisation"),
 
     # sidebarLayout(
-    mainPanel(tags$style(type="text/css",
+    shiny::mainPanel(shiny::tags$style(type="text/css",
                          ".shiny-output-error { visibility: hidden; }",
                          ".shiny-output-error:before { visibility: hidden; }"
     ),
 
-    tabsetPanel(
+    shiny::tabsetPanel(
       # Control UI ---------------------------------
 
-      tabPanel("Control",
-               sidebarLayout(
-                 sidebarPanel = sidebarPanel(
-                   fileInput("uploadSample", "Upload your control sample"),
-                   numericInput("lambda2", "lambda2", value=0.05),
-                   numericInput("gamma2", "gamma2", value=1)
+      shiny::tabPanel("Control",
+               shiny::sidebarLayout(
+                 sidebarPanel = shiny::sidebarPanel(
+                   shiny::fileInput("uploadSample", "Upload your control sample"),
+                   shiny::numericInput("lambda2", "lambda2", value=0.05),
+                   shiny::numericInput("gamma2", "gamma2", value=1)
                  ),
-                 mainPanel = mainPanel(
-                   plotOutput("plotControl"),
-                   htmlOutput("recommendedParams")
+                 mainPanel = shiny::mainPanel(
+                   shiny::plotOutput("plotControl"),
+                   shiny::htmlOutput("recommendedParams")
                  )
                ),
       ),
 
       # T UI ---------------------------------
-      tabPanel("Eliciting T",
-               fluidRow(
-                 column(4,
-                        textInput("limits1", label = h5("T limits"),
+      shiny::tabPanel("Eliciting T",
+               shiny::fluidRow(
+                 shiny::column(4,
+                        shiny::textInput("limits1", label = shiny::h5("T limits"),
                                   value = "0, 6")
                  ),
-                 column(4,
-                        textInput("values1", label = h5("T values"),
+                 shiny::column(4,
+                        shiny::textInput("values1", label = shiny::h5("T values"),
                                   value = "2, 3, 4")
                  ),
-                 column(4,
-                        textInput("probs1", label = h5("Cumulative probabilities"),
+                 shiny::column(4,
+                        shiny::textInput("probs1", label = shiny::h5("Cumulative probabilities"),
                                   value = "0.25, 0.5, 0.75")
                  )
                ),
-               fluidRow(
-                 column(4,
-                        selectInput("dist1", label = h5("Distribution"),
+               shiny::fluidRow(
+                 shiny::column(4,
+                               shiny::selectInput("dist1", label = shiny::h5("Distribution"),
                                     choices =  list(Histogram = "hist",
                                                     Normal = "normal",
                                                     'Student-t' = "t",
@@ -76,35 +75,35 @@ DTEAssuranceApp <- function(){
                                     #choiceValues = 1:8,
                                     selected = 1
                         )),
-                 column(4,conditionalPanel(
+                 shiny::column(4,shiny::conditionalPanel(
                    condition = "input.dist1 == 't' || input.dist1 == 'logt' || input.dist1 == 'mirrorlogt'",
-                   numericInput("tdf1", label = h5("Student-t degrees of freedom"),
+                   shiny::numericInput("tdf1", label = shiny::h5("Student-t degrees of freedom"),
                                 value = 3)
                  )
                  )
 
                ),
-               plotOutput("distPlot1")
+               shiny::plotOutput("distPlot1")
       ),
       # HR UI ---------------------------------
-      tabPanel("Eliciting HR",
-               fluidRow(
-                 column(4,
-                        textInput("limits2", label = h5("HR limits"),
+      shiny::tabPanel("Eliciting HR",
+              shiny::fluidRow(
+                shiny::column(4,
+                    shiny::textInput("limits2", label = shiny::h5("HR limits"),
                                   value = "0, 1")
                  ),
-                 column(4,
-                        textInput("values2", label = h5("HR values"),
+                shiny::column(4,
+                    shiny::textInput("values2", label = shiny::h5("HR values"),
                                   value = "0.5, 0.6, 0.7")
                  ),
-                 column(4,
-                        textInput("probs2", label = h5("Cumulative probabilities"),
+                shiny::column(4,
+                     shiny::textInput("probs2", label = shiny::h5("Cumulative probabilities"),
                                   value = "0.25, 0.5, 0.75")
                  )
                ),
-               fluidRow(
-                 column(4,
-                        selectInput("dist2", label = h5("Distribution"),
+              shiny::fluidRow(
+                shiny::column(4,
+                  shiny::selectInput("dist2", label = shiny::h5("Distribution"),
                                     choices =  list(Histogram = "hist",
                                                     Normal = "normal",
                                                     'Student-t' = "t",
@@ -119,10 +118,10 @@ DTEAssuranceApp <- function(){
                                     #choiceValues = 1:8,
                                     selected = 1
                         )),
-                 column(4,
-                        conditionalPanel(
+                shiny::column(4,
+                      shiny::conditionalPanel(
                           condition = "input.dist2 == 't' || input.dist2 == 'logt' || input.dist1 == 'mirrorlogt'",
-                          numericInput("tdf2", label = h5("degrees of freedom"),
+                          shiny::numericInput("tdf2", label = shiny::h5("degrees of freedom"),
                                        value = 3)
 
 
@@ -130,43 +129,43 @@ DTEAssuranceApp <- function(){
 
                ),
 
-               plotOutput("distPlot2"),
-               htmlOutput("HRProportion")
+              shiny::plotOutput("distPlot2"),
+              shiny::htmlOutput("HRProportion")
       ),
 
       # Feedback UI ---------------------------------
-      tabPanel("Feedback",
-               sidebarLayout(
-                 sidebarPanel = sidebarPanel(
-                   checkboxGroupInput("showfeedback", "Add to plot", choices = c("Median survival line", "95% CI for T", "CI for Treatment Curve (0.1 and 0.9)")),
+      shiny::tabPanel("Feedback",
+           shiny::sidebarLayout(
+                 sidebarPanel = shiny::sidebarPanel(
+                   shiny::checkboxGroupInput("showfeedback", "Add to plot", choices = c("Median survival line", "95% CI for T", "CI for Treatment Curve (0.1 and 0.9)")),
                  ),
-                 mainPanel = mainPanel(
-                   plotOutput("plotFeedback"),
-                   htmlOutput("errorFeedback")
+                 mainPanel = shiny::mainPanel(
+                   shiny::plotOutput("plotFeedback"),
+                   shiny::htmlOutput("errorFeedback")
                  )
                ),
       ),
 
       # Assurance UI ---------------------------------
-      tabPanel("Assurance",
-               sidebarLayout(
-                 sidebarPanel = sidebarPanel(
-                   useShinyjs(),
-                   numericInput("numofpatients", "How many patients could you enrol into the trial?", value=1000),
-                   numericInput("rectime", "How long would it take to enrol all of these patients?", value=6),
+      shiny::tabPanel("Assurance",
+         shiny::sidebarLayout(
+                 sidebarPanel = shiny::sidebarPanel(
+                   shinyjs::useShinyjs(),
+                   shiny::numericInput("numofpatients", "How many patients could you enrol into the trial?", value=1000),
+                   shiny::numericInput("rectime", "How long would it take to enrol all of these patients?", value=6),
 
-                   box(width = 10, title = "Ratio of patients in each group?",
-                       splitLayout(
-                         numericInput("n1", "Control", value=1, min=1),
-                         numericInput("n2", "Treatment", value=1, min=1)
+                   shinydashboard::box(width = 10, title = "Ratio of patients in each group?",
+                       shiny::splitLayout(
+                         shiny::numericInput("n1", "Control", value=1, min=1),
+                         shiny::numericInput("n2", "Treatment", value=1, min=1)
                        )
                    ),
-                   numericInput("chosenLength", "How long do you want to run the trial for? (Including recruitment time)", value=60),
-                   actionButton("drawAssurance", "Produce plot")
+                   shiny::numericInput("chosenLength", "How long do you want to run the trial for? (Including recruitment time)", value=60),
+                   shiny::actionButton("drawAssurance", "Produce plot")
                  ),
-                 mainPanel = mainPanel(
-                   plotOutput("assurancePlot"),
-                   htmlOutput("assuranceText")
+                 mainPanel = shiny::mainPanel(
+                   shiny::plotOutput("assurancePlot"),
+                   shiny::htmlOutput("assuranceText")
                  )
                ),
 
@@ -175,29 +174,29 @@ DTEAssuranceApp <- function(){
       #Help UI ---------------------------------
       #Need to say what files can be uploaded in the control sample
       #Link to SHELF for the elicitation
-      tabPanel("Help",
-               HTML("<p>This app implements the method as outlined in this <a href='https://jamesalsbury.github.io/'>paper.</a></p>"),
-               HTML("<p>The eliciation technique is based on SHELF, more guidance can be found <a href='https://shelf.sites.sheffield.ac.uk/'>here.</a></p>")
+      shiny::tabPanel("Help",
+               shiny::HTML("<p>This app implements the method as outlined in this <a href='https://jamesalsbury.github.io/'>paper.</a></p>"),
+               shiny::HTML("<p>The eliciation technique is based on SHELF, more guidance can be found <a href='https://shelf.sites.sheffield.ac.uk/'>here.</a></p>")
       ),
 
 
-    ), style='width: 1200px; height: 1200px',
-    wellPanel(
-      fluidRow(
-        column(3, selectInput("outFormat", label = "Report format",
+    ), style='width: 800px; height: 800px',
+    shiny::wellPanel(
+      shiny::fluidRow(
+        shiny::column(3, shiny::selectInput("outFormat", label = "Report format",
                               choices = list('html' = "html_document",
                                              'pdf' = "pdf_document",
                                              'Word' = "word_document"))
         ),
-        column(3, offset = 1,
-               numericInput("fs", label = "Font size", value = 12)
+        shiny::column(3, offset = 1,
+                      shiny::numericInput("fs", label = "Font size", value = 12)
         )),
-      fluidRow(
-        column(3, downloadButton("report", "Download report")
+      shiny::fluidRow(
+        shiny::column(3, shiny::downloadButton("report", "Download report")
         ),
-        column(3, downloadButton("downloadData", "Download sample")
+        shiny::column(3, shiny::downloadButton("downloadData", "Download sample")
         ),
-        column(3, actionButton("exit", "Quit")
+        shiny::column(3, shiny::actionButton("exit", "Quit")
         )
       )
 
@@ -211,23 +210,23 @@ DTEAssuranceApp <- function(){
 
     # Functions for the control tab ---------------------------------
 
-    inputData <- reactive({
+    inputData <- shiny::reactive({
       #Allows the user to upload a control sample
       chosenFile <- input$uploadSample
       if (is.null(chosenFile)){
         return(NULL)
       } else {
         #lambda2 and gamma2 are estimated from the uploaded control sample
-        controlSample <- read_excel(chosenFile$datapath, sheet=1)
-        weibfit <- survreg(Surv(time, cens)~1, data = controlSample, dist = "weibull")
-        updateTextInput(session, "lambda2", value = round(as.numeric(1/(exp(weibfit$icoef[1]))), 3))
-        updateTextInput(session, "gamma2", value = round(as.numeric(exp(-weibfit$icoef[2])), 3))
+        controlSample <- readxl::read_excel(chosenFile$datapath, sheet=1)
+        weibfit <- survival::survreg(survival::Surv(time, cens)~1, data = controlSample, dist = "weibull")
+        shiny::updateTextInput(session, "lambda2", value = round(as.numeric(1/(exp(weibfit$icoef[1]))), 3))
+        shiny::updateTextInput(session, "gamma2", value = round(as.numeric(exp(-weibfit$icoef[2])), 3))
         return(list(gamma2 = as.numeric(exp(-weibfit$icoef[2])), lambda2 = as.numeric(1/(exp(weibfit$icoef[1]))), controltime = controlSample$time, controlcens = controlSample$cens))
       }
 
     })
 
-    output$recommendedParams <- renderUI({
+    output$recommendedParams <- shiny::renderUI({
       if (is.null(inputData())){
 
       } else {
@@ -235,21 +234,21 @@ DTEAssuranceApp <- function(){
         str1 <- paste0("For your uploaded sample, the best fitting parameters are:")
         str2 <- paste0("Lambda2 = ", round(inputData()$lambda2, 3))
         str3 <- paste0("Gamma2 = ", round(inputData()$gamma2, 3))
-        HTML(paste(str1, str2, str3, sep = '<br/>'))
+        shiny::HTML(paste(str1, str2, str3, sep = '<br/>'))
       }
 
     })
 
-    output$plotControl <- renderPlot({
+    output$plotControl <- shiny::renderPlot({
 
       #Shows the user what their control parameters look like
       controltime <- seq(0, exp((1.527/input$gamma2)-log(input$lambda2))*1.1, by=0.01)
       controlsurv <- exp(-(input$lambda2*controltime)^input$gamma2)
       controldf <- data.frame(controltime = controltime,
                               controlsurv = controlsurv)
-      theme_set(theme_grey(base_size = input$fs))
-      p1 <- ggplot(data=controldf, aes(x=controltime, y=controlsurv)) +
-        geom_line(colour="blue") + xlab("Time") + ylab("Survival") + ylim(0,1)
+      ggplot2::theme_set(ggplot2::theme_grey(base_size = input$fs))
+      p1 <- ggplot2::ggplot(data=controldf, ggplot2::aes_string(x=controltime, y=controlsurv)) +
+        ggplot2::geom_line(colour="blue") + ggplot2::xlab("Time") + ggplot2::ylab("Survival") + ggplot2::ylim(0,1)
 
       print(p1)
 
@@ -259,8 +258,8 @@ DTEAssuranceApp <- function(){
         #Shows well the Weibull parameters fit the uploaded data set
         controlSample <- data.frame(time = inputData()$controltime, cens = inputData()$controlcens)
         km <- survival::survfit(Surv(time, cens)~1, data = controlSample)
-        autoplot(km, conf.int = F, surv.colour = "red", xlab = "Time", ylab="Survival")  +
-          geom_line(data = controldf, aes(x = controltime, y = controlsurv), colour = "blue")
+        survMisc::autoplot(km, conf.int = F, surv.colour = "red", xlab = "Time", ylab="Survival")  +
+          ggplot2::geom_line(data = controldf, ggplot2::aes_string(x = controltime, y = controlsurv), colour = "blue")
 
       }
 
@@ -269,46 +268,46 @@ DTEAssuranceApp <- function(){
     # Functions for the eliciting distributions tabs ---------------------------------
 
 
-    limits1 <- reactive({
+    limits1 <- shiny::reactive({
       eval(parse(text = paste("c(", input$limits1, ")")))
     })
 
-    limits2 <- reactive({
+    limits2 <- shiny::reactive({
       eval(parse(text = paste("c(", input$limits2, ")")))
     })
 
-    p1 <- reactive({
+    p1 <- shiny::reactive({
       eval(parse(text = paste("c(", input$probs1, ")")))
     })
 
-    p2 <- reactive({
+    p2 <- shiny::reactive({
       eval(parse(text = paste("c(", input$probs2, ")")))
     })
 
-    v1 <- reactive({
+    v1 <- shiny::reactive({
       eval(parse(text = paste("c(", input$values1, ")")))
     })
 
-    v2 <- reactive({
+    v2 <- shiny::reactive({
       eval(parse(text = paste("c(", input$values2, ")")))
     })
 
-    m1 <- reactive({
+    m1 <- shiny::reactive({
       approx(p1(), v1(), 0.5)$y
     })
 
-    m2 <- reactive({
+    m2 <- shiny::reactive({
       approx(p2(), v2(), 0.5)$y
     })
 
-    myfit1 <- reactive({
-      fitdist(vals = v1(), probs = p1(), lower = limits1()[1],
+    myfit1 <- shiny::reactive({
+      SHELF::fitdist(vals = v1(), probs = p1(), lower = limits1()[1],
               upper = limits1()[2],
               tdf = input$tdf1)
     })
 
-    myfit2 <- reactive({
-      fitdist(vals = v2(), probs = p2(), lower = limits2()[1],
+    myfit2 <- shiny::reactive({
+      SHELF::fitdist(vals = v2(), probs = p2(), lower = limits2()[1],
               upper = limits2()[2],
               tdf = input$tdf2)
     })
@@ -316,12 +315,12 @@ DTEAssuranceApp <- function(){
 
     # Functions for the T tab ---------------------------------
 
-    output$distPlot1 <- renderPlot({
+    output$distPlot1 <- shiny::renderPlot({
 
 
       #d = dist[as.numeric(input$radio1)]
       # dist<-c("hist","normal", "t", "gamma", "lognormal", "logt","beta", "best")
-      suppressWarnings(plotfit(myfit1(), d = input$dist1,
+      suppressWarnings(SHELF::plotfit(myfit1(), d = input$dist1,
                                ql = 0.05, qu = 0.95,
                                xl = limits1()[1], xu = limits1()[2],
                                fs = input$fs))
@@ -331,11 +330,11 @@ DTEAssuranceApp <- function(){
     # Functions for the HR tab ---------------------------------
 
 
-    output$distPlot2 <- renderPlot({
+    output$distPlot2 <- shiny::renderPlot({
 
 
       #  dist<-c("hist","normal", "t", "gamma", "lognormal", "logt","beta", "best")
-      suppressWarnings(plotfit(myfit2(), d = input$dist2,
+      suppressWarnings(SHELF::plotfit(myfit2(), d = input$dist2,
                                ql = 0.05, qu = 0.95,
                                xl = limits2()[1], xu = limits2()[2],
                                fs = input$fs))
@@ -346,13 +345,13 @@ DTEAssuranceApp <- function(){
     # Functions for the Feedback tab ---------------------------------
 
     #This function allows the 10 and 90% CI lines to be drawn
-    drawsimlines <- reactive({
+    drawsimlines <- shiny::reactive({
 
       gamma1 <- input$gamma2
       conc.probs <- matrix(0, 2, 2)
       conc.probs[1, 2] <- 0.5
       #Simulates 500 samples from the elicited T and HR distributions
-      mySample <- data.frame(copulaSample(myfit1(), myfit2(), cp = conc.probs, n = 500, d = c(input$dist1, input$dist2)))
+      mySample <- data.frame(SHELF::copulaSample(myfit1(), myfit2(), cp = conc.probs, n = 500, d = c(input$dist1, input$dist2)))
 
       time <- seq(0, exp((1.527/input$gamma2)-log(input$lambda2))*1.1, by=0.01)
       #We fill a matrix with the treatment survival probabilities at each time
@@ -392,39 +391,39 @@ DTEAssuranceApp <- function(){
 
     })
 
-    output$plotFeedback <- renderPlot({
+    output$plotFeedback <- shiny::renderPlot({
 
       #This plots the feedback plot
       gamma1 <- input$gamma2
       controltime <- seq(0, exp((1.527/input$gamma2)-log(input$lambda2))*1.1, by=0.01)
       controlcurve <- exp(-(input$lambda2*controltime)^input$gamma2)
       controldf <- data.frame(controltime = controltime, controlcurve = controlcurve)
-      theme_set(theme_grey(base_size = input$fs))
-      p1 <- ggplot(data=controldf, aes(x=controltime, y=controlcurve)) +
-        geom_line(colour="blue") + xlab("Time") + ylab("Survival") + ylim(0,1)
+      ggplot2::theme_set(ggplot2::theme_grey(base_size = input$fs))
+      p1 <- ggplot2::ggplot(data=controldf, ggplot2::aes_string(x=controltime, y=controlcurve)) +
+        ggplot2::geom_line(colour="blue") + ggplot2::xlab("Time") + ggplot2::ylab("Survival") + ggplot2::ylim(0,1)
 
 
-      zeroval <- feedback(myfit1(), quantiles = 0.01)$fitted.quantiles[input$dist1][, 1]
+      zeroval <- SHELF::feedback(myfit1(), quantiles = 0.01)$fitted.quantiles[input$dist1][, 1]
 
       if (zeroval<0){
 
       } else {
 
         #We use the medians of the elicited distributions to show the treatment curve
-        bigTMedian <- feedback(myfit1(), quantiles = 0.5)$fitted.quantiles[input$dist1][, 1]
-        HRMedian <- feedback(myfit2(), quantiles = 0.5)$fitted.quantiles[input$dist2][, 1]
+        bigTMedian <- SHELF::feedback(myfit1(), quantiles = 0.5)$fitted.quantiles[input$dist1][, 1]
+        HRMedian <- SHELF::feedback(myfit2(), quantiles = 0.5)$fitted.quantiles[input$dist2][, 1]
         lambda1 <- input$lambda2*HRMedian^(1/input$gamma2)
 
         treatmenttime1 <- seq(0, bigTMedian, by=0.01)
         treatmentsurv1 <- exp(-(input$lambda2*treatmenttime1)^input$gamma2)
         treatmenttime1df <- data.frame(treatmenttime1 = treatmenttime1, treatmentsurv1 = treatmentsurv1)
-        p1 <-  p1 + geom_line(data = treatmenttime1df, aes(x = treatmenttime1, y = treatmentsurv1), colour = "green")
+        p1 <-  p1 + ggplot2::geom_line(data = treatmenttime1df, ggplot2::aes_string(x = treatmenttime1, y = treatmentsurv1), colour = "green")
 
 
         treatmenttime2 <- seq(bigTMedian, exp((1.527/input$gamma2)-log(input$lambda2))*1.1, by=0.01)
         treatmentsurv2 <- exp(-(input$lambda2*bigTMedian)^input$gamma2 - lambda1^gamma1*(treatmenttime2^gamma1-bigTMedian^gamma1))
         treatmenttime2df <- data.frame(treatmenttime2 = treatmenttime2, treatmentsurv2 = treatmentsurv2)
-        p1 <-  p1 + geom_line(data = treatmenttime2df, aes(x = treatmenttime2, y = treatmentsurv2), colour = "red")
+        p1 <-  p1 + ggplot2::geom_line(data = treatmenttime2df, ggplot2::aes_string(x = treatmenttime2, y = treatmentsurv2), colour = "red")
 
         print(p1)
 
@@ -439,24 +438,24 @@ DTEAssuranceApp <- function(){
               if (exp(-(input$lambda2*bigTMedian)^input$gamma2)<0.5){
                 mediandf <- data.frame(x = seq(0, controltime[sum(controlcurve>0.5)], length=2), y = rep(0.5, 2))
                 mediandf1 <- data.frame(x = rep(controltime[sum(controlcurve>0.5)], 2), y = seq(0, 0.5, length=2))
-                p1 <- p1 + geom_line(data = mediandf, aes(x = x, y=y), linetype = "dashed") + geom_line(data = mediandf1, aes(x = x, y=y), linetype="dashed")
+                p1 <- p1 + ggplot2::geom_line(data = mediandf, ggplot2::aes_string(x = "time", y="surv"), linetype = "dashed") + ggplot2::geom_line(data = mediandf1, ggplot2::aes_string(x = "x", y="y"), linetype="dashed")
               } else {
                 mediandf <- data.frame(x = seq(0, treatmenttime2[sum(treatmentsurv2>0.5)], length=2), y = rep(0.5, 2))
                 mediandf1 <- data.frame(x = rep(treatmenttime2[sum(treatmentsurv2>0.5)], 2), y = seq(0, 0.5, length=2))
                 mediandf2 <- data.frame(x = rep(controltime[sum(controlcurve>0.5)], 2), y = seq(0, 0.5, length=2))
-                p1 <- p1 + geom_line(data = mediandf, aes(x = x, y=y), linetype = "dashed") + geom_line(data = mediandf1, aes(x = x, y=y), linetype="dashed") +
-                  geom_line(data = mediandf2, aes(x = x, y=y), linetype="dashed")
+                p1 <- p1 + ggplot2::geom_line(data = mediandf, ggplot2::aes_string(x = "x", y="y"), linetype = "dashed") + ggplot2::geom_line(data = mediandf1, ggplot2::aes_string(x = "x", y="y"), linetype="dashed") +
+                  ggplot2::geom_line(data = mediandf2, ggplot2::aes_string(x = "x", y="y"), linetype="dashed")
               }
               #This uses the elicited distribution for T and adds 95% points onto the control curve
             } else if (addfeedback[i]=="95% CI for T"){
-              p1 <- p1 + geom_point(aes(x = feedback(myfit1(), quantiles = 0.025)$fitted.quantiles[input$dist1][, 1], y = controlcurve[sum(controltime<feedback(myfit1(), quantiles = 0.025)$fitted.quantiles[input$dist1][, 1])]), colour="orange", size = 4) +
-                geom_point(aes(x = feedback(myfit1(), quantiles = 0.975)$fitted.quantiles[input$dist1][, 1], y = controlcurve[sum(controltime<feedback(myfit1(), quantiles = 0.975)$fitted.quantiles[input$dist1][, 1])]), colour="orange", size = 4)
+              p1 <- p1 + ggplot2::geom_point(ggplot2::aes_string(x = SHELF::feedback(myfit1(), quantiles = 0.025)$fitted.quantiles[input$dist1][, 1], y = controlcurve[sum(controltime<SHELF::feedback(myfit1(), quantiles = 0.025)$fitted.quantiles[input$dist1][, 1])]), colour="orange", size = 4) +
+                ggplot2::geom_point(ggplot2::aes_string(x = SHELF::feedback(myfit1(), quantiles = 0.975)$fitted.quantiles[input$dist1][, 1], y = controlcurve[sum(controltime<SHELF::feedback(myfit1(), quantiles = 0.975)$fitted.quantiles[input$dist1][, 1])]), colour="orange", size = 4)
             } else if (addfeedback[i]=="CI for Treatment Curve (0.1 and 0.9)"){
               #This adds the simulated confidence interval lines
               simlineslower <- data.frame(x = drawsimlines()$time, y = drawsimlines()$lowerbound)
               simlinesupper <- data.frame(x = drawsimlines()$time, y = drawsimlines()$upperbound)
-              p1 <- p1 + geom_line(data = simlineslower, aes(x=x, y=y), linetype="dashed")+
-                geom_line(data = simlinesupper, aes(x=x, y=y), linetype="dashed")
+              p1 <- p1 + ggplot2::geom_line(data = simlineslower, ggplot2::aes_string(x="x", y="y"), linetype="dashed")+
+                ggplot2::geom_line(data = simlinesupper, ggplot2::aes_string(x="x", y="y"), linetype="dashed")
             }
           }
         }
@@ -464,9 +463,9 @@ DTEAssuranceApp <- function(){
       }
     })
 
-    output$errorFeedback <- renderUI({
+    output$errorFeedback <- shiny::renderUI({
 
-      zeroval <- feedback(myfit1(), quantiles = 0.01)$fitted.quantiles[input$dist1][, 1]
+      zeroval <- SHELF::feedback(myfit1(), quantiles = 0.01)$fitted.quantiles[input$dist1][, 1]
 
       #Adds an error message if the elicited distribution for T includes nonsensical values
       if (zeroval<0){
@@ -478,7 +477,7 @@ DTEAssuranceApp <- function(){
     # Functions for the Assurance tab ---------------------------------
 
     #This function calculates the normal assurance given the elicited distributions and other simple questions about the trial
-    calculateNormalAssurance <- eventReactive(input$drawAssurance, {
+    calculateNormalAssurance <- shiny::eventReactive(input$drawAssurance, {
 
       #Makes the simplification
       gamma1 <- input$gamma2
@@ -489,10 +488,10 @@ DTEAssuranceApp <- function(){
 
         #Simulate 400 observations for T and HR given the elicited distributions
         #For each n1, n2, simulate 400 trials
-        assnum <- 400
+        assnum <- 100
         assvec <- rep(NA, assnum)
         eventsvec <- rep(NA, assnum)
-        mySample <- data.frame(copulaSample(myfit1(), myfit2(), cp = conc.probs, n = assnum, d = c(input$dist1, input$dist2)))
+        mySample <- data.frame(SHELF::copulaSample(myfit1(), myfit2(), cp = conc.probs, n = assnum, d = c(input$dist1, input$dist2)))
 
 
         for (i in 1:assnum){
@@ -505,7 +504,7 @@ DTEAssuranceApp <- function(){
           dataCombined <- SimDTEDataSet(n1, n2, gamma1, input$gamma2, lambda1, input$lambda2, bigT, input$rectime, input$chosenLength)
 
           #Performs a log rank test on the data
-          test <- survdiff(Surv(time, event)~group, data = dataCombined)
+          test <- survival::survdiff(survival::Surv(time, event)~group, data = dataCombined)
           #If the p-value of the test is less than 0.05 then assvec = 1, 0 otherwise
           assvec[i] <- test$chisq > qchisq(0.95, 1)
 
@@ -523,9 +522,9 @@ DTEAssuranceApp <- function(){
       n2vec <- ceiling(input$n2*(samplesizevec/(input$n1+input$n2)))
       calcassvec <- rep(NA, length = length(samplesizevec))
 
-      pboptions(type="shiny", title = "Calculating assurance (1/2)")
+      pbapply::pboptions(type="shiny", title = "Calculating assurance (1/2)")
 
-      calcassvec <- pbmapply(assFunc, n1vec, n2vec)
+      calcassvec <- pbapply::pbmapply(assFunc, n1vec, n2vec)
 
       calcassvec <- unlist(calcassvec[1,])
 
@@ -543,7 +542,7 @@ DTEAssuranceApp <- function(){
 
 
     #This function calculates the normal assurance given the elicited distributions and other simple questions about the trial
-    calculateFlexibleAssurance <- eventReactive(input$drawAssurance, {
+    calculateFlexibleAssurance <- shiny::eventReactive(input$drawAssurance, {
 
       timechosen1 <- floor(0.4*input$chosenLength)
       timechosen2 <- floor(0.75*input$chosenLength)
@@ -554,7 +553,7 @@ DTEAssuranceApp <- function(){
 
       assFunc <- function(n1, n2){
         #For each n1, n2, simulate 300 trials
-        assnum <- 300
+        assnum <- 100
         assvec <- rep(NA, assnum)
         eventsvec <- rep(NA, assnum)
 
@@ -565,7 +564,7 @@ DTEAssuranceApp <- function(){
 
           if (sampledpoint1>sampledpoint2){
             #This needs looking at
-            mySample <- data.frame(copulaSample(myfit1(), myfit2(), cp = conc.probs, n = 100, d = c(input$dist1, input$dist2)))
+            mySample <- data.frame(SHELF::copulaSample(myfit1(), myfit2(), cp = conc.probs, n = 100, d = c(input$dist1, input$dist2)))
             bigT <- mySample[1,1]
 
             dslnex <- function(x) {
@@ -578,7 +577,7 @@ DTEAssuranceApp <- function(){
 
             xstart <- c(0.05,1)
 
-            output <- nleqslv(xstart, dslnex)
+            output <- nleqslv::nleqslv(xstart, dslnex)
 
             lambda1 <- output$x[1]
             gamma1 <- output$x[2]
@@ -591,7 +590,7 @@ DTEAssuranceApp <- function(){
             dataCombined <- SimDTEDataSet(n1, n2, gamma1, input$gamma2, lambda1, input$lambda2, bigT, input$rectime, input$chosenLength)
 
             #Performs a log rank test on the data
-            test <- survdiff(Surv(time, event)~group, data = dataCombined)
+            test <- survival::survdiff(survival::Surv(time, event)~group, data = dataCombined)
             #If the p-value of the test is less than 0.05 then assvec = 1, 0 otherwise
             assvec[i] <- test$chisq > qchisq(0.95, 1)
 
@@ -611,9 +610,9 @@ DTEAssuranceApp <- function(){
       n2vec <- ceiling(input$n2*(samplesizevec/(input$n1+input$n2)))
       calcassvec <- rep(NA, length = length(samplesizevec))
 
-      pboptions(type="shiny", title = "Calculating assurance (2/2)")
+      pbapply::pboptions(type="shiny", title = "Calculating assurance (2/2)")
 
-      calcassvec <- pbmapply(assFunc, n1vec, n2vec)
+      calcassvec <- pbapply::pbmapply(assFunc, n1vec, n2vec)
 
       calcassvec <- unlist(calcassvec[1,])
 
@@ -628,26 +627,26 @@ DTEAssuranceApp <- function(){
 
     })
 
-    output$assurancePlot <- renderPlot({
+    output$assurancePlot <- shiny::renderPlot({
 
       #Plot the assurance calculated in the function
-      theme_set(theme_grey(base_size = input$fs))
+      ggplot2::theme_set(ggplot2::theme_grey(base_size = input$fs))
       assurancenormaldf <- data.frame(x = calculateNormalAssurance()$samplesizevec, y = predict(calculateNormalAssurance()$asssmooth))
       assuranceflexibledf <- data.frame(x = calculateFlexibleAssurance()$samplesizevec, y = predict(calculateFlexibleAssurance()$asssmooth))
-      p1 <- ggplot() + geom_line(data = assurancenormaldf, aes(x = x, y = y, colour="Normal"), linetype="solid") + xlab("Number of patients") +
-        ylab("Assurance") + ylim(0, 1.05) + geom_line(data = assuranceflexibledf, aes(x=x, y=y, colour = "Flexible"), linetype="dashed") +
-        scale_color_manual(name='Type of assurance',
+      p1 <- ggplot2::ggplot() + ggplot2::geom_line(data = assurancenormaldf, ggplot2::aes_string(x = "x", y = "y", colour=shQuote("Normal")), linetype="solid") + ggplot2::xlab("Number of patients") +
+        ggplot2::ylab("Assurance") + ggplot2::ylim(0, 1.05) + ggplot2::geom_line(data = assuranceflexibledf, ggplot2::aes_string(x="x", y="y", colour = shQuote("Flexible")), linetype="dashed") +
+        ggplot2::scale_color_manual(name='Type of assurance',
                            breaks=c('Normal', 'Flexible'),
                            values=c('Normal'='blue', 'Flexible'='red'))
       print(p1)
     })
 
 
-    output$assuranceText  <- renderUI({
+    output$assuranceText  <- shiny::renderUI({
 
       #Show how many events are seen given the set up
       str1 <- paste0("On average, ", round(calculateNormalAssurance()$eventsseen), " events are seen when ", input$numofpatients, " patients are enroled for ", input$chosenLength, " months")
-      HTML(paste(str1, sep = '<br/>'))
+      shiny::HTML(paste(str1, sep = '<br/>'))
     })
 
 
@@ -694,7 +693,7 @@ DTEAssuranceApp <- function(){
 
   }
 
-  shinyApp(ui, server)
+  shiny::shinyApp(ui, server)
 
 }
 
