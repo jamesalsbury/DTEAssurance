@@ -24,4 +24,5 @@ Imports:
   shinyjs,
   stats,
   survMisc,
-  survival
+  survival,
+  plyr
