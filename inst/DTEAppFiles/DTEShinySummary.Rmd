@@ -1,5 +1,5 @@
 ---
-title: "Fitted distributions (bivariate elicitation)"
+title: "Fitted distributions - Delayed Treatment Effects"
 output:
   html_document: default
   pdf_document: default
@@ -15,7 +15,7 @@ params:
   m2: NA
 ---
 
-# Parameter 1
+# Length of delay
 
 ```{r global_options, include=FALSE}
 knitr::opts_chunk$set(echo=FALSE, warning=FALSE, message=FALSE,
@@ -521,7 +521,7 @@ plotfit(params$fit1, d = "mirrorlogt")
 
 
 <hr>
-# Parameter 2
+# post-delay HR
 
 
 ### Elicited cumulative probabilities
@@ -556,6 +556,13 @@ lx <- min(params$fit2$vals[expert, ])
 ux <- max(params$fit2$vals[expert, ])
 ```
 
+### Elicited Pr(T=0)
+
+```{r}
+mydf <- data.frame(params$inputT0, 1 - params$inputT0)
+colnames(mydf) <- c( "$P(T=0)$", "$P(T\\neq 0)$")
+knitr::kable(mydf)
+```
 
 ### Distributions
 

@@ -913,7 +913,8 @@ DTEAssuranceApp <- function(){
 
         # Set up parameters to pass to Rmd document
         params <- list(fit1 = myfit1(), fit2 = myfit2(), cp = 0.5,
-                       d = c(input$dist1, input$dist2), m1 = m1(), m2 = m2())
+                       d = c(input$dist1, input$dist2), m1 = m1(), m2 = m2(),
+                       massT0 = input$massT0, massHR1 = input$massHR1)
 
         # Knit the document, passing in the `params` list, and eval it in a
         # child of the global environment (this isolates the code in the document
