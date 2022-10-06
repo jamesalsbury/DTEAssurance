@@ -25,4 +25,5 @@ Imports:
   stats,
   survMisc,
   survival,
-  plyr
+  plyr,
+  rmarkdown

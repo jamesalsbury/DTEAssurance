@@ -12,6 +12,9 @@
 #' @import shinydashboard
 #' @import survival
 #' @import plyr
+#' @import rmarkdown
+#' @import stats
+#'
 #'
 
 DTEAssuranceApp <- function(){
@@ -178,7 +181,6 @@ DTEAssuranceApp <- function(){
 
       #Help UI ---------------------------------
       #Need to say what files can be uploaded in the control sample
-      #Link to SHELF for the elicitation
       tabPanel("Help",
                HTML("<p>This app implements the method as outlined in this <a href='https://jamesalsbury.github.io/'>paper.</a></p>"),
                HTML("<p>The eliciation technique is based on SHELF, more guidance can be found <a href='https://shelf.sites.sheffield.ac.uk/'>here.</a></p>")
@@ -186,6 +188,7 @@ DTEAssuranceApp <- function(){
 
 
     ), style='width: 1000px; height: 600px',
+    #Well panel UI ---------------------------------
     wellPanel(
       fluidRow(
         column(3, selectInput("outFormat", label = "Report format",
@@ -195,7 +198,11 @@ DTEAssuranceApp <- function(){
         ),
         column(3, offset = 1,
                numericInput("fs", label = "Font size", value = 12)
-        )),
+        ),
+        column(3, offset = 1,
+               numericInput("ss", label = "Sample size (when downloading sample)", value = 500)
+        )
+        ),
       fluidRow(
         column(3, downloadButton("report", "Download report")
         ),
@@ -868,46 +875,56 @@ DTEAssuranceApp <- function(){
     })
 
 
-    # observeEvent(input$exit, {
-    #   stopApp(list(parameter1 = myfit1(), parameter2 = myfit2(),
-    #                cp = input$concProb))
-    # })
+    # Functions for the well panel ---------------------------------
 
-    # output$downloadData <- downloadHandler(
-    #   filename = "joint-sample.csv",
-    #   content = function(file) {
-    #     utils::write.csv(df1(), file, row.names = FALSE)
-    #   }
-    # )
+    df1 <- reactive({
+      conc.probs <- matrix(0, 2, 2)
+      conc.probs[1, 2] <- 0.5
+      data.frame(copulaSample(myfit1(), myfit2(), cp = conc.probs,
+                                     n = input$ss,
+                                     d = c(input$dist1, input$dist2)))
+    })
 
-    # output$report <- downloadHandler(
-    #   filename = function(){switch(input$outFormat,
-    #                                html_document = "distributions-report.html",
-    #                                pdf_document = "distributions-report.pdf",
-    #                                word_document = "distributions-report.docx")},
-    #   content = function(file) {
-    #     # Copy the report file to a temporary directory before processing it, in
-    #     # case we don't have write permissions to the current working dir (which
-    #     # can happen when deployed).
-    #     tempReport <- file.path(tempdir(), "elicitationShinySummaryBivariate.Rmd")
-    #     file.copy(system.file("shinyAppFiles", "elicitationShinySummaryBivariate.Rmd",
-    #                           package="SHELF"),
-    #               tempReport, overwrite = TRUE)
-    #
-    #     # Set up parameters to pass to Rmd document
-    #     params <- list(fit1 = myfit1(), fit2 = myfit2(), cp = input$concProb,
-    #                    d = c(input$dist1, input$dist2), m1 = m1(), m2 = m2())
-    #
-    #     # Knit the document, passing in the `params` list, and eval it in a
-    #     # child of the global environment (this isolates the code in the document
-    #     # from the code in this app).
-    #     rmarkdown::render(tempReport, output_file = file,
-    #                       params = params,
-    #                       output_format = input$outFormat,
-    #                       envir = new.env(parent = globalenv())
-    #     )
-    #   }
-    # )
+    observeEvent(input$exit, {
+      stopApp(list(parameter1 = myfit1(), parameter2 = myfit2(),
+                   cp = 0.5))
+    })
+
+    output$downloadData <- downloadHandler(
+      filename = "DTEsample.csv",
+      content = function(file) {
+        utils::write.csv(df1(), file, row.names = FALSE)
+      }
+    )
+
+    output$report <- downloadHandler(
+      filename = function(){switch(input$outFormat,
+                                   html_document = "distributions-report.html",
+                                   pdf_document = "distributions-report.pdf",
+                                   word_document = "distributions-report.docx")},
+      content = function(file) {
+        # Copy the report file to a temporary directory before processing it, in
+        # case we don't have write permissions to the current working dir (which
+        # can happen when deployed).
+        tempReport <- file.path(tempdir(), "DTEShinySummary.Rmd")
+        file.copy(system.file("DTEAppFiles", "DTEShinySummary.Rmd",
+                              package="DTEAssurance"),
+                  tempReport, overwrite = TRUE)
+
+        # Set up parameters to pass to Rmd document
+        params <- list(fit1 = myfit1(), fit2 = myfit2(), cp = 0.5,
+                       d = c(input$dist1, input$dist2), m1 = m1(), m2 = m2())
+
+        # Knit the document, passing in the `params` list, and eval it in a
+        # child of the global environment (this isolates the code in the document
+        # from the code in this app).
+        rmarkdown::render(tempReport, output_file = file,
+                          params = params,
+                          output_format = input$outFormat,
+                          envir = new.env(parent = globalenv())
+        )
+      }
+    )
 
   }
 
