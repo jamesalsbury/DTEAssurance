@@ -63,7 +63,6 @@ ux <- max(params$fit1$vals[expert, ])
 
 ```{r}
 mydf <- data.frame(params$massT0, 1 - params$massT0)
-print(mydf)
 colnames(mydf) <- c( "$P(T=0)$", "$P(T\\neq 0)$")
 knitr::kable(mydf)
 ```
@@ -570,7 +569,6 @@ ux <- max(params$fit2$vals[expert, ])
 
 ```{r}
 mydf <- data.frame(params$massHR1, 1 - params$massHR1)
-print(mydf)
 colnames(mydf) <- c( "$P(HR=1)$", "$P(HR\\neq 1)$")
 knitr::kable(mydf)
 ```
