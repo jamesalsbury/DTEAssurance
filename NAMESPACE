@@ -3,7 +3,6 @@
 export(DTEAssuranceApp)
 import(SHELF)
 import(ggplot2, except = autoplot)
-import(nleqslv)
 import(pbapply)
 import(plyr)
 import(readxl)

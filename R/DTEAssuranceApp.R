@@ -5,7 +5,6 @@
 #' @import SHELF
 #' @importFrom survMisc autoplot
 #' @rawNamespace import(ggplot2, except = autoplot)
-#' @import nleqslv
 #' @import pbapply
 #' @import readxl
 #' @import shiny
@@ -182,8 +181,29 @@ DTEAssuranceApp <- function(){
       #Help UI ---------------------------------
       #Need to say what files can be uploaded in the control sample
       tabPanel("Help",
-               HTML("<p>This app implements the method as outlined in this <a href='https://jamesalsbury.github.io/'>paper.</a></p>"),
-               HTML("<p>The eliciation technique is based on SHELF, more guidance can be found <a href='https://shelf.sites.sheffield.ac.uk/'>here.</a></p>")
+               HTML("<p>This app implements the method as outlined in this <a href='https://jamesalsbury.github.io/'>paper</a>. For every tab, there is a brief summary below, for any other questions, comments or
+                  feedback, please contact <a href='mailto:jsalsbury1@sheffield.ac.uk'>James Salsbury</a>.</p>"),
+               HTML("<p><u>Control</u></p>"),
+               HTML("<p>Here, the parameters for the control survival are specified, the parameterisation for the control survival curve is:</p>"),
+               withMathJax(paste0(" $$S_c(t) = \\text{exp}\\{-(\\lambda_ct)^{\\gamma_c}\\}$$")),
+               HTML("<p>The control tab also allows an upload of an Excel file containing survival data for the control sample.
+                  The Excel file needs to have two columns: the first column containing the survival time, and the second column containing the event status (1 for dead, 0 for alive).</p>"),
+               HTML("<p><u>Eliciting the two parameters: T and post-delay HR</u></p>"),
+               HTML("<p>These two tabs elicit beliefs from the user about two quantities: the length of delay, T, and the post-delay HR. The parameterisation for the treatment survival curve is:</p>"),
+               withMathJax(paste0(" $$S_t(t) = \\text{exp}\\{-(\\lambda_ct)^{\\gamma_c}\\}, t \\leq T$$")),
+               withMathJax(paste0(" $$S_t(t) = \\text{exp}\\{-(\\lambda_cT)^{\\gamma_c}-\\lambda_t^{\\gamma_t}(t^{\\gamma+t}-T^{\\gamma_t})\\}, t > T$$")),
+               HTML("<p>The elicitation technique is based on SHELF, more guidance can be found <a href='https://shelf.sites.sheffield.ac.uk/'>here.</a></p>"),
+               HTML("<p>There is also an option to include some mass at T = 0 and HR = 1.</p>"),
+               HTML("<p><u>Feedback</u></p>"),
+               HTML("<p>The initial plot may take ~ 5 seconds to load. The plot shows the control survival curve (from the control tab), along with the median elicited treatment line (calculated from the previous two tabs).
+                  There are also three optional quantities to view: the first is the median survival time for both groups, the second is a 95% confidence interval for T and the
+                  third shows a 80% confidence interval for the treatment curve. When the median survival time is added to the plot, a second plot is shown below. Initially, this plot is a histogram for the
+                  treatment median survival time. However, the user is able to change this median to any other quantile of interest.</p>"),
+               HTML("<p><u>Calculating assurance</u></p>"),
+               HTML("<p>This tab allows the user to calculate assurance, given the control parameters and elicited prior distributions  for T and post-delay HR. Some additional questions
+                  about the trial are found on the left-hand panel. The app assumes uniform recruitment and uses a log-rank test for analysis of the simulated data. Depending on your processor speed, this
+                  calculation can take between 30-40 seconds. Once the calculation is complete, the app shows two plots. The top plot shows assurance (along with standard error curves) and target effect curve - which
+                  shows the proportion of trials in which the target effect was observed. The bottom plot shows the average hazard ratio observed and the corresponding confidence intervals for this. </p>")
       ),
 
 
@@ -598,6 +618,7 @@ DTEAssuranceApp <- function(){
         for (i in 1:length(addfeedback)){
           #This adds the median survival line (onto the control and treatment)
           if (addfeedback[i]=="Median survival line(s)"){
+            shinyjs::show(id = "feedbackQuantile")
             #Looks at whether the median time is before or after the delay
             medianTTime <- drawsimlines()$time[sum(drawsimlines()$medianTreatment>0.5)]
             medianCTime <- (1/input$lambdac)*(-log(0.5))^(1/input$gammac)
@@ -636,7 +657,6 @@ DTEAssuranceApp <- function(){
             simlinesupper <- data.frame(x = drawsimlines()$time, y = drawsimlines()$upperbound)
             p1 <- p1 + geom_line(data = simlineslower, aes(x = x, y = y), linetype="dashed")+
               geom_line(data = simlinesupper, aes(x = x, y = y), linetype="dashed")
-            shinyjs::show(id = "feedbackQuantile")
           }
         }
       }
@@ -658,7 +678,7 @@ DTEAssuranceApp <- function(){
 
       if (!is.null(addfeedback)){
         for (i in 1:length(addfeedback)){
-          if (addfeedback[i]=="CI for Treatment Curve (0.1 and 0.9)"){
+          if (addfeedback[i]=="Median survival line(s)"){
 
             quantileMatrix <- drawsimlines()$SimMatrix
 
@@ -837,14 +857,14 @@ DTEAssuranceApp <- function(){
       TPPLBdf <- data.frame(x = calculateNormalAssurance()$samplesizevec, y = predict(calculateNormalAssurance()$LBTPPsmooth))
       TPPUBdf <- data.frame(x = calculateNormalAssurance()$samplesizevec, y = predict(calculateNormalAssurance()$UBTPPsmooth))
       p1 <- ggplot() + geom_line(data = assurancenormaldf, aes(x = x, y = y, colour="Assurance"), linetype="solid") + xlab("Number of patients") +
-        ylab("Assurance") + ylim(0, 1.05) + geom_line(data = TPPdf, aes(x = x, y = y, colour = 'TPP'), linetype="solid") +
+        ylab("Assurance") + ylim(0, 1.05) + geom_line(data = TPPdf, aes(x = x, y = y, colour = 'target effect'), linetype="solid") +
         geom_line(data = assurancenormalLBdf, aes(x = x, y = y, colour = 'Assurance'), linetype='dashed') +
         geom_line(data = assurancenormalUBdf, aes(x = x, y = y, colour = 'Assurance'), linetype='dashed') +
-        geom_line(data = TPPLBdf, aes(x = x, y = y, colour = 'TPP'), linetype='dashed') +
-        geom_line(data = TPPUBdf, aes(x = x, y = y, colour = 'TPP'), linetype='dashed')
+        geom_line(data = TPPLBdf, aes(x = x, y = y, colour = 'target effect'), linetype='dashed') +
+        geom_line(data = TPPUBdf, aes(x = x, y = y, colour = 'target effect'), linetype='dashed')
       scale_color_manual(name='Type of assurance',
-                         breaks=c('Assurance', 'TPP'),
-                         values=c('Assurance'='blue', 'TPP' = 'green'))
+                         breaks=c('Assurance', 'target effect'),
+                         values=c('Assurance'='blue', 'target effect' = 'green'))
       print(p1)
     })
 
