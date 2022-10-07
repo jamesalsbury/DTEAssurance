@@ -1,5 +1,11 @@
-#' App to calculate assurance for when DTE are likely to be present
+#' Shiny app which calculates assurance for trials with DTE
 #'
+#' Launches a shiny app to use for elicitation for when delayed treatment effects are
+#' likely to be present in the clinical trial you are designing: takes these elicited distributions
+#' and calculates assurance.
+#'
+#' You should run the function with no arguments.
+#
 #' @export
 #'
 #' @import SHELF

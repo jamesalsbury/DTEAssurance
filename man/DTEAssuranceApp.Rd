@@ -2,10 +2,15 @@
 % Please edit documentation in R/DTEAssuranceApp.R
 \name{DTEAssuranceApp}
 \alias{DTEAssuranceApp}
-\title{App to calculate assurance for when DTE are likely to be present}
+\title{Shiny app which calculates assurance for trials with DTE}
 \usage{
 DTEAssuranceApp()
 }
 \description{
-App to calculate assurance for when DTE are likely to be present
+Launches a shiny app to use for elicitation for when delayed treatment effects are
+likely to be present in the clinical trial you are designing: takes these elicited distributions
+and calculates assurance.
+}
+\details{
+You should run the function with no arguments.
 }
