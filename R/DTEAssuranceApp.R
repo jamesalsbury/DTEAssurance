@@ -19,12 +19,12 @@
 #' @import plyr
 #' @import rmarkdown
 #' @import stats
-#' @import shinyjs
+#' @rawNamespace import(shinyjs, except = runExample)
 #' @import utils
 #'
 
 DTEAssuranceApp <- function(){
-  x <- y <- quantiletime <- NULL
+  controlcurve <- y <- quantiletime <- NULL
   ui <- fluidPage(
     withMathJax(),
 
@@ -51,8 +51,8 @@ DTEAssuranceApp <- function(){
                    sidebarPanel = sidebarPanel(
                      radioButtons("uploadSampleCheck", "Do you wish to upload a MCMC sample?", choices = c("Yes", "No"), selected = "No"),
                      hidden(fileInput("uploadSample", "Upload your control sample",accept = c(".csv", ".rds", ".xlsx"))),
-                     numericInput("lambdacmean", 'mean (\\(\\text{scale} = \\lambda_c \\))', value=0.08, min=0),
-                     numericInput("gammacmean", 'mean (\\(\\text{shape} = \\gamma_c \\))', value=0.8, min=0)
+                     numericInput('lambdacmean', label =  HTML(paste0("scale (\u03bb",tags$sub("c"), ")")), value = 0.08, min=0),
+                     numericInput('gammacmean', label =  HTML(paste0("scale (\u03b3",tags$sub("c"), ")")), value = 0.8)
 
 
                    ),
@@ -501,7 +501,7 @@ DTEAssuranceApp <- function(){
 
 
       if (input$massT0>0){
-        dist.title <- paste(input$massT0, "⋅ 0 +", 1-input$massT0, "⋅", dist.title)
+        dist.title <- paste(input$massT0, "\u22c5 0 +", 1-input$massT0, "\u22c5", dist.title)
       }
 
 
@@ -629,7 +629,7 @@ DTEAssuranceApp <- function(){
       }
 
       if (input$massHR1>0){
-        dist.title <- paste(input$massHR1, "⋅ 1 +", 1-input$massHR1, "⋅", dist.title)
+        dist.title <- paste(input$massT0, "\u22c5 0 +", 1-input$massT0, "\u22c5", dist.title)
       }
 
       p1 <- ggplot(data=HRsamples, aes(x=HR)) + geom_histogram(aes(y = after_stat(density))) + labs(title = dist.title) +  theme(plot.title = element_text(hjust = 0.5))
