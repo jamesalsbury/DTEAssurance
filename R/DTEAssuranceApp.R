@@ -24,7 +24,7 @@
 #'
 
 DTEAssuranceApp <- function(){
-  controlcurve <- y <- quantiletime <- NULL
+  x <- y <- quantiletime <- NULL
   ui <- fluidPage(
     withMathJax(),
 
@@ -525,19 +525,6 @@ DTEAssuranceApp <- function(){
                           ")", sep="")
       }
 
-<<<<<<< HEAD
-=======
-
-      if (input$massT0>0){
-        dist.title <- paste(input$massT0, "\u22c5 0 +", 1-input$massT0, "\u22c5", dist.title)
-      }
-
-
->>>>>>> 719d8ec856849c2d585e0d92403304ce3aa8d5ae
-      p1 <- ggplot(data=Tsamples, aes(x=time)) + geom_histogram(aes(y = after_stat(density))) + labs(title = dist.title) +  theme(plot.title = element_text(hjust = 0.5))
-
-      print(p1)
-
     })
 
     # Functions for the post-delay HR tab ---------------------------------
@@ -647,16 +634,6 @@ DTEAssuranceApp <- function(){
 
       }
 
-<<<<<<< HEAD
-=======
-      if (input$massHR1>0){
-        dist.title <- paste(input$massT0, "\u22c5 0 +", 1-input$massT0, "\u22c5", dist.title)
-      }
->>>>>>> 719d8ec856849c2d585e0d92403304ce3aa8d5ae
-
-      p1 <- ggplot(data=HRsamples, aes(x=HR)) + geom_histogram(aes(y = after_stat(density))) + labs(title = dist.title) +  theme(plot.title = element_text(hjust = 0.5))
-
-      print(p1)
     })
 
 
