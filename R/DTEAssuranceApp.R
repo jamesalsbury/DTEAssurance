@@ -37,7 +37,6 @@ DTEAssuranceApp <- function(){
       tabsetPanel(
         # Control UI ---------------------------------
 
-
         tabPanel("Control",
                  hidden(wellPanel(
                    id = "instruct_panel",
@@ -61,6 +60,20 @@ DTEAssuranceApp <- function(){
                      htmlOutput("recommendedParams")
                    )
                  ),
+        ),
+
+        # Conditional probabilities UI ---------------------------------
+        tabPanel("Conditional probabilities",
+                 fluidRow(
+                   column(6,
+                          numericInput("P_S", "Pr(survival curves separate)", value = 0.9, min = 0, max = 1)
+
+                   ),
+                   column(6,
+                          numericInput("P_DTE", "Pr(treatment subject to a delay|survival curves separate)", value = 0.6, min = 0, max = 1)
+
+                   )
+                 )
         ),
 
         # Length of delay UI ---------------------------------
@@ -95,14 +108,11 @@ DTEAssuranceApp <- function(){
                      numericInput("tdf1", label = h5("Student-t degrees of freedom"),
                                   value = 3)
                    )
-                   ),
-                   column(4,
-                          numericInput("massT0", label = h5("Pr(T=0)"), value = 0.05, min = 0, max = 1)
                    )
+
 
                  ),
                  plotOutput("distPlot1"),
-                 uiOutput("delayFeedbackText")
         ),
         # post-delay HR UI ---------------------------------
         tabPanel("Eliciting the post-delay hazard ratio",
@@ -145,15 +155,12 @@ DTEAssuranceApp <- function(){
 
 
                           )
-                   ),
-                   column(4,
-                          numericInput("massHR1", label = h5("Pr(HR=1)"), value = 0, min = 0, max = 1)
                    )
+
 
                  ),
 
                  plotOutput("distPlot2"),
-                 uiOutput("HRFeedbackText")
         ),
 
         # Feedback UI ---------------------------------
@@ -269,51 +276,45 @@ DTEAssuranceApp <- function(){
     v <- reactiveValues(upload = NULL)
 
     #Simulates control curves and plots time-wise CI
-    drawsimlinescontrol <- reactive({
+    controlCILines <- reactive({
 
-      #Generate 500 control curves
+      #Generate n control curves
       nsamples <- 500
 
-      time <- seq(0, exp((1.527/input$gammacmean)-log(input$lambdacmean))*1.1, by=0.01)
+      #Calculate the x-axis limits
+      controlTime <- seq(0, 10000, by=0.01)
+      controlCurve <- exp(-(input$lambdacmean*controlTime)^input$gammacmean)
+      finalSurvTime <- controlTime[which(controlCurve<0.01)[1]]
 
-      #Only consider every 0.05 time - makes it much quicker to run
-      quicktime <- time[seq(1, length(time), by=5)]
+      #Re-define the x-axis
+      controlTime <- seq(0, finalSurvTime, length = 100)
+
 
       #We fill a matrix with the control survival probabilities at each time
-      SimMatrix <- matrix(NA, nrow = nsamples, ncol=length(quicktime))
+      SimMatrix <- matrix(NA, nrow = nsamples, ncol=length(controlTime))
 
       #Sample lambdac and gammac from the inputs
-
       lambdacsample <- inputData()$scale
       gammacsample <- inputData()$shape
 
+      chosenMCMCsample <- sample(1:nsamples, size = nsamples, replace = T)
       #Fills matrix with control curves
       for (i in 1:nsamples){
-        chosenMCMCsample <- sample(1:nsamples, size = 1)
-        #print(lambdacsample[chosenMCMCsample])
-        #print(gammacsample[chosenMCMCsample])
-        SimMatrix[i,] <- exp(-(lambdacsample[chosenMCMCsample]*quicktime)^gammacsample[chosenMCMCsample])
-        #print(SimMatrix[i,])
+        SimMatrix[i,] <- exp(-(lambdacsample[chosenMCMCsample[i]]*controlTime)^gammacsample[chosenMCMCsample[i]])
       }
 
-      #SimMatrix[i,] <- exp(-(lambdacsample[i]*quicktime)^gammacsample[i])
 
-      #We now look at each time iteration at the distribution
-      #We look at the 0.1 and 0.9 quantile of the distribution
-      #These quantiles can be thought of as confidence intervals for the control curve
-
-
-      lowerbound <- rep(NA, length(quicktime))
-      upperbound <- rep(NA, length(quicktime))
-      mediancontrol <- rep(NA, length(quicktime))
-      for (j in 1:length(quicktime)){
+      #Finding 95% estimates for the control curve(s)
+      lowerbound <- rep(NA, length(controlTime))
+      upperbound <- rep(NA, length(controlTime))
+      mediancontrol <- rep(NA, length(controlTime))
+      for (j in 1:length(controlTime)){
         lowerbound[j] <- quantile(SimMatrix[,j], 0.05)
         upperbound[j] <- quantile(SimMatrix[,j], 0.95)
         mediancontrol[j] <- quantile(SimMatrix[,j], 0.5)
       }
 
-
-      return(list(lowerbound=lowerbound, upperbound=upperbound, quicktime=quicktime, SimMatrix = SimMatrix,
+      return(list(lowerbound=lowerbound, upperbound=upperbound, controlTime=controlTime, SimMatrix = SimMatrix,
                   mediancontrol = mediancontrol))
 
     })
@@ -323,6 +324,7 @@ DTEAssuranceApp <- function(){
         shinyjs::hide(id = "uploadSample")
         shinyjs::reset(id = "uploadSample")
         shinyjs::hide(id = "instruct_panel")
+        v$upload <- "no"
       } else if (input$uploadSampleCheck=="Yes"){
         shinyjs::show(id = "uploadSample")
         shinyjs::show(id = "instruct_panel")
@@ -337,7 +339,7 @@ DTEAssuranceApp <- function(){
     inputData <- reactive({
       #Allows the user to upload a control sample
 
-      if (is.null(v$upload)){
+      if (v$upload=="no"){
         return(NULL)
       } else {
         chosenFile <- input$uploadSample
@@ -361,51 +363,51 @@ DTEAssuranceApp <- function(){
     })
 
     output$recommendedParams <- renderUI({
-      if (is.null(inputData())){
-
-      } else {
+      if (v$upload=="yes"){
         #Tells the user what the best fitting parameters are for their uploaded sample
         str1 <- paste0("For your uploaded sample, the best fitting parameters are:")
         str2 <- withMathJax(paste0("$$\\lambda_c =  ",signif(mean(inputData()$scale), 3),"$$", "and", "$$\\gamma_c =  ",signif(mean(inputData()$shape), 3),"$$"))
-        #str3 <- withMathJax(paste0("$$\\gamma_c =  ",signif(mean(inputData()$shape), 3),"$$"))
         HTML(paste(str1, str2, sep = '<br/>'))
+      } else {
+
       }
 
     })
 
     output$plotControl <- renderPlot({
 
-      time <- seq(0, exp((1.527/input$gammacmean)-log(input$lambdacmean))*1.1, by=0.01)
-      controlsurv <- exp(-(input$lambdacmean*time)^input$gammacmean)
+      #Calculate the x-axis limits
+      controlTime <- seq(0, 10000, by=0.01)
+      controlCurve <- exp(-(input$lambdacmean*controlTime)^input$gammacmean)
+      finalSurvTime <- controlTime[which(controlCurve<0.01)[1]]
 
-      # #Plots the median control curve along with the CI
-      controldf <- data.frame(controltime = time, controlcurve = controlsurv)
-      mybreaks <- plyr::round_any(seq(0, exp((1.527/input$gammacmean)-log(input$lambdacmean))*1.1, length=5), accuracy = 5)
+      if (v$upload=="no"){
 
-      theme_set(theme_grey(base_size = 12))
-      p1 <- ggplot(data=controldf, aes(x=controltime, y=controlcurve)) + xlim(0, mybreaks[length(mybreaks)]) +
-        geom_line(colour="blue") + xlab("Time") + ylab("Survival") + ylim(0,1)  + scale_x_continuous(breaks = mybreaks)
+        #Re-define the x-axis
+        controlTime <- seq(0, finalSurvTime, length = 100)
+        controlSurv <- exp(-(input$lambdacmean*controlTime)^input$gammacmean)
 
-      print(p1)
+        # #Plots the median control curve along with the CI
+        controlDF <- data.frame(controlTime = controlTime, controlSurv = controlSurv)
 
-      if (is.null(v$upload)){
+        theme_set(theme_grey(base_size = 12))
+        p1 <- ggplot(data=controlDF, aes(x=controlTime, y=controlSurv)) + xlim(0, finalSurvTime) +
+          geom_line(colour="blue") + xlab("Time") + ylab("Survival") + ylim(0,1)
 
-      } else{
-
-        controldf <- data.frame(controltime = drawsimlinescontrol()$quicktime, controlcurve = drawsimlinescontrol()$mediancontrol)
-        controllowerbounddf <- data.frame(x = drawsimlinescontrol()$quicktime, y = drawsimlinescontrol()$lowerbound)
-        controlupperbounddf <- data.frame(x = drawsimlinescontrol()$quicktime, y = drawsimlinescontrol()$upperbound)
-        mybreaks <- plyr::round_any(seq(0, exp((1.527/input$gammacmean)-log(input$lambdacmean))*1.1, length=5), accuracy = 5)
+        print(p1)
+      } else {
+        controlDF <- data.frame(controlTime = controlCILines()$controlTime, controlSurv = controlCILines()$mediancontrol)
+        controlLB <- data.frame(controlTime = controlCILines()$controlTime, controlSurv = controlCILines()$lowerbound)
+        controlUB <- data.frame(controlTime = controlCILines()$controlTime, controlSurv = controlCILines()$upperbound)
 
         theme_set(theme_grey(base_size = 12))
 
-
-        p1 <- ggplot(data=controldf, aes(x=controltime, y=controlcurve)) + xlim(0, mybreaks[length(mybreaks)]) +
-          geom_line(colour="blue") + xlab("Time") + ylab("Survival") + ylim(0,1) + geom_line(data = controllowerbounddf, aes(x=x, y=y), linetype="dashed")+
-          geom_line(data = controlupperbounddf, aes(x=x, y=y), linetype="dashed") + scale_x_continuous(breaks = mybreaks)
+        p1 <- ggplot(data=controlDF, aes(x=controlTime, y=controlSurv)) + xlim(0, finalSurvTime) +
+          geom_line(colour="blue") + xlab("Time") + ylab("Survival") + ylim(0,1) +
+          geom_line(data = controlLB, aes(x=controlTime, y=controlSurv), linetype="dashed") +
+          geom_line(data = controlUB, aes(x=controlTime, y=controlSurv), linetype="dashed")
 
         print(p1)
-
 
       }
 
@@ -460,11 +462,35 @@ DTEAssuranceApp <- function(){
     })
 
 
+    elicitedSamples <- reactive({
+
+      conc.probs <- matrix(0, 2, 2)
+      conc.probs[1, 2] <- 0.5
+      nsamples <- 10000
+      mySample <- data.frame(copulaSample(myfit1(), myfit2(), cp = conc.probs, n = nsamples, d = c(input$dist1, input$dist2)))
+
+      for (i in 1:nsamples){
+        u <- runif(1)
+        if (u < input$P_S){
+          w <- runif(1)
+          if (w > input$P_DTE){
+            mySample[i,1] <- 0
+          }
+        } else {
+          mySample[i,2] <- 1
+          mySample[i,1] <- 0
+        }
+      }
+
+
+      return(list(mySample = mySample, nsamples = nsamples))
+    })
+
     # Functions for the eliciting length of delay tab ---------------------------------
 
     output$distPlot1 <- renderPlot({
 
-      mySample <- drawsamples()$mySample
+      mySample <- elicitedSamples()$mySample
       Tsamples <- data.frame(time = mySample[,1])
       d <- input$dist1
       if(d == "best"){
@@ -499,25 +525,9 @@ DTEAssuranceApp <- function(){
                           ")", sep="")
       }
 
-
-      if (input$massT0>0){
-        dist.title <- paste(input$massT0, "⋅ 0 +", 1-input$massT0, "⋅", dist.title)
-      }
-
-
       p1 <- ggplot(data=Tsamples, aes(x=time)) + geom_histogram(aes(y = after_stat(density))) + labs(title = dist.title) +  theme(plot.title = element_text(hjust = 0.5))
 
       print(p1)
-
-    })
-
-    output$delayFeedbackText <- renderUI({
-      if (input$massT0>0){
-        str1 <- paste0("As you have given some weight to the treatment being subject to no delay, ",
-                       input$massT0*100, "% of the samples are set to be 0, with the remaining ", 100*(1-input$massT0),
-                       "% of samples coming from your elicited distribution - ", input$dist1)
-        HTML(paste(str1, sep = '<br/>'))
-      }
 
     })
 
@@ -526,7 +536,7 @@ DTEAssuranceApp <- function(){
     output$distPlot2 <- renderPlot({
 
 
-      mySample <- drawsamples()$mySample
+      mySample <- elicitedSamples()$mySample
       HRsamples <- data.frame(HR = mySample[,2])
 
       d <- input$dist2
@@ -628,81 +638,54 @@ DTEAssuranceApp <- function(){
 
       }
 
-      if (input$massHR1>0){
-        dist.title <- paste(input$massHR1, "⋅ 1 +", 1-input$massHR1, "⋅", dist.title)
-      }
 
       p1 <- ggplot(data=HRsamples, aes(x=HR)) + geom_histogram(aes(y = after_stat(density))) + labs(title = dist.title) +  theme(plot.title = element_text(hjust = 0.5))
 
       print(p1)
     })
 
-    output$HRFeedbackText <- renderUI({
-      if (input$massHR1>0){
-        str1 <- paste0("As you have given some weight to the treatment having no effect compared to control, ",
-                       input$massHR1*100, "% of the samples are set to be 1, with the remaining ", 100*(1-input$massHR1),
-                       "% of samples coming from your elicited distribution - ", input$dist2)
-        HTML(paste(str1, sep = '<br/>'))
-      }
-
-    })
-
 
 
     # Functions for the Feedback tab ---------------------------------
 
-    #This function allows the 10 and 90% CI lines to be drawn
 
-    drawsamples <- reactive({
-
-      conc.probs <- matrix(0, 2, 2)
-      conc.probs[1, 2] <- 0.5
-      nsamples <- 10000
-      mySample <- data.frame(copulaSample(myfit1(), myfit2(), cp = conc.probs, n = nsamples, d = c(input$dist1, input$dist2)))
-      u <- runif(nsamples, 0, 1)
-
-      mySample[u<input$massT0,1] <- 0
-      mySample[u<input$massHR1,2] <- 1
-
-      return(list(mySample = mySample, nsamples = nsamples))
-    })
-
-    drawsimlines <- reactive({
+    treatmentCILines <- reactive({
 
       gammat <- input$gammacmean
 
-      mySample <- drawsamples()$mySample
+      mySample <- elicitedSamples()$mySample
+
+      #Generate n control curves
       nsamples <- 500
 
-      time <- seq(0, exp((1.527/input$gammacmean)-log(input$lambdacmean))*1.1, by=0.01)
+      #Calculate the x-axis limits
+      controlTime <- seq(0, 10000, by=0.01)
+      controlCurve <- exp(-(input$lambdacmean*controlTime)^input$gammacmean)
+      finalSurvTime <- controlTime[which(controlCurve<0.01)[1]]
 
-      quicktime <- time[seq(1, length(time), by=3)]
 
       #We fill a matrix with the treatment survival probabilities at each time
-      SimMatrix <- matrix(NA, nrow = nsamples, ncol=length(quicktime))
+      SimMatrix <- matrix(NA, nrow = nsamples, ncol=200)
+
+      bigT <- sample(mySample[,1], size = nsamples, replace = T)
+      HR <- sample(mySample[,2], size = nsamples, replace = T)
+
 
       for (i in 1:nsamples){
 
-        bigT <- sample(mySample[,1], 1)
-        HR <- sample(mySample[,2], 1)
+        lambdat <- input$lambdacmean*HR[i]^(1/input$gammacmean)
 
-        lambdat <- input$lambdacmean*HR^(1/input$gammacmean)
-        if (bigT!=0){
-          controltime <- seq(0, bigT, by=0.01)
-          quickcontroltime <- controltime[seq(1, length(controltime), by=3)]
-          controlsurv <- exp(-(input$lambdacmean*quickcontroltime)^input$gammacmean)
-        }
+        TreatmentTime1 <- seq(0, bigT[i], length = 100)
+        TreatmentSurv1 <- exp(-(input$lambdacmean*TreatmentTime1)^input$gammacmean)
 
+        TreatmentTime2 <- seq(bigT[i], finalSurvTime, length = 100)
+        TreatmentSurv2 <- exp(-(input$lambdacmean*bigT[i])^input$gammacmean - lambdat^gammat*(TreatmentTime2^gammat-bigT[i]^gammat))
 
-        treatmenttime <- seq(bigT, exp((1.527/input$gammacmean)-log(input$lambdacmean))*1.1, by=0.01)
-        quicktreatmenttime <- treatmenttime[seq(1, length(treatmenttime), by=3)]
-        treatmentsurv <- exp(-(input$lambdacmean*bigT)^input$gammacmean - lambdat^gammat*(quicktreatmenttime^gammat-bigT^gammat))
-
-        timecombined <- c(quickcontroltime, quicktreatmenttime)[1:length(quicktime)]
-        survcombined <- c(controlsurv, treatmentsurv)[1:length(quicktime)]
+        TreatmentTimeCombined <- c(TreatmentTime1, TreatmentTime2)
+        TreatmentSurvCombined <- c(TreatmentSurv1, TreatmentSurv2)
 
         #The i'th row of the matrix is filled with the survival probabilities for these sampled T and HR
-        SimMatrix[i,] <- survcombined
+        SimMatrix[i,] <- TreatmentSurvCombined
 
       }
 
@@ -710,16 +693,16 @@ DTEAssuranceApp <- function(){
       #We look at the 0.1 and 0.9 quantile of the distribution
       #These quantiles can be thought of as confidence intervals for the treatment curve, taken from
       #the elicited distributions
-      lowerbound <- rep(NA, length(quicktime))
-      upperbound <- rep(NA, length(quicktime))
-      medianTreatment <- rep(NA, length(quicktime))
-      for (j in 1:length(quicktime)){
+      lowerbound <- rep(NA, length(TreatmentTimeCombined))
+      upperbound <- rep(NA, length(TreatmentTimeCombined))
+      medianTreatment <- rep(NA, length(TreatmentTimeCombined))
+      for (j in 1:length(TreatmentTimeCombined)){
         lowerbound[j] <- quantile(SimMatrix[,j], 0.1)
         upperbound[j] <- quantile(SimMatrix[,j], 0.9)
         medianTreatment[j] <- quantile(SimMatrix[,j], 0.5)
       }
 
-      return(list(lowerbound=lowerbound, upperbound=upperbound, quicktime=quicktime, SimMatrix = SimMatrix,
+      return(list(lowerbound=lowerbound, upperbound=upperbound, TreatmentTimeCombined=TreatmentTimeCombined, SimMatrix = SimMatrix,
                   medianTreatment = medianTreatment))
 
     })
@@ -734,8 +717,8 @@ DTEAssuranceApp <- function(){
       if (!is.null(addfeedback)){
         for (i in 1:length(addfeedback)){
           if (addfeedback[i]=="CI for Treatment Curve (0.1 and 0.9)"){
-            simlineslower <- data.frame(x = drawsimlines()$quicktime, y = drawsimlines()$lowerbound)
-            simlinesupper <- data.frame(x = drawsimlines()$quicktime, y = drawsimlines()$upperbound)
+            simlineslower <- data.frame(x = treatmentCILines()$TreatmentTimeCombined, y = treatmentCILines()$lowerbound)
+            simlinesupper <- data.frame(x = treatmentCILines()$TreatmentTimeCombined, y = treatmentCILines()$upperbound)
 
 
             CIwidth <- simlinesupper[(which.min(abs(simlinesupper$x-input$timeInputFeedback))),]$y - simlineslower[(which.min(abs(simlineslower$x-input$timeInputFeedback))),]$y
@@ -760,7 +743,7 @@ DTEAssuranceApp <- function(){
       if (!is.null(addfeedback)){
         for (i in 1:length(addfeedback)){
           if (addfeedback[i]=="Median survival line"){
-            medianTTime <- round(drawsimlines()$quicktime[sum(drawsimlines()$medianTreatment>0.5)], 1)
+            medianTTime <- round(treatmentCILines()$TreatmentTimeCombined[sum(treatmentCILines()$medianTreatment>0.5)], 1)
             medianCTime <- round((1/input$lambdacmean)*(-log(0.5))^(1/input$gammacmean), 1)
             str1 <- paste0("The median survival time on the control is ", medianCTime, " and the median survival time on the treatment is ", medianTTime)
           }
@@ -774,21 +757,28 @@ DTEAssuranceApp <- function(){
     output$plotFeedback <- renderPlot({
       #This plots the feedback plot
 
-      if (is.null(v$upload)){
-        time <- seq(0, exp((1.527/input$gammacmean)-log(input$lambdacmean))*1.1, by=0.01)
-        controlsurv <- exp(-(input$lambdacmean*time)^input$gammacmean)
-        controldf <- data.frame(controltime = time, controlcurve = controlsurv)
+      if (v$upload=="no"){
+
+        controlTime <- seq(0, 10000, by=0.01)
+        controlCurve <- exp(-(input$lambdacmean*controlTime)^input$gammacmean)
+        finalSurvTime <- controlTime[which(controlCurve<0.01)[1]]
+
+        #Re-define the x-axis
+        controlTime <- seq(0, finalSurvTime, length = 100)
+        controlSurv <- exp(-(input$lambdacmean*controlTime)^input$gammacmean)
+
+        controlDF <- data.frame(controlTime = controlTime, controlSurv = controlSurv)
       } else {
-        controldf <- data.frame(controltime = drawsimlinescontrol()$quicktime, controlcurve = drawsimlinescontrol()$mediancontrol)
+        controlDF <- data.frame(controltime = controlCILines()$controlTime, controlSurv = controlCILines()$mediancontrol)
       }
+
       theme_set(theme_grey(base_size = 12))
-      p1 <- ggplot(data=controldf, aes(x=controltime, y=controlcurve)) +
+      p1 <- ggplot(data=controlDF, aes(x=controlTime, y=controlSurv)) +
         geom_line(colour="blue") + xlab("Time") + ylab("Survival") + ylim(0,1)
 
 
-      simlinesmedian <- data.frame(x = drawsimlines()$quicktime, y = drawsimlines()$medianTreatment)
-      mybreaks <- plyr::round_any(seq(0, exp((1.527/input$gammacmean)-log(input$lambdacmean))*1.1, length=5), accuracy = 5)
-      p1 <-  p1 + geom_line(data = simlinesmedian, aes(x = x, y = y), colour = "red") + scale_x_continuous(breaks = mybreaks)
+      treatmentDF <- data.frame(x = treatmentCILines()$TreatmentTimeCombined, y = treatmentCILines()$medianTreatment)
+      p1 <-  p1 + geom_line(data = treatmentDF, aes(x = x, y = y), colour = "red")
 
       print(p1)
 
@@ -803,40 +793,33 @@ DTEAssuranceApp <- function(){
           #This adds the median survival line (onto the control and treatment)
           if (addfeedback[i]=="Median survival line"){
             #Looks at whether the median time is before or after the delay
-            medianTTime <- drawsimlines()$quicktime[sum(drawsimlines()$medianTreatment>0.5)]
+            medianTTime <- treatmentCILines()$TreatmentTimeCombined[sum(treatmentCILines()$medianTreatment>0.5)]
             medianCTime <- (1/input$lambdacmean)*(-log(0.5))^(1/input$gammacmean)
-            if (abs(medianTTime-medianCTime)<0.001){
-              mediandf <- data.frame(x = seq(0, medianCTime, length=2), y = rep(0.5, 2))
-              mediandf1 <- data.frame(x = rep(medianCTime, 2), y = seq(0, 0.5, length=2))
-              p1 <- p1 + geom_line(data = mediandf, aes(x = x, y=y), linetype = "dashed") + geom_line(data = mediandf1, aes(x = x, y=y), linetype="dashed") +
-                scale_x_continuous(breaks = c(mybreaks, medianCTime), labels = c(mybreaks, round(medianCTime, 1)))
-            } else {
               mediandf <- data.frame(x = seq(0, medianTTime, length=2), y = rep(0.5, 2))
               mediandf1 <- data.frame(x = rep(medianTTime, 2), y = seq(0, 0.5, length=2))
               mediandf2 <- data.frame(x = rep(medianCTime, 2), y = seq(0, 0.5, length=2))
               p1 <- p1 + geom_line(data = mediandf, aes(x = x, y=y), linetype = "dashed") + geom_line(data = mediandf1, aes(x = x, y=y), linetype="dashed") +
-                geom_line(data = mediandf2, aes(x = x, y=y), linetype="dashed") +
-                scale_x_continuous(breaks = c(mybreaks,medianCTime, medianTTime), labels = c(mybreaks,  round(medianCTime, 1), round(medianTTime, 1)))
-            }
+                geom_line(data = mediandf2, aes(x = x, y=y), linetype="dashed")
+
             #This uses the elicited distribution for T and adds 95% points onto the control curve
           } else if (addfeedback[i]=="95% CI for T"){
 
-            mySample <- drawsamples()$mySample
+            mySample <- elicitedSamples()$mySample
             lowerT <- quantile(mySample[,1], 0.025)
             upperT <- quantile(mySample[,1], 0.975)
-            p1 <- p1 + geom_point(aes(x = upperT, y = controlcurve[sum(controltime<upperT)]), colour="orange", size = 4)
+            p1 <- p1 + geom_point(aes(x = upperT, y = controlSurv[sum(controlTime<upperT)]), colour="orange", size = 4)
             if (lowerT==0){
               p1 <- p1 + geom_point(aes(x = lowerT, y = 1), colour="orange", size = 4)
             } else {
-              p1 <- p1 + geom_point(aes(x = lowerT, y = controlcurve[sum(controltime<lowerT)]), colour="orange", size = 4)
+              p1 <- p1 + geom_point(aes(x = lowerT, y = controlSurv[sum(controlTime<lowerT)]), colour="orange", size = 4)
             }
 
           } else if (addfeedback[i]=="CI for Treatment Curve (0.1 and 0.9)"){
             shinyjs::show(id = "timeInputFeedback")
             shinyjs::show(id = "feedbackQuantile")
             #This adds the simulated confidence interval lines
-            simlineslower <- data.frame(x = drawsimlines()$quicktime, y = drawsimlines()$lowerbound)
-            simlinesupper <- data.frame(x = drawsimlines()$quicktime, y = drawsimlines()$upperbound)
+            simlineslower <- data.frame(x = treatmentCILines()$TreatmentTimeCombined, y = treatmentCILines()$lowerbound)
+            simlinesupper <- data.frame(x = treatmentCILines()$TreatmentTimeCombined, y = treatmentCILines()$upperbound)
             p1 <- p1 + geom_line(data = simlineslower, aes(x=x, y=y), linetype="dashed")+
               geom_line(data = simlinesupper, aes(x=x, y=y), linetype="dashed")
 
@@ -864,9 +847,9 @@ DTEAssuranceApp <- function(){
         for (i in 1:length(addfeedback)){
           if (addfeedback[i]=="CI for Treatment Curve (0.1 and 0.9)"){
 
-            quantileMatrix <- drawsimlines()$SimMatrix
+            quantileMatrix <- treatmentCILines()$SimMatrix
 
-            quantileTime <- drawsimlines()$quicktime
+            quantileTime <- treatmentCILines()$TreatmentTimeCombined
 
             quantileVec <- rep(NA, length = nrow(quantileMatrix))
 
