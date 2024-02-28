@@ -24,6 +24,9 @@
 #'
 
 DTEAssuranceApp <- function(){
+
+  source("R/helperfunctions.R")
+
   x <- y <- quantiletime <- NULL
   ui <- fluidPage(
     withMathJax(),
@@ -525,6 +528,10 @@ DTEAssuranceApp <- function(){
                           ")", sep="")
       }
 
+      p1 <- ggplot(data=Tsamples, aes(x=time)) + geom_histogram(aes(y = after_stat(density))) + labs(title = dist.title) +  theme(plot.title = element_text(hjust = 0.5))
+
+      print(p1)
+
     })
 
     # Functions for the post-delay HR tab ---------------------------------
@@ -633,6 +640,10 @@ DTEAssuranceApp <- function(){
                            myfit2()$mirrorlogt[1,3], sep="")
 
       }
+
+      p1 <- ggplot(data=HRsamples, aes(x=HR)) + geom_histogram(aes(y = after_stat(density))) + labs(title = dist.title) +  theme(plot.title = element_text(hjust = 0.5))
+
+      print(p1)
 
     })
 
