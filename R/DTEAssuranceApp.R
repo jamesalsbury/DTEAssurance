@@ -170,7 +170,7 @@ DTEAssuranceApp <- function(){
         tabPanel("Feedback",
                  sidebarLayout(
                    sidebarPanel = sidebarPanel(
-                     checkboxGroupInput("showfeedback", "Add to plot", choices = c("Median survival line", "95% CI for T", "CI for Treatment Curve (0.1 and 0.9)")),
+                     checkboxGroupInput("showfeedback", "Add to plot", choices = c("Median survival line", "90% CI for T", "CI for Treatment Curve (0.1 and 0.9)")),
                      hidden(numericInput("feedbackQuantile", "Uncertainty about the following survival quantile:", value = 0.5, min = 0, max = 1)),
                      hidden(numericInput("timeInputFeedback", "Prior information about time:", value = 25, min = 0, max = 100))
                    ),
@@ -190,7 +190,19 @@ DTEAssuranceApp <- function(){
                    sidebarPanel = sidebarPanel(
                      shinyjs::useShinyjs(),
                      numericInput("numofpatients", "Maximum number of patients in the trial", value=1000),
-                     numericInput("rectime", "Recruitment length", value=6),
+                     selectInput("recMethod", "Recruitment method", choices = c("Power"="power", "Piecewise constant"="PWC"), selected = "power"),
+
+                     splitLayout(
+                       numericInput("rec_power", "Power", value=1, min=1),
+                       numericInput("rec_period", "Period", value=12, min=1)
+
+                     ),
+
+                     splitLayout(
+                       hidden(textInput("rec_rate", "Rate", value="30, 50")),
+                       hidden(textInput("rec_duration", "Duration", value="10, 5"))
+
+                     ),
 
 
                      splitLayout(
@@ -199,10 +211,30 @@ DTEAssuranceApp <- function(){
 
                      ),
                      numericInput("chosenLength", "Maximum trial duration (including recruitment time)", value=60),
-                     numericInput("TPP", "Target effect (average hazard ratio)", value = 0.8),
-                     actionButton("drawAssurance", "Produce plot")
+                     selectInput("analysisType", label = "Analysis method", choices = c("Logrank test" = "LRT", "Fleming-Harrington test" = "FHT"), selected = "LRT"),
+                     splitLayout(
+                       hidden(numericInput("t_star", ' \\( t^* \\)', value=3, min=0)),
+                       hidden(numericInput("s_star", ' \\( \\hat{S}(t^*) \\)', value=NA, min=0, max = 1))
+
+                     ),
+                     splitLayout(
+                       hidden(numericInput("rho", ' \\( \\rho \\)', value=0, min=0, max = 1)),
+                       hidden(numericInput("gamma", " \\( \\gamma \\)", value=0, min=0, max = 1))
+
+                     ),
+                     actionButton("calcAssurance", "Calculate Assurance")
                    ),
                    mainPanel = mainPanel(
+                     fluidRow(
+                       column(6,
+                              plotOutput("pdfRec")
+                       ),
+                       column(6,
+                              plotOutput("cdfRec")
+                       )
+                     ),
+
+
                      plotOutput("assurancePlot"),
                      htmlOutput("assuranceText"),
                      plotOutput("AHRPlot"),
@@ -670,42 +702,36 @@ DTEAssuranceApp <- function(){
       #We fill a matrix with the treatment survival probabilities at each time
       SimMatrix <- matrix(NA, nrow = nsamples, ncol=200)
 
+      TreatmentTime <- seq(0, finalSurvTime, length = 200)
+
       bigT <- sample(mySample[,1], size = nsamples, replace = T)
       HR <- sample(mySample[,2], size = nsamples, replace = T)
-
 
       for (i in 1:nsamples){
 
         lambdat <- input$lambdacmean*HR[i]^(1/input$gammacmean)
 
-        TreatmentTime1 <- seq(0, bigT[i], length = 100)
-        TreatmentSurv1 <- exp(-(input$lambdacmean*TreatmentTime1)^input$gammacmean)
-
-        TreatmentTime2 <- seq(bigT[i], finalSurvTime, length = 100)
-        TreatmentSurv2 <- exp(-(input$lambdacmean*bigT[i])^input$gammacmean - lambdat^gammat*(TreatmentTime2^gammat-bigT[i]^gammat))
-
-        TreatmentTimeCombined <- c(TreatmentTime1, TreatmentTime2)
-        TreatmentSurvCombined <- c(TreatmentSurv1, TreatmentSurv2)
-
         #The i'th row of the matrix is filled with the survival probabilities for these sampled T and HR
-        SimMatrix[i,] <- TreatmentSurvCombined
-
+        SimMatrix[i,] <- ifelse(TreatmentTime<bigT[i], exp(-(input$lambdacmean*TreatmentTime)^input$gammacmean), exp(-(input$lambdacmean*bigT[i])^input$gammacmean -
+                                                                                                                       lambdat^gammat*(TreatmentTime^gammat-bigT[i]^gammat)))
       }
+
+      #myMatrix <<- SimMatrix
 
       #We now look at each time iteration at the distribution
       #We look at the 0.1 and 0.9 quantile of the distribution
       #These quantiles can be thought of as confidence intervals for the treatment curve, taken from
       #the elicited distributions
-      lowerbound <- rep(NA, length(TreatmentTimeCombined))
-      upperbound <- rep(NA, length(TreatmentTimeCombined))
-      medianTreatment <- rep(NA, length(TreatmentTimeCombined))
-      for (j in 1:length(TreatmentTimeCombined)){
+      lowerbound <- rep(NA, length(TreatmentTime))
+      upperbound <- rep(NA, length(TreatmentTime))
+      medianTreatment <- rep(NA, length(TreatmentTime))
+      for (j in 1:length(TreatmentTime)){
         lowerbound[j] <- quantile(SimMatrix[,j], 0.1)
         upperbound[j] <- quantile(SimMatrix[,j], 0.9)
         medianTreatment[j] <- quantile(SimMatrix[,j], 0.5)
       }
 
-      return(list(lowerbound=lowerbound, upperbound=upperbound, TreatmentTimeCombined=TreatmentTimeCombined, SimMatrix = SimMatrix,
+      return(list(lowerbound=lowerbound, upperbound=upperbound, TreatmentTime=TreatmentTime, SimMatrix = SimMatrix,
                   medianTreatment = medianTreatment))
 
     })
@@ -720,8 +746,8 @@ DTEAssuranceApp <- function(){
       if (!is.null(addfeedback)){
         for (i in 1:length(addfeedback)){
           if (addfeedback[i]=="CI for Treatment Curve (0.1 and 0.9)"){
-            simlineslower <- data.frame(x = treatmentCILines()$TreatmentTimeCombined, y = treatmentCILines()$lowerbound)
-            simlinesupper <- data.frame(x = treatmentCILines()$TreatmentTimeCombined, y = treatmentCILines()$upperbound)
+            simlineslower <- data.frame(x = treatmentCILines()$TreatmentTime, y = treatmentCILines()$lowerbound)
+            simlinesupper <- data.frame(x = treatmentCILines()$TreatmentTime, y = treatmentCILines()$upperbound)
 
 
             CIwidth <- simlinesupper[(which.min(abs(simlinesupper$x-input$timeInputFeedback))),]$y - simlineslower[(which.min(abs(simlineslower$x-input$timeInputFeedback))),]$y
@@ -746,7 +772,7 @@ DTEAssuranceApp <- function(){
       if (!is.null(addfeedback)){
         for (i in 1:length(addfeedback)){
           if (addfeedback[i]=="Median survival line"){
-            medianTTime <- round(treatmentCILines()$TreatmentTimeCombined[sum(treatmentCILines()$medianTreatment>0.5)], 1)
+            medianTTime <- round(treatmentCILines()$TreatmentTime[sum(treatmentCILines()$medianTreatment>0.5)], 1)
             medianCTime <- round((1/input$lambdacmean)*(-log(0.5))^(1/input$gammacmean), 1)
             str1 <- paste0("The median survival time on the control is ", medianCTime, " and the median survival time on the treatment is ", medianTTime)
           }
@@ -780,7 +806,7 @@ DTEAssuranceApp <- function(){
         geom_line(colour="blue") + xlab("Time") + ylab("Survival") + ylim(0,1)
 
 
-      treatmentDF <- data.frame(x = treatmentCILines()$TreatmentTimeCombined, y = treatmentCILines()$medianTreatment)
+      treatmentDF <- data.frame(x = treatmentCILines()$TreatmentTime, y = treatmentCILines()$medianTreatment)
       p1 <-  p1 + geom_line(data = treatmentDF, aes(x = x, y = y), colour = "red")
 
       print(p1)
@@ -796,7 +822,7 @@ DTEAssuranceApp <- function(){
           #This adds the median survival line (onto the control and treatment)
           if (addfeedback[i]=="Median survival line"){
             #Looks at whether the median time is before or after the delay
-            medianTTime <- treatmentCILines()$TreatmentTimeCombined[sum(treatmentCILines()$medianTreatment>0.5)]
+            medianTTime <- treatmentCILines()$TreatmentTime[sum(treatmentCILines()$medianTreatment>0.5)]
             medianCTime <- (1/input$lambdacmean)*(-log(0.5))^(1/input$gammacmean)
               mediandf <- data.frame(x = seq(0, medianTTime, length=2), y = rep(0.5, 2))
               mediandf1 <- data.frame(x = rep(medianTTime, 2), y = seq(0, 0.5, length=2))
@@ -805,24 +831,26 @@ DTEAssuranceApp <- function(){
                 geom_line(data = mediandf2, aes(x = x, y=y), linetype="dashed")
 
             #This uses the elicited distribution for T and adds 95% points onto the control curve
-          } else if (addfeedback[i]=="95% CI for T"){
+          } else if (addfeedback[i]=="90% CI for T"){
 
             mySample <- elicitedSamples()$mySample
-            lowerT <- quantile(mySample[,1], 0.025)
-            upperT <- quantile(mySample[,1], 0.975)
-            p1 <- p1 + geom_point(aes(x = upperT, y = controlSurv[sum(controlTime<upperT)]), colour="orange", size = 4)
+            lowerT <- quantile(mySample[,1], 0.05)
+            upperT <- quantile(mySample[,1], 0.95)
+
+            #p1 <- p1 + geom_point(aes(x = as.numeric(upperT), y = exp(-(input$lambdacmean*upperT)^input$gammacmean)), colour="orange", size = 4)
+            p1 <- p1 + annotate("point", x = upperT, y = exp(-(input$lambdacmean*upperT)^input$gammacmean), color = "orange", size = 4) # Add a single point
             if (lowerT==0){
-              p1 <- p1 + geom_point(aes(x = lowerT, y = 1), colour="orange", size = 4)
+              p1 <- p1 + annotate("point", x = lowerT, y = 1, color = "orange", size = 4) # Add a single point
             } else {
-              p1 <- p1 + geom_point(aes(x = lowerT, y = controlSurv[sum(controlTime<lowerT)]), colour="orange", size = 4)
+              p1 <- p1 + annotate("point", x = lowerT, y = exp(-(input$lambdacmean*lowerT)^input$gammacmean), color = "orange", size = 4) # Add a single point
             }
 
           } else if (addfeedback[i]=="CI for Treatment Curve (0.1 and 0.9)"){
             shinyjs::show(id = "timeInputFeedback")
             shinyjs::show(id = "feedbackQuantile")
             #This adds the simulated confidence interval lines
-            simlineslower <- data.frame(x = treatmentCILines()$TreatmentTimeCombined, y = treatmentCILines()$lowerbound)
-            simlinesupper <- data.frame(x = treatmentCILines()$TreatmentTimeCombined, y = treatmentCILines()$upperbound)
+            simlineslower <- data.frame(x = treatmentCILines()$TreatmentTime, y = treatmentCILines()$lowerbound)
+            simlinesupper <- data.frame(x = treatmentCILines()$TreatmentTime, y = treatmentCILines()$upperbound)
             p1 <- p1 + geom_line(data = simlineslower, aes(x=x, y=y), linetype="dashed")+
               geom_line(data = simlinesupper, aes(x=x, y=y), linetype="dashed")
 
@@ -852,7 +880,7 @@ DTEAssuranceApp <- function(){
 
             quantileMatrix <- treatmentCILines()$SimMatrix
 
-            quantileTime <- treatmentCILines()$TreatmentTimeCombined
+            quantileTime <- treatmentCILines()$TreatmentTime
 
             quantileVec <- rep(NA, length = nrow(quantileMatrix))
 
@@ -895,47 +923,131 @@ DTEAssuranceApp <- function(){
 
     # Functions for the Assurance tab ---------------------------------
 
-    #This function calculates the normal assurance given the elicited distributions and other simple questions about the trial
-    calculateNormalAssurance <- eventReactive(input$drawAssurance, {
+    observe({
+      if (input$recMethod=="power"){
+        shinyjs::show("rec_power")
+        shinyjs::show("rec_period")
+      } else{
+        shinyjs::hide("rec_power")
+        shinyjs::hide("rec_period")
+      }
+    })
 
-      #Makes the simplification
-      conc.probs <- matrix(0, 2, 2)
-      conc.probs[1, 2] <- 0.5
+    observe({
+      if (input$recMethod=="PWC"){
+        shinyjs::show("rec_rate")
+        shinyjs::show("rec_duration")
+      } else{
+        shinyjs::hide("rec_rate")
+        shinyjs::hide("rec_duration")
+      }
+    })
+
+    observe({
+      if (input$analysisType=="FHT"){
+        shinyjs::show("rho")
+        shinyjs::show("gamma")
+      } else{
+        shinyjs::hide("rho")
+        shinyjs::hide("gamma")
+      }
+    })
+
+    output$pdfRec <- renderPlot({
+
+      if (input$recMethod=="power"){
+
+        # Calculate the correct PDF values
+        x_values <- seq(0, input$rec_period, length.out = 1000)
+        pdf_values <- (input$rec_power / input$rec_period) * (x_values/input$rec_period)^(input$rec_power - 1)
+
+        # Overlay correct PDF on the histogram
+        plot(x_values, pdf_values, col = "red", type = "l", xlab = "Recruitment time", ylab = "Density")
+      } else if (input$recMethod == "PWC"){
+
+        rec_rate <- as.numeric(unlist(strsplit(input$rec_rate,",")))
+        rec_duration <- as.numeric(unlist(strsplit(input$rec_duration,",")))
+
+        n <- length(rec_rate)
+
+        # Define a function that returns the residuals
+        equations <- function(vars) {
+          x <- vars[1:n]
+          eq1 <- sum(x * rec_duration) - 1
+          eq_rest <- sapply(2:n, function(i) x[1] / x[i] - rec_rate[1] / rec_rate[i])
+          return(c(eq1, eq_rest))
+        }
+
+        # Initial guess
+        initial_guess <- rep(0.1, n)
+
+        # Solve the nonlinear system of equations
+        solution <- nleqslv(initial_guess, equations)
+
+        plot(c(0, rec_duration[1]), c(solution$x[1], solution$x[1]), type= "l", col = "red",
+             xlim = c(0, sum(rec_duration)), ylim = c(0, max(solution$x)), xlab = "Recruitment time", ylab = "Density")
+
+        for (i in 1:(n-1)){
+          lines(c(sum(rec_duration[1:i]), sum(rec_duration[1:i])), c(solution$x[i], solution$x[i+1]), col = "red")
+          lines(c(sum(rec_duration[1:i]), sum(rec_duration[1:(i+1)])), c(solution$x[i+1], solution$x[i+1]), col = "red")
+        }
+
+      }
+    })
+
+    output$cdfRec <- renderPlot({
+
+      if (input$recMethod=="power"){
+
+        # Calculate the correct CDF values
+        x_values <- seq(0, input$rec_period, length.out = 1000)
+        cdf_values <- (x_values/input$rec_period)^(input$rec_power)*input$numofpatients
+
+
+        plot(x_values, cdf_values, col = "red", type = "l", xlab = "Recruitment time", ylab = "Number of patients")
+
+      } else if (input$recMethod == "PWC"){
+
+        rec_rate <- as.numeric(unlist(strsplit(input$rec_rate,",")))
+        rec_duration <- as.numeric(unlist(strsplit(input$rec_duration,",")))
+
+        # Calculate cumulative resource allocation over time
+        cumulative_allocation <- cumsum(rec_rate * rec_duration)
+
+        # Create x-axis and y-axis data for step function
+        xaxis <- c(0, cumsum(rec_duration))
+        yaxis <- c(0, cumulative_allocation)
+
+        # Plotting
+        plot(xaxis, yaxis, type = "l", xlab = "Recruitment time", ylab = "Number of patients", col = "red")
+      }
+    })
+
+
+    #This function calculates the normal assurance given the elicited distributions and other simple questions about the trial
+    calculateAssurance <- eventReactive(input$calcAssurance, {
+
 
       assFunc <- function(n1, n2){
 
 
         #Simulate 400 observations for T and HR given the elicited distributions
         #For each n1, n2, simulate 400 trials
-        assnum <- 400
+        assnum <- 1
         assvec <- rep(NA, assnum)
         AHRvec <- rep(NA, assnum)
         LBAHRvec <- rep(NA, assnum)
         UBAHRvec <- rep(NA, assnum)
         TPPvec <- rep(NA, assnum)
         eventsvec <- rep(NA, assnum)
-        mySample <- data.frame(copulaSample(myfit1(), myfit2(), cp = conc.probs, n = assnum, d = c(input$dist1, input$dist2)))
+
+        mySample <- elicitedSamples()$mySample
 
 
         for (i in 1:assnum){
 
-          u <- runif(1, 0, 1)
 
-          if (u>input$massT0){
-            bigT <- mySample[i,1]
-          } else {
-            bigT <- 0
-          }
-
-          u <- runif(1, 0, 1)
-
-          if (u>input$massHR1){
-            HR <- mySample[i,2]
-          } else {
-            HR <- 1
-          }
-
-          if (is.null(v$upload)){
+          if (v$upload=="no"){
             lambdac <- input$lambdacmean
             gammac <- input$gammacmean
           } else {
@@ -945,15 +1057,21 @@ DTEAssuranceApp <- function(){
 
           gammat <- gammac
 
+          bigT <- sample(mySample[,1], 1)
+          HR <- sample(mySample[,2], 1)
+
           lambdat <- lambdac*HR^(1/gammac)
 
-          dataCombined <- SimDTEDataSet(n1, n2, gammat, gammac, lambdat, lambdac, bigT, input$rectime, input$chosenLength)
+          if (input$recMethod=="power"){
+            dataCombined <- SimDTEDataSetPower(n1, n2, gammat, gammac, lambdat, lambdac, bigT, input$rec_period, input$rec_power) {
+            } else {
+            dataCombined <- SimDTEDataSetPWC(n1, n2, gammat, gammac, lambdat, lambdac, bigT, input$rec_rate, input$rec_duration) {
+
+            }
+
+          dataCombined <- CensFunc(dataCombined, input$chosenLength)
 
           coxmodel <- coxph(Surv(time, event)~group, data = dataCombined)
-
-          AHRvec[i] <- exp(coef(coxmodel))
-
-          TPPvec[i] <- exp(coef(coxmodel)) < input$TPP
 
           CI <- exp(confint(coxmodel))
 
@@ -1047,12 +1165,12 @@ DTEAssuranceApp <- function(){
 
       #Plot the assurance calculated in the function
       theme_set(theme_grey(base_size = 12))
-      assurancenormaldf <- data.frame(x = calculateNormalAssurance()$samplesizevec, y = predict(calculateNormalAssurance()$asssmooth))
-      assurancenormalLBdf <- data.frame(x = calculateNormalAssurance()$samplesizevec, y = predict(calculateNormalAssurance()$LBasssmooth))
-      assurancenormalUBdf <- data.frame(x = calculateNormalAssurance()$samplesizevec, y = predict(calculateNormalAssurance()$UBasssmooth))
-      TPPdf <- data.frame(x = calculateNormalAssurance()$samplesizevec, y = predict(calculateNormalAssurance()$TPPsmooth))
-      TPPLBdf <- data.frame(x = calculateNormalAssurance()$samplesizevec, y = predict(calculateNormalAssurance()$LBTPPsmooth))
-      TPPUBdf <- data.frame(x = calculateNormalAssurance()$samplesizevec, y = predict(calculateNormalAssurance()$UBTPPsmooth))
+      assurancenormaldf <- data.frame(x = calculateAssurance()$samplesizevec, y = predict(calculateAssurance()$asssmooth))
+      assurancenormalLBdf <- data.frame(x = calculateAssurance()$samplesizevec, y = predict(calculateAssurance()$LBasssmooth))
+      assurancenormalUBdf <- data.frame(x = calculateAssurance()$samplesizevec, y = predict(calculateAssurance()$UBasssmooth))
+      TPPdf <- data.frame(x = calculateAssurance()$samplesizevec, y = predict(calculateAssurance()$TPPsmooth))
+      TPPLBdf <- data.frame(x = calculateAssurance()$samplesizevec, y = predict(calculateAssurance()$LBTPPsmooth))
+      TPPUBdf <- data.frame(x = calculateAssurance()$samplesizevec, y = predict(calculateAssurance()$UBTPPsmooth))
       p1 <- ggplot() + geom_line(data = assurancenormaldf, aes(x = x, y = y, colour="Assurance"), linetype="solid") + xlab("Number of patients") +
         ylab("Assurance") + ylim(0, 1.05) +
         geom_line(data = TPPdf, aes(x=x, y=y, colour = 'Target effect'), linetype="solid") +
@@ -1072,9 +1190,9 @@ DTEAssuranceApp <- function(){
 
     output$AHRPlot <- renderPlot({
 
-      AHRdf <- data.frame(x = calculateNormalAssurance()$samplesizevec, y = predict(calculateNormalAssurance()$AHRsmooth))
-      LBdf <- data.frame(x = calculateNormalAssurance()$samplesizevec, y = predict(calculateNormalAssurance()$LBsmooth))
-      UBdf <- data.frame(x = calculateNormalAssurance()$samplesizevec, y = predict(calculateNormalAssurance()$UBsmooth))
+      AHRdf <- data.frame(x = calculateAssurance()$samplesizevec, y = predict(calculateAssurance()$AHRsmooth))
+      LBdf <- data.frame(x = calculateAssurance()$samplesizevec, y = predict(calculateAssurance()$LBsmooth))
+      UBdf <- data.frame(x = calculateAssurance()$samplesizevec, y = predict(calculateAssurance()$UBsmooth))
 
       p1 <- ggplot() + geom_line(data = AHRdf, aes(x = x, y = y, colour="Average HR"), linetype="solid") + xlab("Number of patients") +
         ylab("Average hazard ratio") + geom_line(data = LBdf, aes(x=x, y=y, colour = "CI"), linetype="dashed") +
@@ -1098,13 +1216,13 @@ DTEAssuranceApp <- function(){
       #Show how many events are seen given the set up
       str1 <- paste0("The ","<font color=\"#0000FF\"><b>blue</b></font>", " line is the proportion of trials that give rise to a 'successful' outcome.")
       str2 <- paste0("The ", "<font color=\"#FFA500\"><b>orange</b></font>", " line is the  proportion of trials in which the estimated average hazard ratio is less than the target effect - ", input$TPP, ".")
-      str3 <- paste0("On average, ", round(calculateNormalAssurance()$eventsseen), " events are seen when ", input$numofpatients, " patients are enroled for ", input$chosenLength, " months.")
+      str3 <- paste0("On average, ", round(calculateAssurance()$eventsseen), " events are seen when ", input$numofpatients, " patients are enroled for ", input$chosenLength, " months.")
       HTML(paste(str1, str2, str3, sep = '<br/>'))
     })
 
     output$AHRFeedback  <- renderUI({
       #Show how many events are seen given the set up
-      x <-  round(calculateNormalAssurance()$eventsseen)
+      x <-  round(calculateAssurance()$eventsseen)
       str1 <- paste0("The ","<font color=\"##FF0000\"><b>red</b></font>", " line is the average estimated hazard ratio.")
       HTML(paste(str1, sep = '<br/>'))
     })
