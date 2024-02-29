@@ -1033,7 +1033,7 @@ DTEAssuranceApp <- function(){
 
         #Simulate 400 observations for T and HR given the elicited distributions
         #For each n1, n2, simulate 400 trials
-        assnum <- 100
+        assnum <- 500
         assvec <- rep(NA, assnum)
         AHRvec <- rep(NA, assnum)
         LBAHRvec <- rep(NA, assnum)
@@ -1072,6 +1072,8 @@ DTEAssuranceApp <- function(){
           #print(dataCombined)
 
           coxmodel <- coxph(Surv(survival_time, status)~group, data = dataCombined)
+
+          AHRvec[i] <- as.numeric(exp(coef(coxmodel)))
 
           CI <- exp(confint(coxmodel))
 
@@ -1114,11 +1116,11 @@ DTEAssuranceApp <- function(){
 
       UBAHRvec <- unlist(calcassvec[3,])
 
-      AHRvec <- unlist(calcassvec[5,])
+      AHRvec <- unlist(calcassvec[4,])
 
-      eventvec <- unlist(calcassvec[6,])
+      eventvec <- unlist(calcassvec[5,])
 
-      assnumvec <- unlist(calcassvec[7,])
+      assnumvec <- unlist(calcassvec[6,])
 
       LBassvec <- assvec-1.96*sqrt(assvec*(1-assvec)/assnumvec)
 
@@ -1137,13 +1139,9 @@ DTEAssuranceApp <- function(){
 
       UBsmooth <- loess(UBAHRvec~samplesizevec)
 
-
-
       LBasssmooth <- loess(LBassvec~samplesizevec)
 
       UBasssmooth <- loess(UBassvec~samplesizevec)
-
-
 
 
       return(list(calcassvec = calcassvec, asssmooth = asssmooth, samplesizevec = samplesizevec,
@@ -1160,23 +1158,17 @@ DTEAssuranceApp <- function(){
       assurancenormaldf <- data.frame(x = calculateAssurance()$samplesizevec, y = predict(calculateAssurance()$asssmooth))
       assurancenormalLBdf <- data.frame(x = calculateAssurance()$samplesizevec, y = predict(calculateAssurance()$LBasssmooth))
       assurancenormalUBdf <- data.frame(x = calculateAssurance()$samplesizevec, y = predict(calculateAssurance()$UBasssmooth))
-      #TPPdf <- data.frame(x = calculateAssurance()$samplesizevec, y = predict(calculateAssurance()$TPPsmooth))
-      #TPPLBdf <- data.frame(x = calculateAssurance()$samplesizevec, y = predict(calculateAssurance()$LBTPPsmooth))
-      #TPPUBdf <- data.frame(x = calculateAssurance()$samplesizevec, y = predict(calculateAssurance()$UBTPPsmooth))
-      p1 <- ggplot() + geom_line(data = assurancenormaldf, aes(x = x, y = y, colour="Assurance"), linetype="solid") + xlab("Number of patients") +
+      p1 <- ggplot() + geom_line(data = assurancenormaldf, aes(x = x, y = y, colour="Assurance"), linetype="solid") + xlab("Total number of patients") +
         ylab("Assurance") + ylim(0, 1.05) +
-        #geom_line(data = TPPdf, aes(x=x, y=y, colour = 'Target effect'), linetype="solid") +
         geom_line(data = assurancenormalLBdf, aes(x=x, y=y, colour = 'Assurance'), linetype='dashed') +
         geom_line(data = assurancenormalUBdf, aes(x=x, y=y, colour = 'Assurance'), linetype='dashed') +
-       # geom_line(data = TPPLBdf, aes(x=x, y=y, colour = 'Target effect'), linetype='dashed') +
-       # geom_line(data = TPPUBdf, aes(x=x, y=y, colour = 'Target effect'), linetype='dashed') +
         theme(
           legend.position = c(.05, .95),
           legend.justification = c("left", "top"),
           legend.box.just = "left",
           legend.margin = margin(6, 6, 6, 6)) + scale_color_manual(name=NULL,
-                                                                   breaks=c('Assurance', 'Target effect'),
-                                                                   values=c('Assurance'='blue', 'Target effect' = 'orange'))
+                                                                   breaks=c('Assurance'),
+                                                                   values=c('Assurance'='blue'))
       print(p1)
     })
 
@@ -1208,9 +1200,8 @@ DTEAssuranceApp <- function(){
     output$assuranceText  <- renderUI({
       #Show how many events are seen given the set up
       str1 <- paste0("The ","<font color=\"#0000FF\"><b>blue</b></font>", " line is the proportion of trials that give rise to a 'successful' outcome.")
-      str2 <- paste0("The ", "<font color=\"#FFA500\"><b>orange</b></font>", " line is the  proportion of trials in which the estimated average hazard ratio is less than the target effect - ", input$TPP, ".")
-      str3 <- paste0("On average, ", round(calculateAssurance()$eventsseen), " events are seen when ", input$numofpatients, " patients are enroled for ", input$chosenLength, " months.")
-      HTML(paste(str1, str2, str3, sep = '<br/>'))
+      str2 <- paste0("On average, ", round(calculateAssurance()$eventsseen), " events are seen when ", input$numofpatients, " patients are enroled for ", input$chosenLength, " months.")
+      HTML(paste(str1, str2, sep = '<br/>'))
     })
 
     output$AHRFeedback  <- renderUI({
