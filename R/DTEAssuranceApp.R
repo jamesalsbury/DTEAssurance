@@ -1033,12 +1033,11 @@ DTEAssuranceApp <- function(){
 
         #Simulate 400 observations for T and HR given the elicited distributions
         #For each n1, n2, simulate 400 trials
-        assnum <- 1
+        assnum <- 100
         assvec <- rep(NA, assnum)
         AHRvec <- rep(NA, assnum)
         LBAHRvec <- rep(NA, assnum)
         UBAHRvec <- rep(NA, assnum)
-        TPPvec <- rep(NA, assnum)
         eventsvec <- rep(NA, assnum)
 
         mySample <- elicitedSamples()$mySample
@@ -1063,15 +1062,16 @@ DTEAssuranceApp <- function(){
           lambdat <- lambdac*HR^(1/gammac)
 
           if (input$recMethod=="power"){
-            dataCombined <- SimDTEDataSetPower(n1, n2, gammat, gammac, lambdat, lambdac, bigT, input$rec_period, input$rec_power) {
+            dataCombined <- SimDTEDataSetPower(n1, n2, gammat, gammac, lambdat, lambdac, bigT, input$rec_period, input$rec_power)
             } else {
-            dataCombined <- SimDTEDataSetPWC(n1, n2, gammat, gammac, lambdat, lambdac, bigT, input$rec_rate, input$rec_duration) {
-
+            dataCombined <- SimDTEDataSetPWC(n1, n2, gammat, gammac, lambdat, lambdac, bigT, input$rec_rate, input$rec_duration)
             }
 
           dataCombined <- CensFunc(dataCombined, input$chosenLength)
 
-          coxmodel <- coxph(Surv(time, event)~group, data = dataCombined)
+          #print(dataCombined)
+
+          coxmodel <- coxph(Surv(survival_time, status)~group, data = dataCombined)
 
           CI <- exp(confint(coxmodel))
 
@@ -1080,7 +1080,7 @@ DTEAssuranceApp <- function(){
           UBAHRvec[i] <- CI[2]
 
           #Performs a log rank test on the data
-          test <- survdiff(Surv(time, event)~group, data = dataCombined)
+          test <- survdiff(Surv(survival_time, status)~group, data = dataCombined)
           #If the p-value of the test is less than 0.05 then assvec = 1, 0 otherwise
           assvec[i] <- test$chisq > qchisq(0.95, 1)
 
@@ -1090,13 +1090,12 @@ DTEAssuranceApp <- function(){
         }
 
         AHRvec[is.infinite(AHRvec)]<-NA
-        TPPvec[is.infinite(TPPvec)]<-NA
         LBAHRvec[is.infinite(LBAHRvec)]<-NA
         UBAHRvec[is.infinite(UBAHRvec)]<-NA
 
 
         return(list(assvec = mean(assvec), LBAHRvec = mean(LBAHRvec, na.rm=T), UBAHRvec = mean(UBAHRvec, na.rm = T),
-                    TPPvec = mean(TPPvec, na.rm = T), AHRvec = mean(AHRvec, na.rm=T), eventvec = mean(eventsvec), assnum=assnum))
+                    AHRvec = mean(AHRvec, na.rm=T), eventvec = mean(eventsvec), assnum=assnum))
       }
 
       #Looking at assurance for varying sample sizes
@@ -1115,8 +1114,6 @@ DTEAssuranceApp <- function(){
 
       UBAHRvec <- unlist(calcassvec[3,])
 
-      TPPvec <- unlist(calcassvec[4,])
-
       AHRvec <- unlist(calcassvec[5,])
 
       eventvec <- unlist(calcassvec[6,])
@@ -1127,9 +1124,6 @@ DTEAssuranceApp <- function(){
 
       UBassvec <- assvec+1.96*sqrt(assvec*(1-assvec)/assnumvec)
 
-      LBTPPvec <- TPPvec-1.96*sqrt(TPPvec*(1-TPPvec)/assnumvec)
-
-      UBTPPvec <- TPPvec+1.96*sqrt(TPPvec*(1-TPPvec)/assnumvec)
 
       #How many events are seen given this set up
       eventsseen <- eventvec[length(eventvec)]
@@ -1143,20 +1137,18 @@ DTEAssuranceApp <- function(){
 
       UBsmooth <- loess(UBAHRvec~samplesizevec)
 
-      TPPsmooth <- loess(TPPvec~samplesizevec)
+
 
       LBasssmooth <- loess(LBassvec~samplesizevec)
 
       UBasssmooth <- loess(UBassvec~samplesizevec)
 
-      LBTPPsmooth <- loess(LBTPPvec~samplesizevec)
 
-      UBTPPsmooth <- loess(UBTPPvec~samplesizevec)
 
 
       return(list(calcassvec = calcassvec, asssmooth = asssmooth, samplesizevec = samplesizevec,
-                  eventsseen = eventsseen, AHRsmooth = AHRsmooth, LBsmooth = LBsmooth, UBsmooth = UBsmooth, TPPsmooth = TPPsmooth,
-                  LBasssmooth = LBasssmooth, UBasssmooth = UBasssmooth, LBTPPsmooth = LBTPPsmooth, UBTPPsmooth = UBTPPsmooth))
+                  eventsseen = eventsseen, AHRsmooth = AHRsmooth, LBsmooth = LBsmooth, UBsmooth = UBsmooth,
+                  LBasssmooth = LBasssmooth, UBasssmooth = UBasssmooth))
 
     })
 
@@ -1168,16 +1160,17 @@ DTEAssuranceApp <- function(){
       assurancenormaldf <- data.frame(x = calculateAssurance()$samplesizevec, y = predict(calculateAssurance()$asssmooth))
       assurancenormalLBdf <- data.frame(x = calculateAssurance()$samplesizevec, y = predict(calculateAssurance()$LBasssmooth))
       assurancenormalUBdf <- data.frame(x = calculateAssurance()$samplesizevec, y = predict(calculateAssurance()$UBasssmooth))
-      TPPdf <- data.frame(x = calculateAssurance()$samplesizevec, y = predict(calculateAssurance()$TPPsmooth))
-      TPPLBdf <- data.frame(x = calculateAssurance()$samplesizevec, y = predict(calculateAssurance()$LBTPPsmooth))
-      TPPUBdf <- data.frame(x = calculateAssurance()$samplesizevec, y = predict(calculateAssurance()$UBTPPsmooth))
+      #TPPdf <- data.frame(x = calculateAssurance()$samplesizevec, y = predict(calculateAssurance()$TPPsmooth))
+      #TPPLBdf <- data.frame(x = calculateAssurance()$samplesizevec, y = predict(calculateAssurance()$LBTPPsmooth))
+      #TPPUBdf <- data.frame(x = calculateAssurance()$samplesizevec, y = predict(calculateAssurance()$UBTPPsmooth))
       p1 <- ggplot() + geom_line(data = assurancenormaldf, aes(x = x, y = y, colour="Assurance"), linetype="solid") + xlab("Number of patients") +
         ylab("Assurance") + ylim(0, 1.05) +
-        geom_line(data = TPPdf, aes(x=x, y=y, colour = 'Target effect'), linetype="solid") +
+        #geom_line(data = TPPdf, aes(x=x, y=y, colour = 'Target effect'), linetype="solid") +
         geom_line(data = assurancenormalLBdf, aes(x=x, y=y, colour = 'Assurance'), linetype='dashed') +
         geom_line(data = assurancenormalUBdf, aes(x=x, y=y, colour = 'Assurance'), linetype='dashed') +
-        geom_line(data = TPPLBdf, aes(x=x, y=y, colour = 'Target effect'), linetype='dashed') +
-        geom_line(data = TPPUBdf, aes(x=x, y=y, colour = 'Target effect'), linetype='dashed') + theme(
+       # geom_line(data = TPPLBdf, aes(x=x, y=y, colour = 'Target effect'), linetype='dashed') +
+       # geom_line(data = TPPUBdf, aes(x=x, y=y, colour = 'Target effect'), linetype='dashed') +
+        theme(
           legend.position = c(.05, .95),
           legend.justification = c("left", "top"),
           legend.box.just = "left",
