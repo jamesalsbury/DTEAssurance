@@ -14,11 +14,13 @@
 #' @import pbapply
 #' @import readxl
 #' @import shiny
-#' @import shinydashboard
+#' @rawNamespace import(shinydashboard, except = box)
 #' @import survival
 #' @import plyr
 #' @import rmarkdown
 #' @import stats
+#' @import nleqslv
+#' @import graphics
 #' @rawNamespace import(shinyjs, except = runExample)
 #' @import utils
 #'
@@ -988,8 +990,8 @@ DTEAssuranceApp <- function(){
              xlim = c(0, sum(rec_duration)), ylim = c(0, max(solution$x)), xlab = "Recruitment time", ylab = "Density")
 
         for (i in 1:(n-1)){
-          lines(c(sum(rec_duration[1:i]), sum(rec_duration[1:i])), c(solution$x[i], solution$x[i+1]), col = "red")
-          lines(c(sum(rec_duration[1:i]), sum(rec_duration[1:(i+1)])), c(solution$x[i+1], solution$x[i+1]), col = "red")
+          graphics::lines(c(sum(rec_duration[1:i]), sum(rec_duration[1:i])), c(solution$x[i], solution$x[i+1]), col = "red")
+          graphics::lines(c(sum(rec_duration[1:i]), sum(rec_duration[1:(i+1)])), c(solution$x[i+1], solution$x[i+1]), col = "red")
         }
 
       }
