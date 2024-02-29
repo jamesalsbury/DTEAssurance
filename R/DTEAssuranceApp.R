@@ -27,8 +27,6 @@
 
 DTEAssuranceApp <- function(){
 
-  source("R/helperfunctions.R")
-
   x <- y <- quantiletime <- NULL
   ui <- fluidPage(
     withMathJax(),
