@@ -4,15 +4,17 @@
 \alias{CensFunc}
 \title{Function to censor a data set}
 \usage{
-CensFunc(dataCombined, censTime)
+CensFunc(dataCombined, censEvents = NULL, censTime = NULL)
 }
 \arguments{
-\item{dataCombined}{a data frame}
+\item{dataCombined}{An uncensored dataframe}
 
-\item{censTime}{Time at whcih you wish to perform the censoring}
+\item{censEvents}{Number of events at which you wish to perform the censoring}
+
+\item{censTime}{Time at which you wish to perform the censoring}
 }
 \value{
-A dataframe
+A censored dataframe
 }
 \description{
 Function to censor a data set
