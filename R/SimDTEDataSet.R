@@ -3,10 +3,12 @@
 #' @param n_C Sample size in control group
 #' @param n_E Sample size in experimental treatment group
 #' @param lambda_C Weibull control parameter
-#' @param lambda_E Weibull experimental treatment parameter
+#' @param HRSTar The post-delay hazard ratio
 #' @param gamma_C Weibull control parameter
 #' @param gamma_E Weibull experimental treatment parameter
 #' @param delayT Length of delay
+#' @param P_S Probability of the Kaplan-Meier curves separating at some time
+#' @param P_DTE Probability of the treatment being subject to a delay (given the K-M curves will separate)
 #' @param rec_method Recruitment method
 #' @param rec_period Recruitment period (for the power method)
 #' @param rec_power Recruitment power (for the power method)
@@ -15,12 +17,26 @@
 #'
 #' @return A dataframe
 #' @export
-SimDTEDataSet <- function(n_C, n_E, lambda_C, lambda_E, gamma_C, gamma_E, delayT,
+SimDTEDataSet <- function(n_C, n_E, lambda_C, HRStar, gamma_C, gamma_E, delayT, P_S = 1, P_DTE = 0,
                                rec_method, rec_period=NULL, rec_power=NULL, rec_rate=NULL, rec_duration=NULL) {
 
   #Simulates the control data
   u <- runif(n_C)
   controlTimes <- (1/lambda_C)*(-log(u))^(1/gamma_C)
+
+  #Make the simplification
+  gamma_E <- gamma_C
+
+  #Takes into account the probabilities of the curves separating (and then being subject to a DTE)
+  if (runif(1)>P_S){
+    delayT <- 0
+    HRStar <- 1
+  } else if (runif(1)>P_DTE){
+    delayT <- 0
+  }
+
+  #Transforming the post-delay HR to lambda_E
+  lambda_E <- lambda_C*HRStar^(1/gamma_C)
 
   #Simulates the treatment data
   CP <- exp(-(lambda_C*delayT)^gamma_C)

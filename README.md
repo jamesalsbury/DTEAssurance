@@ -22,11 +22,9 @@ You can install the development version of DTEAssurance from
 devtools::install_github("jamesalsbury/DTEAssurance")
 ```
 
-## shiny app
+## Example (from the paper)
 
-The only function contained within the package is one which launches a
-`shiny` app. The app allows you to implement all of the methods outlined
-in [this paper](https://jamesalsbury.github.io/). To launch the app, run
+First, we use SHELF to elicit beliefs about T, the length of the delay
 
 ``` r
 DTEAssurance::DTEAssuranceApp()
