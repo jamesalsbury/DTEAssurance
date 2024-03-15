@@ -8,10 +8,12 @@ SimDTEDataSet(
   n_C,
   n_E,
   lambda_C,
-  lambda_E,
+  HRStar,
   gamma_C,
   gamma_E,
   delayT,
+  P_S = 1,
+  P_DTE = 0,
   rec_method,
   rec_period = NULL,
   rec_power = NULL,
@@ -26,13 +28,15 @@ SimDTEDataSet(
 
 \item{lambda_C}{Weibull control parameter}
 
-\item{lambda_E}{Weibull experimental treatment parameter}
-
 \item{gamma_C}{Weibull control parameter}
 
 \item{gamma_E}{Weibull experimental treatment parameter}
 
 \item{delayT}{Length of delay}
+
+\item{P_S}{Probability of the Kaplan-Meier curves separating at some time}
+
+\item{P_DTE}{Probability of the treatment being subject to a delay (given the K-M curves will separate)}
 
 \item{rec_method}{Recruitment method}
 
@@ -43,6 +47,8 @@ SimDTEDataSet(
 \item{rec_rate}{Recruitment rate (for the piecewise constant method)}
 
 \item{rec_duration}{Recruitment duration (for the piecewise constant method)}
+
+\item{HRSTar}{The post-delay hazard ratio}
 }
 \value{
 A dataframe

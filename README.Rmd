@@ -13,6 +13,12 @@ knitr::opts_chunk$set(
 )
 ```
 
+```{r}
+library(survival)
+library(rjags)
+```
+
+
 # DTEAssurance
 
 <!-- badges: start -->
@@ -32,10 +38,99 @@ You can install the development version of DTEAssurance from [GitHub](https://gi
 devtools::install_github("jamesalsbury/DTEAssurance")
 ```
 
-## shiny app
+## Example (from the paper)
 
-The only function contained within the package is one which launches a `shiny` app. The app allows you to implement all of the methods outlined in [this paper](https://jamesalsbury.github.io/). To launch the app, run
+### Control
+
+```{r}
+data("ZODIAC")
+data("REVEL")
+data("INTEREST")
+```
+
+
+```{r}
+
+ZodiacFit <- survfit(Surv(`Survival time`, Status)~1, data = ZODIAC)
+plot(ZodiacFit, col = "blue", conf.int = F, xlab = "Time (months)", ylab = "Overall Survival")
+
+RevelFit <- survfit(Surv(`Survival time`, Status)~1, data = REVEL)
+lines(RevelFit, col = "red", conf.int = F)
+
+InterestFit <- survfit(Surv(`Survival time`, Status)~1, data = INTEREST)
+lines(InterestFit, col = "yellow", conf.int = F)
+
+combinedControlArms <- rbind(INTEREST, REVEL, ZODIAC)
+
+combinedFit <- survfit(Surv(`Survival time`, Status)~1, data = combinedControlArms)
+lines(combinedFit, col = "black", conf.int = F)
+
+legend("topright", legend = c("ZODIAC", "REVEL", "INTEREST", "Combined"), lty = 1, col = c("blue", "red", "yellow", "black"))
+
+```
+
+
+```{r}
+#Performing MCMC on this data set
+
+modelstring="
+
+data {
+  for (j in 1:n){
+    zeros[j] <- 0
+  }
+}
+
+model {
+  C <- 10000
+  for (i in 1:n){
+    zeros[i] ~ dpois(zeros.mean[i])
+    zeros.mean[i] <-  -l[i] + C
+    l[i] <- ifelse(datEvent[i]==1, log(gamma_C)+gamma_C*log(lambda_C*datTimes[i])-(lambda_C*datTimes[i])^gamma_C-log(datTimes[i]), -(lambda_C*datTimes[i])^gamma_C)
+  }
+  
+    lambda_C ~ dnorm(1,1/10000)T(0,)
+    gamma_C ~ dnorm(1,1/10000)T(0,)
+    
+    }
+"
+
+model = jags.model(textConnection(modelstring), data = list(datTimes = combinedControlArms$`Survival time`, datEvent = combinedControlArms$Status, n= nrow(combinedControlArms)), quiet = T) 
+
+update(model, n.iter=1000)
+output=coda.samples(model=model, variable.names=c("lambda_C", "gamma_C"), n.iter = 10000)
+
+plot(output)
+
+lambda_Csample <- as.numeric(unlist(output[,2]))
+gamma_Csample <- as.numeric(unlist(output[,1]))
+```
+
+### Eliciting T
+
+First, we use SHELF to elicit beliefs about T, the length of the delay
 
 ```{r, eval = F}
-DTEAssurance::DTEAssuranceApp()
+P_S <- 0.9
+P_DTE <- 0.7
+TBeliefs <- SHELF::fitdist(c(3, 4, 5), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 10)
 ```
+
+
+### Eliciting post-delay HR
+
+and the treatment effect, in the form of the post-delay hazard ratio
+
+```{r, eval = F}
+HRStarBeliefs <- SHELF::fitdist(c(0.55, 0.6, 0.7), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 1.5)
+```
+
+
+### Calculating Assurance
+
+
+
+
+
+
+

@@ -1,5 +1,5 @@
 calculateAssurance <- function(n_C, n_E, lambda_C, gammac, P_E, P_DTE, delayT, HRStar, nEvents,
-                               rec_method, analysis_method, nSims=1e5){
+                               rec_method, analysis_method, rho = 0, gamma = 0, nSims=1e5){
 
   control_n <- length(lambdac)
 
@@ -42,4 +42,4 @@ calculateAssurance <- function(n_C, n_E, lambda_C, gammac, P_E, P_DTE, delayT, H
 
   }
 
-  lambdac <- c(0.08, 0.07, 0.09)
+}
