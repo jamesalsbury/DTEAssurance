@@ -27,5 +27,5 @@ CensFunc <- function(dataCombined, censEvents = NULL, censTime = NULL){
                                        censTime - dataCombined$recTime,
                                        dataCombined$time)
 
-  return(dataCombined)
+  return(list(dataCombined = dataCombined, censEvents = censEvents, censTime = censTime))
 }

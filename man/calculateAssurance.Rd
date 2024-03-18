@@ -16,7 +16,7 @@ calculateAssurance(
   delayTDist = "hist",
   P_S = 1,
   P_DTE = 0,
-  nEvents = NULL,
+  censEvents = NULL,
   censTime = NULL,
   rec_method,
   rec_period = NULL,
@@ -50,8 +50,6 @@ calculateAssurance(
 
 \item{P_DTE}{Probability of the treatment being subject to a delay (given the K-M curves will separate)}
 
-\item{nEvents}{Number of events to be censored at}
-
 \item{censTime}{Time of censoring}
 
 \item{rec_method}{Recruitment method}
@@ -71,6 +69,8 @@ calculateAssurance(
 \item{gamma}{Gamma parameter for the Fleming-Harrington weighted log-rank test}
 
 \item{HRSTar}{The post-delay hazard ratio}
+
+\item{nEvents}{Number of events to be censored at}
 }
 \value{
 A value
