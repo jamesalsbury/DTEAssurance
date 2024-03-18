@@ -3,6 +3,8 @@
 export(CensFunc)
 export(DTEAssuranceApp)
 export(SimDTEDataSet)
+export(calculateAssurance)
+export(survivalAnalysis)
 import(SHELF)
 import(ggplot2, except = autoplot)
 import(graphics)

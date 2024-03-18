@@ -16,6 +16,7 @@ knitr::opts_chunk$set(
 ```{r}
 library(survival)
 library(rjags)
+library(SHELF)
 ```
 
 
@@ -43,26 +44,26 @@ devtools::install_github("jamesalsbury/DTEAssurance")
 ### Control
 
 ```{r}
-data("ZODIAC")
-data("REVEL")
-data("INTEREST")
+ZODIAC <- read.csv("data/ZODIAC.csv")
+REVEL <- read.csv("data/REVEL.csv")
+INTEREST <- read.csv("data/INTEREST.csv")
 ```
 
 
 ```{r}
 
-ZodiacFit <- survfit(Surv(`Survival time`, Status)~1, data = ZODIAC)
+ZodiacFit <- survfit(Surv(Survival.time, Status)~1, data = ZODIAC)
 plot(ZodiacFit, col = "blue", conf.int = F, xlab = "Time (months)", ylab = "Overall Survival")
 
-RevelFit <- survfit(Surv(`Survival time`, Status)~1, data = REVEL)
+RevelFit <- survfit(Surv(Survival.time, Status)~1, data = REVEL)
 lines(RevelFit, col = "red", conf.int = F)
 
-InterestFit <- survfit(Surv(`Survival time`, Status)~1, data = INTEREST)
+InterestFit <- survfit(Surv(Survival.time, Status)~1, data = INTEREST)
 lines(InterestFit, col = "yellow", conf.int = F)
 
 combinedControlArms <- rbind(INTEREST, REVEL, ZODIAC)
 
-combinedFit <- survfit(Surv(`Survival time`, Status)~1, data = combinedControlArms)
+combinedFit <- survfit(Surv(Survival.time, Status)~1, data = combinedControlArms)
 lines(combinedFit, col = "black", conf.int = F)
 
 legend("topright", legend = c("ZODIAC", "REVEL", "INTEREST", "Combined"), lty = 1, col = c("blue", "red", "yellow", "black"))
@@ -95,7 +96,7 @@ model {
     }
 "
 
-model = jags.model(textConnection(modelstring), data = list(datTimes = combinedControlArms$`Survival time`, datEvent = combinedControlArms$Status, n= nrow(combinedControlArms)), quiet = T) 
+model = jags.model(textConnection(modelstring), data = list(datTimes = combinedControlArms$Survival.time, datEvent = combinedControlArms$Status, n= nrow(combinedControlArms)), quiet = T) 
 
 update(model, n.iter=1000)
 output=coda.samples(model=model, variable.names=c("lambda_C", "gamma_C"), n.iter = 10000)
