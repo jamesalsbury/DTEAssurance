@@ -28,6 +28,8 @@ SimDTEDataSet(
 
 \item{lambda_C}{Weibull control parameter}
 
+\item{HRStar}{The post-delay hazard ratio}
+
 \item{gamma_C}{Weibull control parameter}
 
 \item{gamma_E}{Weibull experimental treatment parameter}
@@ -47,8 +49,6 @@ SimDTEDataSet(
 \item{rec_rate}{Recruitment rate (for the piecewise constant method)}
 
 \item{rec_duration}{Recruitment duration (for the piecewise constant method)}
-
-\item{HRSTar}{The post-delay hazard ratio}
 }
 \value{
 A dataframe

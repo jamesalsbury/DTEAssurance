@@ -1061,11 +1061,14 @@ DTEAssuranceApp <- function(){
 
           lambdat <- lambdac*HR^(1/gammac)
 
-          if (input$recMethod=="power"){
-            dataCombined <- SimDTEDataSetPower(n1, n2, gammat, gammac, lambdat, lambdac, bigT, input$rec_period, input$rec_power)
-            } else {
-            dataCombined <- SimDTEDataSetPWC(n1, n2, gammat, gammac, lambdat, lambdac, bigT, input$rec_rate, input$rec_duration)
-            }
+          dataCombined <- SimDTEDataSet(n1, n2, lambdac, HR, gammac, gammat, bigT,
+                                    input$rec_method, input$rec_period, input$rec_power, input$rec_rate, input$rec_duration)
+
+          # if (input$recMethod=="power"){
+          #   dataCombined <- SimDTEDataSetPower(n1, n2, gammat, gammac, lambdat, lambdac, bigT, input$rec_period, input$rec_power)
+          #   } else {
+          #   dataCombined <- SimDTEDataSetPWC(n1, n2, gammat, gammac, lambdat, lambdac, bigT, input$rec_rate, input$rec_duration)
+          #   }
 
           dataCombined <- CensFunc(dataCombined, input$chosenLength)
 

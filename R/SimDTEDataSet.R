@@ -3,7 +3,7 @@
 #' @param n_C Sample size in control group
 #' @param n_E Sample size in experimental treatment group
 #' @param lambda_C Weibull control parameter
-#' @param HRSTar The post-delay hazard ratio
+#' @param HRStar The post-delay hazard ratio
 #' @param gamma_C Weibull control parameter
 #' @param gamma_E Weibull experimental treatment parameter
 #' @param delayT Length of delay

@@ -26,7 +26,7 @@ calculateAssurance(
   analysis_method,
   rho = 0,
   gamma = 0,
-  nSims = 1e+05
+  nSims = 10000
 )
 }
 \arguments{
@@ -35,6 +35,8 @@ calculateAssurance(
 \item{n_E}{Sample size in experimental treatment group}
 
 \item{lambda_C}{Weibull control parameter}
+
+\item{HRStar}{The post-delay hazard ratio}
 
 \item{HRStarDist}{The chosen parametric distribution for the post-delay hazard ratio}
 
@@ -49,6 +51,8 @@ calculateAssurance(
 \item{P_S}{Probability of the Kaplan-Meier curves separating at some time}
 
 \item{P_DTE}{Probability of the treatment being subject to a delay (given the K-M curves will separate)}
+
+\item{censEvents}{Number of events to be censored at}
 
 \item{censTime}{Time of censoring}
 
@@ -68,9 +72,7 @@ calculateAssurance(
 
 \item{gamma}{Gamma parameter for the Fleming-Harrington weighted log-rank test}
 
-\item{HRSTar}{The post-delay hazard ratio}
-
-\item{nEvents}{Number of events to be censored at}
+\item{nSims}{Number of simulations}
 }
 \value{
 A value

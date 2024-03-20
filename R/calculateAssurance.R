@@ -21,6 +21,7 @@
 #' @param analysis_method Method of analysis (log-rank test or weighted log-rank test)
 #' @param rho Rho parameter for the Fleming-Harrington weighted log-rank test
 #' @param gamma Gamma parameter for the Fleming-Harrington weighted log-rank test
+#' @param nSims Number of simulations
 #'
 #' @return A value
 #' @export
@@ -30,6 +31,7 @@ calculateAssurance <- function(n_C, n_E, lambda_C, HRStar, HRStarDist = "hist", 
                                analysis_method, rho = 0, gamma = 0, nSims=1e4){
 
   control_n <- length(lambda_C)
+
 
   assVec <- rep(NA, nSims)
   censVec <- rep(NA, nSims)
@@ -45,14 +47,11 @@ calculateAssurance <- function(n_C, n_E, lambda_C, HRStar, HRStarDist = "hist", 
     sampled_HRStar <- SHELF::sampleFit(HRStar, n = 1)[,HRStarDist]
     sampled_delayT <- SHELF::sampleFit(delayT, n = 1)[,delayTDist]
 
-    print(sampled_HRStar)
-    print(sampled_delayT)
-
     #Make the simplifications
-    sampled_lambdae <- sampled_HRStar*sampled_lambdac
     sampled_gammae <- sampled_gammac
 
-    dataCombined <- SimDTEDataSet(n_C, n_E, lambda_C, sampled_HRStar, sampled_gammac, sampled_gammae, sampled_delayT, P_S, P_DTE,
+
+    dataCombined <- SimDTEDataSet(n_C, n_E, sampled_lambdac, sampled_HRStar, sampled_gammac, sampled_gammae, sampled_delayT, P_S, P_DTE,
                               rec_method, rec_period, rec_power, rec_rate, rec_duration)
 
 
@@ -75,9 +74,8 @@ calculateAssurance <- function(n_C, n_E, lambda_C, HRStar, HRStarDist = "hist", 
 }
 
 
-DTEAssurance::calculateAssurance(n_C = 200, n_E = 200, lambda_C = lambda_Csample, HRStar = HRStarBeliefs, HRStarDist = "gamma", gamma_C = gamma_Csample, gamma_E = gamma_Csample, delayT = TBeliefs, delayTDist = "gamma",
-                                 P_S = P_S, P_DTE = P_DTE, censEvents = 400*0.8, rec_method = "power", rec_period=12, rec_power=1,
-                                 analysis_method = "LRT", nSims=1e2)
+
+
 
 
 
