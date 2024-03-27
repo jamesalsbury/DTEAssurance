@@ -29,7 +29,7 @@ You can install the development version of DTEAssurance from
 
 ``` r
 devtools::install_github("jamesalsbury/DTEAssurance")
-#> Skipping install of 'DTEAssurance' from a github remote, the SHA1 (10b7ecbd) has not changed since last install.
+#> Skipping install of 'DTEAssurance' from a github remote, the SHA1 (9ea69d00) has not changed since last install.
 #>   Use `force = TRUE` to force installation
 ```
 
@@ -129,18 +129,18 @@ HRStarBeliefs <- SHELF::fitdist(c(0.55, 0.6, 0.7), probs = c(0.25, 0.5, 0.75), l
 
 DTEAssurance::calculateAssurance(n_C = 100, n_E = 100, lambda_C = lambda_Csample, HRStar = HRStarBeliefs, HRStarDist = "gamma", gamma_C = gamma_Csample, gamma_E = gamma_Csample, delayT = TBeliefs, delayTDist = "gamma",
                                P_S = P_S, P_DTE = P_DTE, censEvents = 200*0.8, rec_method = "power", rec_period=12, rec_power=1, 
-                               analysis_method = "LRT", nSims=5e2)
+                               analysis_method = "WLRT", rho = 0, gamma = 1, nSims=1e1)
 #> $assurance
-#> [1] 0.614
+#> [1] 0.6
 #> 
 #> $duration
-#> [1] 30.27034
+#> [1] 28.86784
 #> 
 #> $LBAssurance
-#> [1] 0.5713274
+#> [1] 0.2963581
 #> 
 #> $UBAssurance
-#> [1] 0.6566726
+#> [1] 0.9036419
 ```
 
 ### Plotting Assurance curve
@@ -154,7 +154,7 @@ resultsAssurance <- sapply(nVec, function(n_C){
   DTEAssurance::calculateAssurance(n_C = n_C, n_E = n_E, lambda_C = lambda_Csample, HRStar = HRStarBeliefs, HRStarDist = "gamma",
                      gamma_C = gamma_Csample, gamma_E = gamma_Csample, delayT = TBeliefs, delayTDist = "gamma",
                      P_S = P_S, P_DTE = P_DTE, censEvents = censEvents, rec_method = "power", rec_period=12, rec_power=1,
-                     analysis_method = "LRT", nSims=5e3)
+                     analysis_method = "WLRT", rho = 0, gamma = 1, nSims=1e3)
 })
 
 
@@ -186,7 +186,7 @@ resultsPower <- sapply(nVec, function(n_C){
   DTEAssurance::calculateAssurance(n_C = n_C, n_E = n_E, lambda_C = MLE_lambdaC, HRStar = HRStarBeliefs, HRStarDist = "gamma",
                      gamma_C = MLE_gammaC, gamma_E = MLE_gammaC, delayT = TBeliefs, delayTDist = "gamma",
                      P_S = P_S, P_DTE = P_DTE, censEvents = censEvents, rec_method = "power", rec_period=12, rec_power=1,
-                     analysis_method = "LRT", nSims=5e3)
+                     analysis_method = "WLRT", rho = 0, gamma = 1, nSims=1e3)
 })
 
 
@@ -214,7 +214,7 @@ resultsPowerND <- sapply(nVec, function(n_C){
   DTEAssurance::calculateAssurance(n_C = n_C, n_E = n_E, lambda_C = MLE_lambdaC, HRStar = HRStarBeliefs, HRStarDist = "gamma",
                      gamma_C = MLE_gammaC, gamma_E = MLE_gammaC, delayT = TBeliefs, delayTDist = "gamma",
                      P_S = P_S, P_DTE = P_DTE, censEvents = censEvents, rec_method = "power", rec_period=12, rec_power=1,
-                     analysis_method = "LRT", nSims=5e3)
+                      analysis_method = "WLRT", rho = 0, gamma = 1, nSims=1e3)
 })
 
 
