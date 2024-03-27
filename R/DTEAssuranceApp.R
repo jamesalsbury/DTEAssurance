@@ -190,7 +190,7 @@ DTEAssuranceApp <- function(){
                    sidebarPanel = sidebarPanel(
                      shinyjs::useShinyjs(),
                      numericInput("numofpatients", "Maximum number of patients in the trial", value=1000),
-                     selectInput("recMethod", "Recruitment method", choices = c("Power"="power", "Piecewise constant"="PWC"), selected = "power"),
+                     selectInput("rec_method", "Recruitment method", choices = c("Power"="power", "Piecewise constant"="PWC"), selected = "power"),
 
                      splitLayout(
                        numericInput("rec_power", "Power", value=1, min=1),
@@ -924,7 +924,7 @@ DTEAssuranceApp <- function(){
     # Functions for the Assurance tab ---------------------------------
 
     observe({
-      if (input$recMethod=="power"){
+      if (input$rec_method=="power"){
         shinyjs::show("rec_power")
         shinyjs::show("rec_period")
       } else{
@@ -934,7 +934,7 @@ DTEAssuranceApp <- function(){
     })
 
     observe({
-      if (input$recMethod=="PWC"){
+      if (input$rec_method=="PWC"){
         shinyjs::show("rec_rate")
         shinyjs::show("rec_duration")
       } else{
@@ -955,7 +955,7 @@ DTEAssuranceApp <- function(){
 
     output$pdfRec <- renderPlot({
 
-      if (input$recMethod=="power"){
+      if (input$rec_method=="power"){
 
         # Calculate the correct PDF values
         x_values <- seq(0, input$rec_period, length.out = 1000)
@@ -963,7 +963,7 @@ DTEAssuranceApp <- function(){
 
         # Overlay correct PDF on the histogram
         plot(x_values, pdf_values, col = "red", type = "l", xlab = "Recruitment time", ylab = "Density")
-      } else if (input$recMethod == "PWC"){
+      } else if (input$rec_method == "PWC"){
 
         rec_rate <- as.numeric(unlist(strsplit(input$rec_rate,",")))
         rec_duration <- as.numeric(unlist(strsplit(input$rec_duration,",")))
@@ -997,7 +997,7 @@ DTEAssuranceApp <- function(){
 
     output$cdfRec <- renderPlot({
 
-      if (input$recMethod=="power"){
+      if (input$rec_method=="power"){
 
         # Calculate the correct CDF values
         x_values <- seq(0, input$rec_period, length.out = 1000)
@@ -1006,7 +1006,7 @@ DTEAssuranceApp <- function(){
 
         plot(x_values, cdf_values, col = "red", type = "l", xlab = "Recruitment time", ylab = "Number of patients")
 
-      } else if (input$recMethod == "PWC"){
+      } else if (input$rec_method == "PWC"){
 
         rec_rate <- as.numeric(unlist(strsplit(input$rec_rate,",")))
         rec_duration <- as.numeric(unlist(strsplit(input$rec_duration,",")))
@@ -1045,6 +1045,8 @@ DTEAssuranceApp <- function(){
 
         for (i in 1:assnum){
 
+          print(i)
+
 
           if (v$upload=="no"){
             lambdac <- input$lambdacmean
@@ -1056,6 +1058,8 @@ DTEAssuranceApp <- function(){
 
           gammat <- gammac
 
+          print(gammat)
+
           bigT <- sample(mySample[,1], 1)
           HR <- sample(mySample[,2], 1)
 
@@ -1064,7 +1068,10 @@ DTEAssuranceApp <- function(){
           dataCombined <- SimDTEDataSet(n1, n2, lambdac, HR, gammac, gammat, bigT,
                                     input$rec_method, input$rec_period, input$rec_power, input$rec_rate, input$rec_duration)
 
-          # if (input$recMethod=="power"){
+
+          print(dataCombined)
+
+          # if (input$rec_method=="power"){
           #   dataCombined <- SimDTEDataSetPower(n1, n2, gammat, gammac, lambdat, lambdac, bigT, input$rec_period, input$rec_power)
           #   } else {
           #   dataCombined <- SimDTEDataSetPWC(n1, n2, gammat, gammac, lambdat, lambdac, bigT, input$rec_rate, input$rec_duration)
