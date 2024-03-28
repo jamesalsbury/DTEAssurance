@@ -9,12 +9,9 @@ fontsize: 11pt
 params:
   fit1: NA
   fit2: NA
-  cp: NA
   d: NA
-  m1: NA
-  m2: NA
-  massT0: NA
-  massHR1: NA
+  P_S: NA
+  P_DTE: NA
 ---
 
 # Length of delay
@@ -59,13 +56,7 @@ lx <- min(params$fit1$vals[expert, ])
 ux <- max(params$fit1$vals[expert, ])
 ```
 
-### Elicited Pr(T=0)
 
-```{r}
-mydf <- data.frame(params$massT0, 1 - params$massT0)
-colnames(mydf) <- c( "$P(T=0)$", "$P(T\\neq 0)$")
-knitr::kable(mydf)
-```
 
 ### Distributions
 
@@ -565,13 +556,6 @@ lx <- min(params$fit2$vals[expert, ])
 ux <- max(params$fit2$vals[expert, ])
 ```
 
-### Elicited Pr(HR=1)
-
-```{r}
-mydf <- data.frame(params$massHR1, 1 - params$massHR1)
-colnames(mydf) <- c( "$P(HR=1)$", "$P(HR\\neq 1)$")
-knitr::kable(mydf)
-```
 
 ### Distributions
 
@@ -1035,71 +1019,4 @@ plotfit(params$fit2, d = "mirrorlogt")
 
 
 
-<hr>
-# Joint distribution
-
-```{r}
-d1 <- switch(params$d[1],
-                       "normal" = "normal",
-                       "t" = "Student-t",
-                       "gamma" = "gamma",
-                       "lognormal" = "log normal",
-                       "logt" = "log Student-t",
-                       "beta" = "beta",
-                       "hist" = "histogram",
-                       "best" = as.character(params$fit1$best.fitting[1, 1]))
-
-d2 <- switch(params$d[2],
-                       "normal" = "normal",
-                       "t" = "Student-t",
-                       "gamma" = "gamma",
-                       "lognormal" = "log normal",
-                       "logt" = "log Student-t",
-                       "beta" = "beta",
-                       "hist" = "histogram",
-                       "best" = as.character(params$fit2$best.fitting[1, 1]))
-```
-
-
-Elicited concordance probability:
-
-$$
-P(\{X_1 < m_1,\, X_2 < m_2\} \cup\{ X_1>m_1, \, X_2 > m_2\}) = `r params$cp`
-$$
-Joint sample, obtained using a `r paste(d1)` distribution for $X_1$ and a `r paste(d2)` distribution for $X_2$:
-
-```{r, echo = FALSE, fig.align = "center"}
-library(ggplot2)
-conc.probs <- matrix(0, 2, 2)
-      conc.probs[1, 2] <- params$cp
-      df1<-data.frame(copulaSample(params$fit1, params$fit2, cp=conc.probs, n=10000, 
-                                     d=params$d))
-    
-      
-      annotations <- data.frame(
-        xpos = c(Inf,Inf,-Inf,-Inf),
-        ypos =  c(Inf, -Inf,-Inf,Inf),
-        annotateText = as.character(c(params$cp / 2, 0.5 - params$cp /2,
-                                      params$cp / 2, 
-                                      0.5 - params$cp /2)),
-        hjustvar = c(1.5, 1.5, -0.5, -0.5) ,
-        vjustvar = c(1.5, -0.5, -0.5, 1.5))
-      
-      
-      p1<-ggplot(data=df1,aes(x=X1, y=X2))+
-        geom_point(alpha=0.15, colour = "red") +
-        geom_hline(yintercept = params$m2)+
-        geom_vline(xintercept = params$m1)+
-        labs(x=expression(X[1]), y = expression(X[2]))+
-        geom_text(data = annotations, aes(x = xpos,
-                                          y = ypos,
-                                          hjust = hjustvar,
-                                          vjust = vjustvar,
-                                          label = annotateText),
-                  size =10) +
-        xlim(0.95*params$fit1$limits[1, 1], 1.05*params$fit1$limits[1, 2])+
-        ylim(0.95*params$fit2$limits[1, 1], 1.05*params$fit2$limits[1, 2])
-      suppressWarnings(suppressMessages(ggExtra::ggMarginal(p1, type = "histogram",
-                                           fill = "red")))
-```
 

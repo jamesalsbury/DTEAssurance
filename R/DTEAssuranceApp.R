@@ -293,6 +293,8 @@ DTEAssuranceApp <- function(){
         fluidRow(
           column(3, downloadButton("report", "Download report")
           ),
+          column(3, downloadButton("downloadObjects", "Download objects")
+          ),
           column(3, downloadButton("downloadData", "Download sample")
           ),
           column(3, actionButton("exit", "Quit")
@@ -1260,9 +1262,9 @@ DTEAssuranceApp <- function(){
                   tempReport, overwrite = TRUE)
 
         # Set up parameters to pass to Rmd document
-        params <- list(fit1 = myfit1(), fit2 = myfit2(), cp = 0.5,
-                       d = c(input$dist1, input$dist2), m1 = m1(), m2 = m2(),
-                       massT0 = input$massT0, massHR1 = input$massHR1)
+        params <- list(fit1 = myfit1(), fit2 = myfit2(),
+                       d = c(input$dist1, input$dist2),
+                       P_S = input$P_S, P_DTE = input$P_DTE)
 
         # Knit the document, passing in the `params` list, and eval it in a
         # child of the global environment (this isolates the code in the document
@@ -1274,6 +1276,20 @@ DTEAssuranceApp <- function(){
         )
       }
     )
+
+
+    output$downloadObjects <- downloadHandler(
+      filename = function() {
+        "DTEAssurance.rds"
+      },
+      content = function(file) {
+          object_list <- list(fit1 = myfit1(), fit2 = myfit2(),
+                                        d = c(input$dist1, input$dist2),
+                                        P_S = input$P_S, P_DTE = input$P_DTE)
+          saveRDS(object_list, file)
+        }
+    )
+
 
   }
 
