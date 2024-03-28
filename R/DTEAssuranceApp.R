@@ -962,7 +962,7 @@ DTEAssuranceApp <- function(){
         pdf_values <- (input$rec_power / input$rec_period) * (x_values/input$rec_period)^(input$rec_power - 1)
 
         # Overlay correct PDF on the histogram
-        plot(x_values, pdf_values, col = "red", type = "l", xlab = "Recruitment time", ylab = "Density")
+        plot(x_values, pdf_values, col = "red", type = "l", xlab = "Recruitment time", ylab = "Density", main = "Probability Density Function")
       } else if (input$rec_method == "PWC"){
 
         rec_rate <- as.numeric(unlist(strsplit(input$rec_rate,",")))
@@ -985,7 +985,8 @@ DTEAssuranceApp <- function(){
         solution <- nleqslv(initial_guess, equations)
 
         plot(c(0, rec_duration[1]), c(solution$x[1], solution$x[1]), type= "l", col = "red",
-             xlim = c(0, sum(rec_duration)), ylim = c(0, max(solution$x)), xlab = "Recruitment time", ylab = "Density")
+             xlim = c(0, sum(rec_duration)), ylim = c(0, max(solution$x)), xlab = "Recruitment time", ylab = "Density",
+             main = "Probability Density Function")
 
         for (i in 1:(n-1)){
           graphics::lines(c(sum(rec_duration[1:i]), sum(rec_duration[1:i])), c(solution$x[i], solution$x[i+1]), col = "red")
@@ -1004,7 +1005,7 @@ DTEAssuranceApp <- function(){
         cdf_values <- (x_values/input$rec_period)^(input$rec_power)*input$numofpatients
 
 
-        plot(x_values, cdf_values, col = "red", type = "l", xlab = "Recruitment time", ylab = "Number of patients")
+        plot(x_values, cdf_values, col = "red", type = "l", xlab = "Recruitment time", ylab = "Number of patients",  main = "Cumulative Density Function")
 
       } else if (input$rec_method == "PWC"){
 
@@ -1019,7 +1020,8 @@ DTEAssuranceApp <- function(){
         yaxis <- c(0, cumulative_allocation)
 
         # Plotting
-        plot(xaxis, yaxis, type = "l", xlab = "Recruitment time", ylab = "Number of patients", col = "red")
+        plot(xaxis, yaxis, type = "l", xlab = "Recruitment time", ylab = "Number of patients", col = "red",
+             main = "Cumulative Density Function")
       }
     })
 
@@ -1045,8 +1047,6 @@ DTEAssuranceApp <- function(){
 
         for (i in 1:assnum){
 
-          print(i)
-
 
           if (v$upload=="no"){
             lambdac <- input$lambdacmean
@@ -1058,28 +1058,15 @@ DTEAssuranceApp <- function(){
 
           gammat <- gammac
 
-          print(gammat)
-
           bigT <- sample(mySample[,1], 1)
           HR <- sample(mySample[,2], 1)
 
           lambdat <- lambdac*HR^(1/gammac)
 
-          dataCombined <- SimDTEDataSet(n1, n2, lambdac, HR, gammac, gammat, bigT,
-                                    input$rec_method, input$rec_period, input$rec_power, input$rec_rate, input$rec_duration)
+          dataCombined <- SimDTEDataSet(n_C = n1, n_E = n2, lambda_C = lambdac, HRStar = HR, gamma_C = gammac, gamma_E = gammat, delayT = bigT,
+                                        rec_method = input$rec_method, rec_period = input$rec_period, rec_power = input$rec_power, rec_rate = input$rec_rate, rec_duration = input$rec_duration)
 
-
-          print(dataCombined)
-
-          # if (input$rec_method=="power"){
-          #   dataCombined <- SimDTEDataSetPower(n1, n2, gammat, gammac, lambdat, lambdac, bigT, input$rec_period, input$rec_power)
-          #   } else {
-          #   dataCombined <- SimDTEDataSetPWC(n1, n2, gammat, gammac, lambdat, lambdac, bigT, input$rec_rate, input$rec_duration)
-          #   }
-
-          dataCombined <- CensFunc(dataCombined, input$chosenLength)
-
-          #print(dataCombined)
+          dataCombined <- CensFunc(dataCombined = dataCombined, censTime = input$chosenLength)$dataCombined
 
           coxmodel <- coxph(Surv(survival_time, status)~group, data = dataCombined)
 
