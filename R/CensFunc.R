@@ -19,6 +19,7 @@ CensFunc <- function(dataCombined, censEvents = NULL, censTime = NULL){
   }
 
 
+
   dataCombined$status <- dataCombined$pseudoTime <= censTime
   dataCombined$status <- dataCombined$status * 1
   dataCombined$enrolled <- dataCombined$recTime < censTime
