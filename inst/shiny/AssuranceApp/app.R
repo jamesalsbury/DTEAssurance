@@ -1,33 +1,20 @@
-#' Shiny app which calculates assurance for trials with DTE
-#'
-#' Launches a shiny app to use for elicitation for when delayed treatment effects are
-#' likely to be present in the clinical trial you are designing: takes these elicited distributions
-#' and calculates assurance.
-#'
-#' You should run the function with no arguments.
-#
-#' @export
-#'
-#' @import SHELF
-#' @importFrom survMisc autoplot
-#' @rawNamespace import(ggplot2, except = autoplot)
-#' @import pbapply
-#' @import readxl
-#' @import shiny
-#' @rawNamespace import(shinydashboard, except = box)
-#' @import survival
-#' @import plyr
-#' @import rmarkdown
-#' @import stats
-#' @import nleqslv
-#' @import graphics
-#' @rawNamespace import(shinyjs, except = runExample)
-#' @import utils
-#'
+library(SHELF)
+library(survMisc)
+library(ggplot2)
+library(pbapply)
+library(readxl)
+library(shiny)
+library(shinydashboard)
+library(survival)
+library(plyr)
+library(rmarkdown)
+library(stats)
+library(nleqslv)
+library(graphics)
+library(shinyjs)
+library(utils)
 
-DTEAssuranceApp <- function(){
-
-  x <- y <- quantiletime <- NULL
+x <- y <- quantiletime <- NULL
   ui <- fluidPage(
     withMathJax(),
 
@@ -494,8 +481,8 @@ DTEAssuranceApp <- function(){
 
     myfit1 <- reactive({
       fitdist(vals = v1(), probs = p1(), lower = limits1()[1],
-                    upper = limits1()[2],
-                    tdf = input$tdf1)
+              upper = limits1()[2],
+              tdf = input$tdf1)
     })
 
     myfit2 <- reactive({
@@ -832,11 +819,11 @@ DTEAssuranceApp <- function(){
             #Looks at whether the median time is before or after the delay
             medianTTime <- treatmentCILines()$TreatmentTime[sum(treatmentCILines()$medianTreatment>0.5)]
             medianCTime <- (1/input$lambdacmean)*(-log(0.5))^(1/input$gammacmean)
-              mediandf <- data.frame(x = seq(0, medianTTime, length=2), y = rep(0.5, 2))
-              mediandf1 <- data.frame(x = rep(medianTTime, 2), y = seq(0, 0.5, length=2))
-              mediandf2 <- data.frame(x = rep(medianCTime, 2), y = seq(0, 0.5, length=2))
-              p1 <- p1 + geom_line(data = mediandf, aes(x = x, y=y), linetype = "dashed") + geom_line(data = mediandf1, aes(x = x, y=y), linetype="dashed") +
-                geom_line(data = mediandf2, aes(x = x, y=y), linetype="dashed")
+            mediandf <- data.frame(x = seq(0, medianTTime, length=2), y = rep(0.5, 2))
+            mediandf1 <- data.frame(x = rep(medianTTime, 2), y = seq(0, 0.5, length=2))
+            mediandf2 <- data.frame(x = rep(medianCTime, 2), y = seq(0, 0.5, length=2))
+            p1 <- p1 + geom_line(data = mediandf, aes(x = x, y=y), linetype = "dashed") + geom_line(data = mediandf1, aes(x = x, y=y), linetype="dashed") +
+              geom_line(data = mediandf2, aes(x = x, y=y), linetype="dashed")
 
             #This uses the elicited distribution for T and adds 95% points onto the control curve
           } else if (addfeedback[i]=="90% CI for T"){
@@ -1224,8 +1211,8 @@ DTEAssuranceApp <- function(){
       conc.probs <- matrix(0, 2, 2)
       conc.probs[1, 2] <- 0.5
       data.frame(copulaSample(myfit1(), myfit2(), cp = conc.probs,
-                                     n = input$ss,
-                                     d = c(input$dist1, input$dist2)))
+                              n = input$ss,
+                              d = c(input$dist1, input$dist2)))
     })
 
     observeEvent(input$exit, {
@@ -1276,11 +1263,11 @@ DTEAssuranceApp <- function(){
         "DTEAssurance.rds"
       },
       content = function(file) {
-          object_list <- list(fit1 = myfit1(), fit2 = myfit2(),
-                                        d = c(input$dist1, input$dist2),
-                                        P_S = input$P_S, P_DTE = input$P_DTE)
-          saveRDS(object_list, file)
-        }
+        object_list <- list(fit1 = myfit1(), fit2 = myfit2(),
+                            d = c(input$dist1, input$dist2),
+                            P_S = input$P_S, P_DTE = input$P_DTE)
+        saveRDS(object_list, file)
+      }
     )
 
 
@@ -1288,7 +1275,7 @@ DTEAssuranceApp <- function(){
 
   shiny::shinyApp(ui, server)
 
-}
+
 
 
 

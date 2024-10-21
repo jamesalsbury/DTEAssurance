@@ -27,7 +27,7 @@ library(SHELF)
 
 DTE is an R package which elicits two distributions and then calculates assurance using these elicited prior distributions. The package implements the methods as described in 
 
-* [this paper](https://jamesalsbury.github.io/)
+* [this paper](https://onlinelibrary.wiley.com/doi/10.1002/sim.10136)
 
 
 ## Installation

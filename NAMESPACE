@@ -3,6 +3,7 @@
 export(CensFunc)
 export(DTEAssuranceApp)
 export(SimDTEDataSet)
+export(assurance_shiny_app)
 export(calculateAssurance)
 export(survivalAnalysis)
 import(SHELF)
