@@ -28,26 +28,67 @@ x <- y <- quantiletime <- NULL
         # Control UI ---------------------------------
 
         tabPanel("Control",
-                 hidden(wellPanel(
-                   id = "instruct_panel",
-                   h4("Instructions"),
-                   tags$ol(
-                     tags$li("You are able to upload an MCMC sample to estimate the control survival curve.
-                   The MCMC sample must be in one of the following three file formats: '.csv', '.xlsx' or '.rds'. The
-                           file must contain nothing but two columns of samples. The first column must contain the output for the SHAPE parameter
-                           and the second column must contain the output for the SCALE parameter.")))),
                  sidebarLayout(
                    sidebarPanel = sidebarPanel(
-                     radioButtons("uploadSampleCheck", "Do you wish to upload a MCMC sample?", choices = c("Yes", "No"), selected = "No"),
-                     hidden(fileInput("uploadSample", "Upload your control sample",accept = c(".csv", ".rds", ".xlsx"))),
-                     numericInput('lambdacmean', label =  HTML(paste0("scale (\u03bb",tags$sub("c"), ")")), value = 0.08, min=0),
-                     numericInput('gammacmean', label =  HTML(paste0("scale (\u03b3",tags$sub("c"), ")")), value = 0.8)
+                     selectInput("ControlDist", "Distribution", choices = c("Exponential", "Weibull"), selected = "Exponential"),
+                     # Conditional UI for Exponential distribution
+                     conditionalPanel(
+                       condition = "input.ControlDist == 'Exponential'",
+                       selectInput("ExpChoice", "Choice", choices = c("Single Value", "Distribution", "rBEST"), selected = "Single Value"),
+                       conditionalPanel(
+                         condition = "input.ExpChoice == 'Single Value'",
+                         numericInput("ExpRate", label =  HTML(paste0("rate (\u03bb)")), value = 0.08, min=0)
+                       ),
+                       conditionalPanel(
+                         condition = "input.ExpChoice == 'Distribution'",
+                         numericInput("ExpSurvTime", label = "Survival Time", value = 12),
+                         fluidRow(
+                           column(6,
+                                  numericInput("ExpBetaA", "Beta(a)", value = 20, min = 0, max = 1)
+
+                           ),
+                           column(6,
+                                  numericInput("ExpBetaB", "Beta(b)", value = 32, min = 0, max = 1)
+
+                           )
+                         )
+
+
+                       ),
+                       conditionalPanel(
+                         condition = "input.ExpChoice == 'rBEST'",
+
+                       ),
+                     ),
+                     # Conditional UI for Weibull distribution
+                     conditionalPanel(
+                       condition = "input.ControlDist == 'Weibull'",
+                       selectInput("WeibullChoice", "Choice", choices = c("Single Value", "Distribution"), selected = "Single Value"),
+                       conditionalPanel(
+                         condition = "input.WeibullChoice == 'Single Value'",
+                         fluidRow(
+                           column(6,
+                                  numericInput("WeibullScale", label =  HTML(paste0("scale (\u03bb",tags$sub("c"), ")")), value = 0.08, min=0)
+
+                           ),
+                           column(6,
+                                  numericInput("WeibullShape", label =  HTML(paste0("shape (\u03b3",tags$sub("c"), ")")), value = 1, min=0)
+
+                           )
+                         )
+                       ),
+
+                       conditionalPanel(
+                         condition = "input.WeibullChoice == 'Distribution'",
+
+                       ),
+
+                     )
 
 
                    ),
                    mainPanel = mainPanel(
-                     plotOutput("plotControl"),
-                     htmlOutput("recommendedParams")
+                     plotOutput("plotControl")
                    )
                  ),
         ),
@@ -241,7 +282,7 @@ x <- y <- quantiletime <- NULL
         #Need to say what files can be uploaded in the control sample
         #Link to SHELF for the elicitation
         tabPanel("Help",
-                 HTML("<p>This app implements the method as outlined in this <a href='https://jamesalsbury.github.io/'>paper</a>. For every tab, there is a brief summary below, for any other questions, comments or
+                 HTML("<p>This app implements the method as outlined in this <a href='https://onlinelibrary.wiley.com/doi/full/10.1002/sim.10136'>paper</a>. For every tab, there is a brief summary below, for any other questions, comments or
                   feedback, please contact <a href='mailto:jsalsbury1@sheffield.ac.uk'>James Salsbury</a>.</p>"),
                  HTML("<p><u>Control</u></p>"),
                  HTML("<p>Here, the parameters for the control survival are specified, the parameterisation for the control survival curve is:</p>"),
@@ -267,7 +308,7 @@ x <- y <- quantiletime <- NULL
         ),
 
 
-      ), style='width: 1000px; height: 600px',
+      ), style='width: 1200px; height: 600px',
       #Well panel UI ---------------------------------
       wellPanel(
         fluidRow(
@@ -349,100 +390,164 @@ x <- y <- quantiletime <- NULL
 
     })
 
-    observe({
-      if (input$uploadSampleCheck=="No"){
-        shinyjs::hide(id = "uploadSample")
-        shinyjs::reset(id = "uploadSample")
-        shinyjs::hide(id = "instruct_panel")
-        v$upload <- "no"
-      } else if (input$uploadSampleCheck=="Yes"){
-        shinyjs::show(id = "uploadSample")
-        shinyjs::show(id = "instruct_panel")
-      }
+    # observe({
+    #   if (input$uploadSampleCheck=="No"){
+    #     shinyjs::hide(id = "uploadSample")
+    #     shinyjs::reset(id = "uploadSample")
+    #     shinyjs::hide(id = "instruct_panel")
+    #     v$upload <- "no"
+    #   } else if (input$uploadSampleCheck=="Yes"){
+    #     shinyjs::show(id = "uploadSample")
+    #     shinyjs::show(id = "instruct_panel")
+    #   }
+    #
+    # })
 
-    })
+    # observeEvent(input$uploadSample,{
+    #   v$upload <- "yes"
+    # })
 
-    observeEvent(input$uploadSample,{
-      v$upload <- "yes"
-    })
+    # inputData <- reactive({
+    #   #Allows the user to upload a control sample
+    #
+    #   if (v$upload=="no"){
+    #     return(NULL)
+    #   } else {
+    #     chosenFile <- input$uploadSample
+    #     req(chosenFile)
+    #     if (endsWith(chosenFile$name, ".xlsx")){
+    #       controlMCMC <- read_excel(chosenFile$datapath, sheet = 1)
+    #     } else if (endsWith(chosenFile$name, "csv")){
+    #       controlMCMC <- read.csv(chosenFile$datapath)
+    #     } else if (endsWith(chosenFile$name, "rds")){
+    #       controlMCMC <- readRDS(chosenFile$datapath)
+    #     }
+    #
+    #     #lambdac and gammac are estimated from the uploaded control sample
+    #     shape <- unlist(controlMCMC[,1])
+    #     scale <- unlist(controlMCMC[,2])
+    #     updateTextInput(session, "lambdacmean", value = signif(mean(scale), 3))
+    #     updateTextInput(session, "gammacmean", value = signif(mean(shape), 3))
+    #     return(list(shape = shape, scale = scale))
+    #   }
+    #
+    # })
 
-    inputData <- reactive({
-      #Allows the user to upload a control sample
-
-      if (v$upload=="no"){
-        return(NULL)
-      } else {
-        chosenFile <- input$uploadSample
-        req(chosenFile)
-        if (endsWith(chosenFile$name, ".xlsx")){
-          controlMCMC <- read_excel(chosenFile$datapath, sheet = 1)
-        } else if (endsWith(chosenFile$name, "csv")){
-          controlMCMC <- read.csv(chosenFile$datapath)
-        } else if (endsWith(chosenFile$name, "rds")){
-          controlMCMC <- readRDS(chosenFile$datapath)
-        }
-
-        #lambdac and gammac are estimated from the uploaded control sample
-        shape <- unlist(controlMCMC[,1])
-        scale <- unlist(controlMCMC[,2])
-        updateTextInput(session, "lambdacmean", value = signif(mean(scale), 3))
-        updateTextInput(session, "gammacmean", value = signif(mean(shape), 3))
-        return(list(shape = shape, scale = scale))
-      }
-
-    })
-
-    output$recommendedParams <- renderUI({
-      if (v$upload=="yes"){
-        #Tells the user what the best fitting parameters are for their uploaded sample
-        str1 <- paste0("For your uploaded sample, the best fitting parameters are:")
-        str2 <- withMathJax(paste0("$$\\lambda_c =  ",signif(mean(inputData()$scale), 3),"$$", "and", "$$\\gamma_c =  ",signif(mean(inputData()$shape), 3),"$$"))
-        HTML(paste(str1, str2, sep = '<br/>'))
-      } else {
-
-      }
-
-    })
+    # output$recommendedParams <- renderUI({
+    #   if (v$upload=="yes"){
+    #     #Tells the user what the best fitting parameters are for their uploaded sample
+    #     str1 <- paste0("For your uploaded sample, the best fitting parameters are:")
+    #     str2 <- withMathJax(paste0("$$\\lambda_c =  ",signif(mean(inputData()$scale), 3),"$$", "and", "$$\\gamma_c =  ",signif(mean(inputData()$shape), 3),"$$"))
+    #     HTML(paste(str1, str2, sep = '<br/>'))
+    #   } else {
+    #
+    #   }
+    #
+    # })
 
     output$plotControl <- renderPlot({
 
-      #Calculate the x-axis limits
-      controlTime <- seq(0, 10000, by=0.01)
-      controlCurve <- exp(-(input$lambdacmean*controlTime)^input$gammacmean)
-      finalSurvTime <- controlTime[which(controlCurve<0.01)[1]]
 
-      if (v$upload=="no"){
-
-        #Re-define the x-axis
-        controlTime <- seq(0, finalSurvTime, length = 100)
-        controlSurv <- exp(-(input$lambdacmean*controlTime)^input$gammacmean)
-
-        # #Plots the median control curve along with the CI
-        controlDF <- data.frame(controlTime = controlTime, controlSurv = controlSurv)
-
-        theme_set(theme_grey(base_size = 12))
-        p1 <- ggplot(data=controlDF, aes(x=controlTime, y=controlSurv)) + xlim(0, finalSurvTime) +
+      if (input$ControlDist=="Exponential"){
+        if (input$ExpChoice=="Single Value"){
+          finalSurvTime <- -log(0.01)/input$ExpRate
+          controlTime <- seq(0, finalSurvTime, length = 100)
+          controlSurv <- exp(-input$ExpRate*controlTime)
+          controlDF <- data.frame(controlTime = controlTime, controlSurv = controlSurv)
+          theme_set(theme_grey(base_size = 12))
+          p1 <- ggplot(data=controlDF, aes(x=controlTime, y=controlSurv)) + xlim(0, finalSurvTime) +
           geom_line(colour="blue") + xlab("Time") + ylab("Survival") + ylim(0,1)
 
-        print(p1)
-      } else {
-        controlDF <- data.frame(controlTime = controlCILines()$controlTime, controlSurv = controlCILines()$mediancontrol)
-        controlLB <- data.frame(controlTime = controlCILines()$controlTime, controlSurv = controlCILines()$lowerbound)
-        controlUB <- data.frame(controlTime = controlCILines()$controlTime, controlSurv = controlCILines()$upperbound)
+        }
 
-        theme_set(theme_grey(base_size = 12))
+        else if (input$ExpChoice=="Distribution"){
 
-        p1 <- ggplot(data=controlDF, aes(x=controlTime, y=controlSurv)) + xlim(0, finalSurvTime) +
-          geom_line(colour="blue") + xlab("Time") + ylab("Survival") + ylim(0,1) +
-          geom_line(data = controlLB, aes(x=controlTime, y=controlSurv), linetype="dashed") +
-          geom_line(data = controlUB, aes(x=controlTime, y=controlSurv), linetype="dashed")
+          # Define parameters
+          nSamples <- 1000
 
-        print(p1)
+          # Sample lambda values and calculate final survival time
+          sampledLambda <- -log(rbeta(nSamples, input$ExpBetaA, input$ExpBetaB)) / input$ExpSurvTime
+          finalSurvTime <- -log(0.05) / min(sampledLambda)
 
+          controlTime <- seq(0, finalSurvTime, length = 100)
+
+          # Calculate survival probabilities in a vectorized manner
+          controlDF <- exp(-outer(sampledLambda, controlTime, "*"))
+
+          # Calculate median and confidence intervals across rows (i.e., for each time point)
+          medVec <- apply(controlDF, 2, median)
+          UBVec <- apply(controlDF, 2, quantile, 0.975)
+          LBVec <- apply(controlDF, 2, quantile, 0.025)
+
+          # Combine all data into a single data frame for ggplot
+          controlDF <- data.frame(controlTime = controlTime, medVec = medVec, UBVec = UBVec, LBVec = LBVec)
+
+          # Plot using ggplot2
+          theme_set(theme_grey(base_size = 12))
+          p1 <- ggplot(data = controlDF, aes(x = controlTime)) +
+            geom_line(aes(y = medVec), colour = "blue") +
+            geom_line(aes(y = UBVec), colour = "blue", linetype = "dashed") +
+            geom_line(aes(y = LBVec), colour = "blue", linetype = "dashed") +
+            xlim(0, finalSurvTime) + ylim(0, 1) +
+            xlab("Time") + ylab("Survival")
+
+        }
+
+
+      } else if (input$ControlDist=="Weibull"){
+        if (input$WeibullChoice=="Single Value"){
+          finalSurvTime <- (1/input$WeibullScale)*(-log(0.01))^(1/input$WeibullShape)
+          #print(finalSurvTime)
+          controlTime <- seq(0, finalSurvTime, length = 100)
+          controlSurv <- exp(-(input$WeibullScale*controlTime)^input$WeibullShape)
+          controlDF <- data.frame(controlTime = controlTime, controlSurv = controlSurv)
+          theme_set(theme_grey(base_size = 12))
+          p1 <- ggplot(data=controlDF, aes(x=controlTime, y=controlSurv)) + xlim(0, finalSurvTime) +
+            geom_line(colour="blue") + xlab("Time") + ylab("Survival") + ylim(0,1)
+
+        }
       }
 
+      print(p1)
 
     })
+
+      # #Calculate the x-axis limits
+      # controlTime <- seq(0, 10000, by=0.01)
+      # controlCurve <- exp(-(input$lambdacmean*controlTime)^input$gammacmean)
+      # finalSurvTime <- controlTime[which(controlCurve<0.01)[1]]
+      #
+      # if (v$upload=="no"){
+      #
+      #   #Re-define the x-axis
+      #   controlTime <- seq(0, finalSurvTime, length = 100)
+      #   controlSurv <- exp(-(input$lambdacmean*controlTime)^input$gammacmean)
+      #
+      #   # #Plots the median control curve along with the CI
+      #   controlDF <- data.frame(controlTime = controlTime, controlSurv = controlSurv)
+      #
+      #   theme_set(theme_grey(base_size = 12))
+      #   p1 <- ggplot(data=controlDF, aes(x=controlTime, y=controlSurv)) + xlim(0, finalSurvTime) +
+      #     geom_line(colour="blue") + xlab("Time") + ylab("Survival") + ylim(0,1)
+      #
+      #   print(p1)
+      # } else {
+      #   controlDF <- data.frame(controlTime = controlCILines()$controlTime, controlSurv = controlCILines()$mediancontrol)
+      #   controlLB <- data.frame(controlTime = controlCILines()$controlTime, controlSurv = controlCILines()$lowerbound)
+      #   controlUB <- data.frame(controlTime = controlCILines()$controlTime, controlSurv = controlCILines()$upperbound)
+      #
+      #   theme_set(theme_grey(base_size = 12))
+      #
+      #   p1 <- ggplot(data=controlDF, aes(x=controlTime, y=controlSurv)) + xlim(0, finalSurvTime) +
+      #     geom_line(colour="blue") + xlab("Time") + ylab("Survival") + ylim(0,1) +
+      #     geom_line(data = controlLB, aes(x=controlTime, y=controlSurv), linetype="dashed") +
+      #     geom_line(data = controlUB, aes(x=controlTime, y=controlSurv), linetype="dashed")
+      #
+      #   print(p1)
+      #
+      # }
+
+
 
     # Functions for the eliciting distributions tabs ---------------------------------
 
