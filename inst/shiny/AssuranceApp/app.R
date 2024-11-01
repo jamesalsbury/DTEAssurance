@@ -13,6 +13,8 @@ library(nleqslv)
 library(graphics)
 library(shinyjs)
 library(utils)
+library(nleqslv)
+
 
 x <- y <- quantiletime <- NULL
   ui <- fluidPage(
@@ -44,12 +46,19 @@ x <- y <- quantiletime <- NULL
                          numericInput("ExpSurvTime", label = "Survival Time", value = 12),
                          fluidRow(
                            column(6,
-                                  numericInput("ExpBetaA", "Beta(a)", value = 20, min = 0, max = 1)
-
+                                  uiOutput("ExpDistText")
                            ),
-                           column(6,
-                                  numericInput("ExpBetaB", "Beta(b)", value = 32, min = 0, max = 1)
-
+                           column(4,
+                                  numericInput("ExpBetaA", label = NULL, value = 20)
+                           ),
+                           column(1,
+                                  tags$div(", ")
+                           ),
+                           column(4,
+                                  numericInput("ExpBetaB", label = NULL, value = 32)
+                           ),
+                           column(1,
+                                  tags$div(")")
                            )
                          )
 
@@ -80,7 +89,50 @@ x <- y <- quantiletime <- NULL
 
                        conditionalPanel(
                          condition = "input.WeibullChoice == 'Distribution'",
+                         fluidRow(
+                           column(6,
+                                  numericInput("WeibullDistT1", label =  HTML(paste0("t",tags$sub("1"))), value = 12)
 
+                           ),
+                           column(6,
+                                  numericInput("WeibullDistT2", label =  HTML(paste0("t",tags$sub("2"))), value = 18)
+
+                           )
+                         ),
+                         fluidRow(
+                           column(6,
+                                  uiOutput("WeibullDistS1Text")
+                           ),
+                           column(4,
+                                  numericInput("WeibullDistS1BetaA", label = NULL, value = 20)
+                           ),
+                           column(1,
+                                  tags$div(", ")
+                           ),
+                           column(4,
+                                  numericInput("WeibullDistS1BetaB", label = NULL, value = 32)
+                           ),
+                           column(1,
+                                  tags$div(")")
+                           )
+                         ),
+                         fluidRow(
+                           column(6,
+                                  uiOutput("WeibullDistDelta1Text")
+                           ),
+                           column(4,
+                                  numericInput("WeibullDistDelta1BetaA", label = NULL, value = 20)
+                           ),
+                           column(1,
+                                  tags$div(", ")
+                           ),
+                           column(4,
+                                  numericInput("WeibullDistDelta1BetaB", label = NULL, value = 120)
+                           ),
+                           column(1,
+                                  tags$div(")")
+                           )
+                         )
                        ),
 
                      )
@@ -97,11 +149,11 @@ x <- y <- quantiletime <- NULL
         tabPanel("Conditional probabilities",
                  fluidRow(
                    column(6,
-                          numericInput("P_S", "Pr(survival curves separate)", value = 0.9, min = 0, max = 1)
+                          numericInput("P_S", "Pr(survival curves separate)", value = 0.5, min = 0, max = 1)
 
                    ),
                    column(6,
-                          numericInput("P_DTE", "Pr(treatment subject to a delay|survival curves separate)", value = 0.6, min = 0, max = 1)
+                          numericInput("P_DTE", "Pr(treatment subject to a delay|survival curves separate)", value = 0.5, min = 0, max = 1)
 
                    )
                  )
@@ -111,21 +163,21 @@ x <- y <- quantiletime <- NULL
         tabPanel("Eliciting the length of delay",
                  fluidRow(
                    column(4,
-                          textInput("limits1", label = h5("Length of delay limits"),
+                          textInput("TLimits", label = h5("Length of delay limits"),
                                     value = "0, 12")
                    ),
                    column(4,
-                          textInput("values1", label = h5("Length of delay values"),
+                          textInput("TValues", label = h5("Length of delay values"),
                                     value = "5.5, 6, 6.5")
                    ),
                    column(4,
-                          textInput("probs1", label = h5("Cumulative probabilities"),
+                          textInput("TProbs", label = h5("Cumulative probabilities"),
                                     value = "0.25, 0.5, 0.75")
                    )
                  ),
                  fluidRow(
                    column(4,
-                          selectInput("dist1", label = h5("Distribution"),
+                          selectInput("TDist", label = h5("Distribution"),
                                       choices =  list(Histogram = "hist",
                                                       Normal = "normal",
                                                       'Student-t' = "t",
@@ -141,7 +193,7 @@ x <- y <- quantiletime <- NULL
                                       selected = 1
                           )),
                    column(4,conditionalPanel(
-                     condition = "input.dist1 == 't' || input.dist1 == 'logt' || input.dist1 == 'mirrorlogt'",
+                     condition = "input.TDist == 't' || input.TDist == 'logt' || input.TDist == 'mirrorlogt'",
                      numericInput("tdf1", label = h5("Student-t degrees of freedom"),
                                   value = 3)
                    )
@@ -149,27 +201,27 @@ x <- y <- quantiletime <- NULL
 
 
                  ),
-                 plotOutput("distPlot1"),
+                 plotOutput("TPlot"),
         ),
         # post-delay HR UI ---------------------------------
         tabPanel("Eliciting the post-delay hazard ratio",
                  fluidRow(
                    column(4,
-                          textInput("limits2", label = h5("Post-delay hazard ratio limits"),
+                          textInput("HRLimits", label = h5("Post-delay hazard ratio limits"),
                                     value = "0, 1")
                    ),
                    column(4,
-                          textInput("values2", label = h5("Post-delay hazard ratio values"),
+                          textInput("HRValues", label = h5("Post-delay hazard ratio values"),
                                     value = "0.5, 0.6, 0.7")
                    ),
                    column(4,
-                          textInput("probs2", label = h5("Cumulative probabilities"),
+                          textInput("HRProbs", label = h5("Cumulative probabilities"),
                                     value = "0.25, 0.5, 0.75")
                    )
                  ),
                  fluidRow(
                    column(4,
-                          selectInput("dist2", label = h5("Distribution"),
+                          selectInput("HRDist", label = h5("Distribution"),
                                       choices =  list(Histogram = "hist",
                                                       Normal = "normal",
                                                       'Student-t' = "t",
@@ -186,7 +238,7 @@ x <- y <- quantiletime <- NULL
                           )),
                    column(4,
                           conditionalPanel(
-                            condition = "input.dist2 == 't' || input.dist2 == 'logt' || input.dist1 == 'mirrorlogt'",
+                            condition = "input.HRDist == 't' || input.HRDist == 'logt' || input.HRDist == 'mirrorlogt'",
                             numericInput("tdf2", label = h5("degrees of freedom"),
                                          value = 3)
 
@@ -194,10 +246,9 @@ x <- y <- quantiletime <- NULL
                           )
                    )
 
-
                  ),
 
-                 plotOutput("distPlot2"),
+                 plotOutput("HRPlot"),
         ),
 
         # Feedback UI ---------------------------------
@@ -343,439 +394,189 @@ x <- y <- quantiletime <- NULL
 
     # Functions for the control tab ---------------------------------
 
-    #Reactive which determines whether addKM button has been clicked
-    v <- reactiveValues(upload = NULL)
-
-    #Simulates control curves and plots time-wise CI
-    controlCILines <- reactive({
-
-      #Generate n control curves
-      nsamples <- 500
-
-      #Calculate the x-axis limits
-      controlTime <- seq(0, 10000, by=0.01)
-      controlCurve <- exp(-(input$lambdacmean*controlTime)^input$gammacmean)
-      finalSurvTime <- controlTime[which(controlCurve<0.01)[1]]
-
-      #Re-define the x-axis
-      controlTime <- seq(0, finalSurvTime, length = 100)
-
-
-      #We fill a matrix with the control survival probabilities at each time
-      SimMatrix <- matrix(NA, nrow = nsamples, ncol=length(controlTime))
-
-      #Sample lambdac and gammac from the inputs
-      lambdacsample <- inputData()$scale
-      gammacsample <- inputData()$shape
-
-      chosenMCMCsample <- sample(1:nsamples, size = nsamples, replace = T)
-      #Fills matrix with control curves
-      for (i in 1:nsamples){
-        SimMatrix[i,] <- exp(-(lambdacsample[chosenMCMCsample[i]]*controlTime)^gammacsample[chosenMCMCsample[i]])
-      }
-
-
-      #Finding 95% estimates for the control curve(s)
-      lowerbound <- rep(NA, length(controlTime))
-      upperbound <- rep(NA, length(controlTime))
-      mediancontrol <- rep(NA, length(controlTime))
-      for (j in 1:length(controlTime)){
-        lowerbound[j] <- quantile(SimMatrix[,j], 0.05)
-        upperbound[j] <- quantile(SimMatrix[,j], 0.95)
-        mediancontrol[j] <- quantile(SimMatrix[,j], 0.5)
-      }
-
-      return(list(lowerbound=lowerbound, upperbound=upperbound, controlTime=controlTime, SimMatrix = SimMatrix,
-                  mediancontrol = mediancontrol))
-
+    output$ExpDistText <- renderUI({
+      paste0("S(", input$ExpSurvTime, ") ~ Beta(")
     })
 
-    # observe({
-    #   if (input$uploadSampleCheck=="No"){
-    #     shinyjs::hide(id = "uploadSample")
-    #     shinyjs::reset(id = "uploadSample")
-    #     shinyjs::hide(id = "instruct_panel")
-    #     v$upload <- "no"
-    #   } else if (input$uploadSampleCheck=="Yes"){
-    #     shinyjs::show(id = "uploadSample")
-    #     shinyjs::show(id = "instruct_panel")
-    #   }
-    #
-    # })
+    output$WeibullDistS1Text <- renderUI({
+      paste0("S(", input$WeibullDistT1, ") ~ Beta(")
+    })
 
-    # observeEvent(input$uploadSample,{
-    #   v$upload <- "yes"
-    # })
-
-    # inputData <- reactive({
-    #   #Allows the user to upload a control sample
-    #
-    #   if (v$upload=="no"){
-    #     return(NULL)
-    #   } else {
-    #     chosenFile <- input$uploadSample
-    #     req(chosenFile)
-    #     if (endsWith(chosenFile$name, ".xlsx")){
-    #       controlMCMC <- read_excel(chosenFile$datapath, sheet = 1)
-    #     } else if (endsWith(chosenFile$name, "csv")){
-    #       controlMCMC <- read.csv(chosenFile$datapath)
-    #     } else if (endsWith(chosenFile$name, "rds")){
-    #       controlMCMC <- readRDS(chosenFile$datapath)
-    #     }
-    #
-    #     #lambdac and gammac are estimated from the uploaded control sample
-    #     shape <- unlist(controlMCMC[,1])
-    #     scale <- unlist(controlMCMC[,2])
-    #     updateTextInput(session, "lambdacmean", value = signif(mean(scale), 3))
-    #     updateTextInput(session, "gammacmean", value = signif(mean(shape), 3))
-    #     return(list(shape = shape, scale = scale))
-    #   }
-    #
-    # })
-
-    # output$recommendedParams <- renderUI({
-    #   if (v$upload=="yes"){
-    #     #Tells the user what the best fitting parameters are for their uploaded sample
-    #     str1 <- paste0("For your uploaded sample, the best fitting parameters are:")
-    #     str2 <- withMathJax(paste0("$$\\lambda_c =  ",signif(mean(inputData()$scale), 3),"$$", "and", "$$\\gamma_c =  ",signif(mean(inputData()$shape), 3),"$$"))
-    #     HTML(paste(str1, str2, sep = '<br/>'))
-    #   } else {
-    #
-    #   }
-    #
-    # })
-
-    output$plotControl <- renderPlot({
+    output$WeibullDistDelta1Text <- renderUI({
+      paste0("S(", input$WeibullDistT2, ") - S(", input$WeibullDistT1,") ~ Beta(")
+    })
 
 
-      if (input$ControlDist=="Exponential"){
-        if (input$ExpChoice=="Single Value"){
-          finalSurvTime <- -log(0.01)/input$ExpRate
-          controlTime <- seq(0, finalSurvTime, length = 100)
-          controlSurv <- exp(-input$ExpRate*controlTime)
-          controlDF <- data.frame(controlTime = controlTime, controlSurv = controlSurv)
-          theme_set(theme_grey(base_size = 12))
-          p1 <- ggplot(data=controlDF, aes(x=controlTime, y=controlSurv)) + xlim(0, finalSurvTime) +
-          geom_line(colour="blue") + xlab("Time") + ylab("Survival") + ylim(0,1)
+    # Reactive for common calculations based on distribution type and inputs
+    controlSurvivalData <- reactive({
+      # Initialize an empty list to hold output data
+      result <- list()
 
-        }
+      # Calculate control survival data based on distribution type and input options
+      if (input$ControlDist == "Exponential") {
+        if (input$ExpChoice == "Single Value") {
+          finalSurvTime <- -log(0.01) / input$ExpRate
+          controlTime <- seq(0, finalSurvTime, length.out = 100)
+          controlSurv <- exp(-input$ExpRate * controlTime)
 
-        else if (input$ExpChoice=="Distribution"){
+          result$controlDF <- data.frame(controlTime = controlTime, controlSurv = controlSurv)
+          result$type <- "single"
 
-          # Define parameters
+        } else if (input$ExpChoice == "Distribution") {
           nSamples <- 1000
-
-          # Sample lambda values and calculate final survival time
           sampledLambda <- -log(rbeta(nSamples, input$ExpBetaA, input$ExpBetaB)) / input$ExpSurvTime
           finalSurvTime <- -log(0.05) / min(sampledLambda)
+          controlTime <- seq(0, finalSurvTime, length.out = 100)
 
-          controlTime <- seq(0, finalSurvTime, length = 100)
+          # Vectorized calculation for survival curves
+          survivalMatrix <- exp(-outer(sampledLambda, controlTime, "*"))
+          medVec <- apply(survivalMatrix, 2, median)
+          UBVec <- apply(survivalMatrix, 2, quantile, 0.975)
+          LBVec <- apply(survivalMatrix, 2, quantile, 0.025)
 
-          # Calculate survival probabilities in a vectorized manner
-          controlDF <- exp(-outer(sampledLambda, controlTime, "*"))
-
-          # Calculate median and confidence intervals across rows (i.e., for each time point)
-          medVec <- apply(controlDF, 2, median)
-          UBVec <- apply(controlDF, 2, quantile, 0.975)
-          LBVec <- apply(controlDF, 2, quantile, 0.025)
-
-          # Combine all data into a single data frame for ggplot
-          controlDF <- data.frame(controlTime = controlTime, medVec = medVec, UBVec = UBVec, LBVec = LBVec)
-
-          # Plot using ggplot2
-          theme_set(theme_grey(base_size = 12))
-          p1 <- ggplot(data = controlDF, aes(x = controlTime)) +
-            geom_line(aes(y = medVec), colour = "blue") +
-            geom_line(aes(y = UBVec), colour = "blue", linetype = "dashed") +
-            geom_line(aes(y = LBVec), colour = "blue", linetype = "dashed") +
-            xlim(0, finalSurvTime) + ylim(0, 1) +
-            xlab("Time") + ylab("Survival")
-
+          result$controlDF <- data.frame(controlTime = controlTime, medVec = medVec, UBVec = UBVec, LBVec = LBVec)
+          result$type <- "distribution"
         }
 
+      } else if (input$ControlDist == "Weibull") {
+        if (input$WeibullChoice == "Single Value") {
+          finalSurvTime <- (1 / input$WeibullScale) * (-log(0.01))^(1 / input$WeibullShape)
+          controlTime <- seq(0, finalSurvTime, length.out = 100)
+          controlSurv <- exp(-(input$WeibullScale * controlTime)^input$WeibullShape)
 
-      } else if (input$ControlDist=="Weibull"){
-        if (input$WeibullChoice=="Single Value"){
-          finalSurvTime <- (1/input$WeibullScale)*(-log(0.01))^(1/input$WeibullShape)
-          #print(finalSurvTime)
-          controlTime <- seq(0, finalSurvTime, length = 100)
-          controlSurv <- exp(-(input$WeibullScale*controlTime)^input$WeibullShape)
-          controlDF <- data.frame(controlTime = controlTime, controlSurv = controlSurv)
-          theme_set(theme_grey(base_size = 12))
-          p1 <- ggplot(data=controlDF, aes(x=controlTime, y=controlSurv)) + xlim(0, finalSurvTime) +
-            geom_line(colour="blue") + xlab("Time") + ylab("Survival") + ylim(0,1)
+          result$controlDF <- data.frame(controlTime = controlTime, controlSurv = controlSurv)
+          result$type <- "single"
 
+        } else if (input$WeibullChoice == "Distribution") {
+          n <- 500
+          controlTime <- seq(0, 100, length.out = 100)
+          survival_curves <- matrix(NA, nrow = n, ncol = length(controlTime))
+
+          for (i in 1:n) {
+            sampledS1to <- rbeta(1, input$WeibullDistS1BetaA, input$WeibullDistS1BetaB)
+            sampledDelta1 <- rbeta(1, input$WeibullDistDelta1BetaA, input$WeibullDistDelta1BetaB)
+            sampledS1toPrime <- sampledS1to - sampledDelta1
+
+            # Solve for lambda and gamma using sampled values
+            solution <- nleqslv(c(10, 1), function(params) {
+              lambda <- params[1]
+              k <- params[2]
+              c(exp(-(input$WeibullDistT1 / lambda)^k) - sampledS1to,
+                exp(-(input$WeibullDistT2 / lambda)^k) - sampledS1toPrime)
+            })
+
+            lambda <- 1 / solution$x[1]
+            gamma <- solution$x[2]
+            survival_curves[i, ] <- exp(-(lambda * controlTime)^gamma)
+          }
+
+          medVec <- apply(survival_curves, 2, median)
+          UBVec <- apply(survival_curves, 2, quantile, 0.975)
+          LBVec <- apply(survival_curves, 2, quantile, 0.025)
+
+          result$controlDF <- data.frame(controlTime = controlTime, medVec = medVec, UBVec = UBVec, LBVec = LBVec)
+          result$type <- "distribution"
         }
       }
 
-      print(p1)
-
+      return(result)
     })
 
-      # #Calculate the x-axis limits
-      # controlTime <- seq(0, 10000, by=0.01)
-      # controlCurve <- exp(-(input$lambdacmean*controlTime)^input$gammacmean)
-      # finalSurvTime <- controlTime[which(controlCurve<0.01)[1]]
-      #
-      # if (v$upload=="no"){
-      #
-      #   #Re-define the x-axis
-      #   controlTime <- seq(0, finalSurvTime, length = 100)
-      #   controlSurv <- exp(-(input$lambdacmean*controlTime)^input$gammacmean)
-      #
-      #   # #Plots the median control curve along with the CI
-      #   controlDF <- data.frame(controlTime = controlTime, controlSurv = controlSurv)
-      #
-      #   theme_set(theme_grey(base_size = 12))
-      #   p1 <- ggplot(data=controlDF, aes(x=controlTime, y=controlSurv)) + xlim(0, finalSurvTime) +
-      #     geom_line(colour="blue") + xlab("Time") + ylab("Survival") + ylim(0,1)
-      #
-      #   print(p1)
-      # } else {
-      #   controlDF <- data.frame(controlTime = controlCILines()$controlTime, controlSurv = controlCILines()$mediancontrol)
-      #   controlLB <- data.frame(controlTime = controlCILines()$controlTime, controlSurv = controlCILines()$lowerbound)
-      #   controlUB <- data.frame(controlTime = controlCILines()$controlTime, controlSurv = controlCILines()$upperbound)
-      #
-      #   theme_set(theme_grey(base_size = 12))
-      #
-      #   p1 <- ggplot(data=controlDF, aes(x=controlTime, y=controlSurv)) + xlim(0, finalSurvTime) +
-      #     geom_line(colour="blue") + xlab("Time") + ylab("Survival") + ylim(0,1) +
-      #     geom_line(data = controlLB, aes(x=controlTime, y=controlSurv), linetype="dashed") +
-      #     geom_line(data = controlUB, aes(x=controlTime, y=controlSurv), linetype="dashed")
-      #
-      #   print(p1)
-      #
-      # }
+    # Reactive for plotting
+    controlPlot <- reactive({
+      data <- controlSurvivalData()$controlDF
+      plotType <- controlSurvivalData()$type
 
+      if (plotType == "single") {
+        ggplot(data, aes(x = controlTime, y = controlSurv)) +
+          geom_line(colour = "blue") +
+          xlim(0, max(data$controlTime)) +
+          ylim(0, 1) +
+          xlab("Time") + ylab("Survival")
 
+      } else if (plotType == "distribution") {
+        ggplot(data, aes(x = controlTime)) +
+          geom_line(aes(y = medVec), colour = "blue") +
+          geom_line(aes(y = UBVec), colour = "blue", linetype = "dashed") +
+          geom_line(aes(y = LBVec), colour = "blue", linetype = "dashed") +
+          xlim(0, max(data$controlTime)) + ylim(0, 1) +
+          xlab("Time") + ylab("Survival")
+      }
+    })
+
+    # Render plot in the UI
+    output$plotControl <- renderPlot({
+      controlPlot()
+    })
 
     # Functions for the eliciting distributions tabs ---------------------------------
 
-
-    limits1 <- reactive({
-      eval(parse(text = paste("c(", input$limits1, ")")))
+    TLimits <- reactive({
+      eval(parse(text = paste("c(", input$TLimits, ")")))
     })
 
-    limits2 <- reactive({
-      eval(parse(text = paste("c(", input$limits2, ")")))
+    HRLimits <- reactive({
+      eval(parse(text = paste("c(", input$HRLimits, ")")))
     })
 
-    p1 <- reactive({
-      eval(parse(text = paste("c(", input$probs1, ")")))
+    TProbs <- reactive({
+      eval(parse(text = paste("c(", input$TProbs, ")")))
     })
 
-    p2 <- reactive({
-      eval(parse(text = paste("c(", input$probs2, ")")))
+    HRProbs <- reactive({
+      eval(parse(text = paste("c(", input$HRProbs, ")")))
     })
 
-    v1 <- reactive({
-      eval(parse(text = paste("c(", input$values1, ")")))
+    TValues <- reactive({
+      eval(parse(text = paste("c(", input$TValues, ")")))
     })
 
-    v2 <- reactive({
-      eval(parse(text = paste("c(", input$values2, ")")))
+    HRValues <- reactive({
+      eval(parse(text = paste("c(", input$HRValues, ")")))
     })
 
-    m1 <- reactive({
-      approx(p1(), v1(), 0.5)$y
+    TMedian <- reactive({
+      approx(TProbs(), TValues(), 0.5)$y
     })
 
-    m2 <- reactive({
-      approx(p2(), v2(), 0.5)$y
+    HRMedian <- reactive({
+      approx(HRProbs(), HRValues(), 0.5)$y
     })
 
-    myfit1 <- reactive({
-      fitdist(vals = v1(), probs = p1(), lower = limits1()[1],
-              upper = limits1()[2],
+    TFit <- reactive({
+      fitdist(vals = TValues(), probs = TProbs(), lower = TLimits()[1],
+              upper = TLimits()[2],
               tdf = input$tdf1)
     })
 
-    myfit2 <- reactive({
-      fitdist(vals = v2(), probs = p2(), lower = limits2()[1],
-              upper = limits2()[2],
+    HRFit <- reactive({
+      fitdist(vals = HRValues(), probs = HRProbs(), lower = HRLimits()[1],
+              upper = HRLimits()[2],
               tdf = input$tdf2)
     })
 
 
-    elicitedSamples <- reactive({
-
-      conc.probs <- matrix(0, 2, 2)
-      conc.probs[1, 2] <- 0.5
-      nsamples <- 10000
-
-      mySample <- data.frame(copulaSample(myfit1(), myfit2(), cp = conc.probs, n = nsamples, d = c(input$dist1, input$dist2)))
-      for (i in 1:nsamples){
-        u <- runif(1)
-        if (u < input$P_S){
-          w <- runif(1)
-          if (w > input$P_DTE){
-            mySample[i,1] <- 0
-          }
-        } else {
-          mySample[i,2] <- 1
-          mySample[i,1] <- 0
-        }
-      }
-
-
-      return(list(mySample = mySample, nsamples = nsamples))
-    })
-
     # Functions for the eliciting length of delay tab ---------------------------------
 
-    output$distPlot1 <- renderPlot({
+    output$TPlot <- renderPlot({
 
-      mySample <- elicitedSamples()$mySample
-      Tsamples <- data.frame(time = mySample[,1])
-      d <- input$dist1
-      if(d == "best"){
-        d <- myfit1()$best.fitting[1, 1]
-      }
 
-      dist.title <- ""
-      if(d == "hist"){
-        dist.title = "histogram fit"
-      }
-
-      if(d == "gamma"){
-        dist.title = paste("Gamma(",
-                           signif(myfit1()$Gamma[1,1], 3),
-                           ", ",
-                           signif(myfit1()$Gamma[1,2], 3),
-                           ")", sep="")
-      }
-
-      if(d == "lognormal"){
-        dist.title = paste("Log normal(",
-                           signif(myfit1()$Log.normal[1,1], 3),
-                           ", ",
-                           signif(myfit1()$Log.normal[1,2], 3), ")",
-                           sep="")
-      }
-
-      if(d == "beta"){
-        dist.title =paste("Beta(",
-                          signif(myfit1()$Beta[1,1], 3),
-                          ", ", signif(myfit1()$Beta[1,2], 3),
-                          ")", sep="")
-      }
-
-      p1 <- ggplot(data=Tsamples, aes(x=time)) + geom_histogram(aes(y = after_stat(density))) + labs(title = dist.title) +  theme(plot.title = element_text(hjust = 0.5))
-
-      print(p1)
+      suppressWarnings(plotfit(TFit(), d = input$TDist,
+                               ql = 0.05, qu = 0.95,
+                               xl = TLimits()[1], xu = TLimits()[2],
+                               fs = input$fs))
 
     })
 
     # Functions for the post-delay HR tab ---------------------------------
 
-    output$distPlot2 <- renderPlot({
+    output$HRPlot <- renderPlot({
 
 
-      mySample <- elicitedSamples()$mySample
-      HRsamples <- data.frame(HR = mySample[,2])
-
-      d <- input$dist2
-      if(d == "best"){
-        d <- myfit2()$best.fitting[1, 1]
-      }
-
-      dist.title <- ""
-      if(d == "normal"){
-
-        dist.title <- paste("Normal (mean = ",
-                            signif(myfit2()$Normal[1,1], 3),
-                            ", sd = ",
-                            signif(myfit2()$Normal[1,2], 3), ")",
-                            sep="")
-      }
-
-      if(d == "t"){
-
-
-        dist.title=paste("Student-t(",
-                         signif(myfit2()$Student.t[1,1], 3),
-                         ", ",
-                         signif(myfit2()$Student.t[1,2], 3),
-                         "), df = ",
-                         myfit2()$Student.t[1, 3],
-                         sep="")
-      }
-
-      if(d == "gamma"){
-
-        dist.title = paste("Gamma(",
-                           signif(myfit2()$Gamma[1,1], 3),
-                           ", ",
-                           signif(myfit2()$Gamma[1,2], 3),
-                           ")", sep="")
-      }
-
-      if(d == "lognormal"){
-
-        dist.title = paste("Log normal(",
-                           signif(myfit2()$Log.normal[1,1], 3),
-                           ", ",
-                           signif(myfit2()$Log.normal[1,2], 3), ")",
-                           sep="")
-      }
-
-      if(d == "logt"){ # log student t
-
-        dist.title = paste("Log T(",
-                           signif(myfit2()$Log.Student.t[1,1], 3),
-                           ", ",
-                           signif(myfit2()$Log.Student.t[1,2], 3),
-                           "), df = ",
-                           myfit2()$Log.Student.t[1,3], sep="")
-
-      }
-
-      if(d == "beta"){
-
-        dist.title =paste("Beta(",
-                          signif(myfit2()$Beta[1,1], 3),
-                          ", ", signif(myfit2()$Beta[1,2], 3),
-                          ")", sep="")
-      }
-
-      if(d == "hist"){
-
-        dist.title = "histogram fit"
-
-      }
-
-      if(d == "mirrorgamma"){
-
-        dist.title = paste("Mirror gamma(",
-                           signif(myfit2()$mirrorgamma[1,1], 3),
-                           ", ",
-                           signif(myfit2()$mirrorgamma[1,2], 3),
-                           ")", sep="")
-      }
-
-      if(d == "mirrorlognormal"){
-
-        dist.title = paste("Mirror log normal(",
-                           signif(myfit2()$mirrorlognormal[1,1], 3),
-                           ", ",
-                           signif(myfit2()$mirrorlognormal[1,2], 3), ")",
-                           sep="")
-      }
-
-      if(d == "mirrorlogt"){ # mirror log student t
-
-        dist.title = paste("Mirror log T(",
-                           signif(myfit2()$mirrorlogt[1,1], 3),
-                           ", ",
-                           signif(myfit2()$mirrorlogt[1,2], 3),
-                           "), df = ",
-                           myfit2()$mirrorlogt[1,3], sep="")
-
-      }
-
-      p1 <- ggplot(data=HRsamples, aes(x=HR)) + geom_histogram(aes(y = after_stat(density))) + labs(title = dist.title) +  theme(plot.title = element_text(hjust = 0.5))
-
-      print(p1)
+      suppressWarnings(plotfit(HRFit(), d = input$HRDist,
+                               ql = 0.05, qu = 0.95,
+                               xl = HRLimits()[1], xu = HRLimits()[2],
+                               fs = input$fs))
 
     })
 
@@ -784,57 +585,57 @@ x <- y <- quantiletime <- NULL
     # Functions for the Feedback tab ---------------------------------
 
 
-    treatmentCILines <- reactive({
-
-      gammat <- input$gammacmean
-
-      mySample <- elicitedSamples()$mySample
-
-      #Generate n control curves
-      nsamples <- 500
-
-      #Calculate the x-axis limits
-      controlTime <- seq(0, 10000, by=0.01)
-      controlCurve <- exp(-(input$lambdacmean*controlTime)^input$gammacmean)
-      finalSurvTime <- controlTime[which(controlCurve<0.01)[1]]
-
-
-      #We fill a matrix with the treatment survival probabilities at each time
-      SimMatrix <- matrix(NA, nrow = nsamples, ncol=200)
-
-      TreatmentTime <- seq(0, finalSurvTime, length = 200)
-
-      bigT <- sample(mySample[,1], size = nsamples, replace = T)
-      HR <- sample(mySample[,2], size = nsamples, replace = T)
-
-      for (i in 1:nsamples){
-
-        lambdat <- input$lambdacmean*HR[i]^(1/input$gammacmean)
-
-        #The i'th row of the matrix is filled with the survival probabilities for these sampled T and HR
-        SimMatrix[i,] <- ifelse(TreatmentTime<bigT[i], exp(-(input$lambdacmean*TreatmentTime)^input$gammacmean), exp(-(input$lambdacmean*bigT[i])^input$gammacmean -
-                                                                                                                       lambdat^gammat*(TreatmentTime^gammat-bigT[i]^gammat)))
-      }
-
-      #myMatrix <<- SimMatrix
-
-      #We now look at each time iteration at the distribution
-      #We look at the 0.1 and 0.9 quantile of the distribution
-      #These quantiles can be thought of as confidence intervals for the treatment curve, taken from
-      #the elicited distributions
-      lowerbound <- rep(NA, length(TreatmentTime))
-      upperbound <- rep(NA, length(TreatmentTime))
-      medianTreatment <- rep(NA, length(TreatmentTime))
-      for (j in 1:length(TreatmentTime)){
-        lowerbound[j] <- quantile(SimMatrix[,j], 0.1)
-        upperbound[j] <- quantile(SimMatrix[,j], 0.9)
-        medianTreatment[j] <- quantile(SimMatrix[,j], 0.5)
-      }
-
-      return(list(lowerbound=lowerbound, upperbound=upperbound, TreatmentTime=TreatmentTime, SimMatrix = SimMatrix,
-                  medianTreatment = medianTreatment))
-
-    })
+    # treatmentCILines <- reactive({
+    #
+    #   gammat <- input$gammacmean
+    #
+    #   mySample <- elicitedSamples()$mySample
+    #
+    #   #Generate n control curves
+    #   nsamples <- 500
+    #
+    #   #Calculate the x-axis limits
+    #   controlTime <- seq(0, 10000, by=0.01)
+    #   controlCurve <- exp(-(input$lambdacmean*controlTime)^input$gammacmean)
+    #   finalSurvTime <- controlTime[which(controlCurve<0.01)[1]]
+    #
+    #
+    #   #We fill a matrix with the treatment survival probabilities at each time
+    #   SimMatrix <- matrix(NA, nrow = nsamples, ncol=200)
+    #
+    #   TreatmentTime <- seq(0, finalSurvTime, length = 200)
+    #
+    #   bigT <- sample(mySample[,1], size = nsamples, replace = T)
+    #   HR <- sample(mySample[,2], size = nsamples, replace = T)
+    #
+    #   for (i in 1:nsamples){
+    #
+    #     lambdat <- input$lambdacmean*HR[i]^(1/input$gammacmean)
+    #
+    #     #The i'th row of the matrix is filled with the survival probabilities for these sampled T and HR
+    #     SimMatrix[i,] <- ifelse(TreatmentTime<bigT[i], exp(-(input$lambdacmean*TreatmentTime)^input$gammacmean), exp(-(input$lambdacmean*bigT[i])^input$gammacmean -
+    #                                                                                                                    lambdat^gammat*(TreatmentTime^gammat-bigT[i]^gammat)))
+    #   }
+    #
+    #   #myMatrix <<- SimMatrix
+    #
+    #   #We now look at each time iteration at the distribution
+    #   #We look at the 0.1 and 0.9 quantile of the distribution
+    #   #These quantiles can be thought of as confidence intervals for the treatment curve, taken from
+    #   #the elicited distributions
+    #   lowerbound <- rep(NA, length(TreatmentTime))
+    #   upperbound <- rep(NA, length(TreatmentTime))
+    #   medianTreatment <- rep(NA, length(TreatmentTime))
+    #   for (j in 1:length(TreatmentTime)){
+    #     lowerbound[j] <- quantile(SimMatrix[,j], 0.1)
+    #     upperbound[j] <- quantile(SimMatrix[,j], 0.9)
+    #     medianTreatment[j] <- quantile(SimMatrix[,j], 0.5)
+    #   }
+    #
+    #   return(list(lowerbound=lowerbound, upperbound=upperbound, TreatmentTime=TreatmentTime, SimMatrix = SimMatrix,
+    #               medianTreatment = medianTreatment))
+    #
+    # })
 
 
     output$priorWorthFeedback <- renderUI({
@@ -884,22 +685,33 @@ x <- y <- quantiletime <- NULL
     })
 
     output$plotFeedback <- renderPlot({
-      #This plots the feedback plot
 
-      if (v$upload=="no"){
 
-        controlTime <- seq(0, 10000, by=0.01)
-        controlCurve <- exp(-(input$lambdacmean*controlTime)^input$gammacmean)
-        finalSurvTime <- controlTime[which(controlCurve<0.01)[1]]
+      controlPlot <- reactive({
+        data <- controlSurvivalData()$controlDF
+        plotType <- controlSurvivalData()$type
 
-        #Re-define the x-axis
-        controlTime <- seq(0, finalSurvTime, length = 100)
-        controlSurv <- exp(-(input$lambdacmean*controlTime)^input$gammacmean)
+        if (plotType == "single") {
+          ggplot(data, aes(x = controlTime, y = controlSurv)) +
+            geom_line(colour = "blue") +
+            xlim(0, max(data$controlTime)) +
+            ylim(0, 1) +
+            xlab("Time") + ylab("Survival")
 
-        controlDF <- data.frame(controlTime = controlTime, controlSurv = controlSurv)
-      } else {
-        controlDF <- data.frame(controltime = controlCILines()$controlTime, controlSurv = controlCILines()$mediancontrol)
-      }
+        } else if (plotType == "distribution") {
+          ggplot(data, aes(x = controlTime)) +
+            geom_line(aes(y = medVec), colour = "blue") +
+            geom_line(aes(y = UBVec), colour = "blue", linetype = "dashed") +
+            geom_line(aes(y = LBVec), colour = "blue", linetype = "dashed") +
+            xlim(0, max(data$controlTime)) + ylim(0, 1) +
+            xlab("Time") + ylab("Survival")
+        }
+      })
+
+      # Render plot in the UI
+      output$plotControl <- renderPlot({
+        controlPlot()
+      })
 
       theme_set(theme_grey(base_size = 12))
       p1 <- ggplot(data=controlDF, aes(x=controlTime, y=controlSurv)) +
@@ -1288,9 +1100,6 @@ x <- y <- quantiletime <- NULL
                                                                    values=c('Average HR'='red', 'CI' = 'black'))
       print(p1)
 
-
-
-
     })
 
 
@@ -1361,8 +1170,6 @@ x <- y <- quantiletime <- NULL
         )
       }
     )
-
-
     output$downloadObjects <- downloadHandler(
       filename = function() {
         "DTEAssurance.rds"
@@ -1375,13 +1182,9 @@ x <- y <- quantiletime <- NULL
       }
     )
 
-
   }
 
   shiny::shinyApp(ui, server)
-
-
-
 
 
 
