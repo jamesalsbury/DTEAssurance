@@ -242,7 +242,6 @@ x <- y <- quantiletime <- NULL
                             numericInput("tdf2", label = h5("degrees of freedom"),
                                          value = 3)
 
-
                           )
                    )
 
@@ -255,8 +254,10 @@ x <- y <- quantiletime <- NULL
         tabPanel("Feedback",
                  sidebarLayout(
                    sidebarPanel = sidebarPanel(
-                     checkboxGroupInput("showfeedback", "Add to plot", choices = c("Median survival line", "90% CI for T", "CI for Treatment Curve (0.1 and 0.9)")),
-                     hidden(numericInput("feedbackQuantile", "Uncertainty about the following survival quantile:", value = 0.5, min = 0, max = 1)),
+                     checkboxGroupInput("showfeedback", "Add to plot",
+                                        choices = c("Median survival line" = "median_line",
+                                                    "95% CI for T" = "ci_t",
+                                                    "CI for Treatment Curve (0.025 and 0.975)" = "ci_treatment_curve")),                     hidden(numericInput("feedbackQuantile", "Uncertainty about the following survival quantile:", value = 0.5, min = 0, max = 1)),
                      hidden(numericInput("timeInputFeedback", "Prior information about time:", value = 25, min = 0, max = 100))
                    ),
                    mainPanel = mainPanel(
@@ -584,6 +585,40 @@ x <- y <- quantiletime <- NULL
 
     # Functions for the Feedback tab ---------------------------------
 
+    # Reactive for common calculations based on distribution type and inputs
+    treatmentSurvivalData <- reactive({
+      # Initialize an empty list to hold output data
+      result <- list()
+
+      # Calculate control survival data based on distribution type and input options
+      if (input$ControlDist == "Exponential") {
+        if (input$ExpChoice == "Single Value") {
+          print("yes")
+          if (runif(1) > input$P_S){
+            #Curve is same as control
+          } else {
+            if (runif(1) > input$P_DTE){
+              sampleFit(HRFit(), n = 1)
+              print("yes")
+            }
+          }
+
+        } else if (input$ExpChoice == "Distribution") {
+
+        }
+
+      } else if (input$ControlDist == "Weibull") {
+        if (input$WeibullChoice == "Single Value") {
+
+
+        } else if (input$WeibullChoice == "Distribution") {
+
+        }
+      }
+
+      return(result)
+    })
+
 
     # treatmentCILines <- reactive({
     #
@@ -638,200 +673,269 @@ x <- y <- quantiletime <- NULL
     # })
 
 
-    output$priorWorthFeedback <- renderUI({
+    # output$priorWorthFeedback <- renderUI({
+    #
+    #   addfeedback <- radiobuttons()
+    #
+    #   str1 <- ""
+    #
+    #   if (!is.null(addfeedback)){
+    #     for (i in 1:length(addfeedback)){
+    #       if (addfeedback[i]=="CI for Treatment Curve (0.1 and 0.9)"){
+    #         simlineslower <- data.frame(x = treatmentCILines()$TreatmentTime, y = treatmentCILines()$lowerbound)
+    #         simlinesupper <- data.frame(x = treatmentCILines()$TreatmentTime, y = treatmentCILines()$upperbound)
+    #
+    #
+    #         CIwidth <- simlinesupper[(which.min(abs(simlinesupper$x-input$timeInputFeedback))),]$y - simlineslower[(which.min(abs(simlineslower$x-input$timeInputFeedback))),]$y
+    #         midpoint <- (simlinesupper[(which.min(abs(simlinesupper$x-input$timeInputFeedback))),]$y + simlineslower[(which.min(abs(simlineslower$x-input$timeInputFeedback))),]$y)/2
+    #         n <- (16*midpoint*(1-midpoint))/(CIwidth^2)
+    #         str1 <- paste0("The confidence interval width at t = ", input$timeInputFeedback, " is equivalent to  ", round(n, 0),
+    #                        " patients from a Binomial distribution")
+    #       }
+    #     }
+    #   }
+    #
+    #   HTML(paste(str1, sep = '<br/>'))
+    #
+    # })
 
-      addfeedback <- radiobuttons()
+    # output$medianSurvivalFeedback <- renderUI({
+    #
+    #   addfeedback <- radiobuttons()
+    #
+    #   str1 <- ""
+    #
+    #   if (!is.null(addfeedback)){
+    #     for (i in 1:length(addfeedback)){
+    #       if (addfeedback[i]=="Median survival line"){
+    #         medianTTime <- round(treatmentCILines()$TreatmentTime[sum(treatmentCILines()$medianTreatment>0.5)], 1)
+    #         medianCTime <- round((1/input$lambdacmean)*(-log(0.5))^(1/input$gammacmean), 1)
+    #         str1 <- paste0("The median survival time on the control is ", medianCTime, " and the median survival time on the treatment is ", medianTTime)
+    #       }
+    #     }
+    #   }
+    #
+    #   HTML(paste(str1, sep = '<br/>'))
+    #
+    # })
 
-      str1 <- ""
+    # output$plotFeedback <- renderPlot({
+    #
+    #
+    #   controlPlot <- reactive({
+    #     data <- controlSurvivalData()$controlDF
+    #     plotType <- controlSurvivalData()$type
+    #
+    #     if (plotType == "single") {
+    #       ggplot(data, aes(x = controlTime, y = controlSurv)) +
+    #         geom_line(colour = "blue") +
+    #         xlim(0, max(data$controlTime)) +
+    #         ylim(0, 1) +
+    #         xlab("Time") + ylab("Survival")
+    #
+    #     } else if (plotType == "distribution") {
+    #       ggplot(data, aes(x = controlTime)) +
+    #         geom_line(aes(y = medVec), colour = "blue") +
+    #         geom_line(aes(y = UBVec), colour = "blue", linetype = "dashed") +
+    #         geom_line(aes(y = LBVec), colour = "blue", linetype = "dashed") +
+    #         xlim(0, max(data$controlTime)) + ylim(0, 1) +
+    #         xlab("Time") + ylab("Survival")
+    #     }
+    #   })
+    #
+    #   # Render plot in the UI
+    #   output$plotControl <- renderPlot({
+    #     controlPlot()
+    #   })
+    #
+    #   theme_set(theme_grey(base_size = 12))
+    #   p1 <- ggplot(data=controlDF, aes(x=controlTime, y=controlSurv)) +
+    #     geom_line(colour="blue") + xlab("Time") + ylab("Survival") + ylim(0,1)
+    #
+    #
+    #   treatmentDF <- data.frame(x = treatmentCILines()$TreatmentTime, y = treatmentCILines()$medianTreatment)
+    #   p1 <-  p1 + geom_line(data = treatmentDF, aes(x = x, y = y), colour = "red")
+    #
+    #   print(p1)
+    #
+    #
+    #   #This code adds the three choices to the plots
+    #   addfeedback <- input$showfeedback
+    #   shinyjs::hide(id = "feedbackQuantile")
+    #   shinyjs::hide(id = "timeInputFeedback")
+    #
+    #   if (!is.null(addfeedback)){
+    #     for (i in 1:length(addfeedback)){
+    #       #This adds the median survival line (onto the control and treatment)
+    #       if (addfeedback[i]=="Median survival line"){
+    #         #Looks at whether the median time is before or after the delay
+    #         medianTTime <- treatmentCILines()$TreatmentTime[sum(treatmentCILines()$medianTreatment>0.5)]
+    #         medianCTime <- (1/input$lambdacmean)*(-log(0.5))^(1/input$gammacmean)
+    #         mediandf <- data.frame(x = seq(0, medianTTime, length=2), y = rep(0.5, 2))
+    #         mediandf1 <- data.frame(x = rep(medianTTime, 2), y = seq(0, 0.5, length=2))
+    #         mediandf2 <- data.frame(x = rep(medianCTime, 2), y = seq(0, 0.5, length=2))
+    #         p1 <- p1 + geom_line(data = mediandf, aes(x = x, y=y), linetype = "dashed") + geom_line(data = mediandf1, aes(x = x, y=y), linetype="dashed") +
+    #           geom_line(data = mediandf2, aes(x = x, y=y), linetype="dashed")
+    #
+    #         #This uses the elicited distribution for T and adds 90% points onto the control curve
+    #       } else if (addfeedback[i]=="90% CI for T"){
+    #
+    #         mySample <- elicitedSamples()$mySample
+    #         lowerT <- quantile(mySample[,1], 0.05)
+    #         upperT <- quantile(mySample[,1], 0.95)
+    #
+    #         #p1 <- p1 + geom_point(aes(x = as.numeric(upperT), y = exp(-(input$lambdacmean*upperT)^input$gammacmean)), colour="orange", size = 4)
+    #         p1 <- p1 + annotate("point", x = upperT, y = exp(-(input$lambdacmean*upperT)^input$gammacmean), color = "orange", size = 4) # Add a single point
+    #         if (lowerT==0){
+    #           p1 <- p1 + annotate("point", x = lowerT, y = 1, color = "orange", size = 4) # Add a single point
+    #         } else {
+    #           p1 <- p1 + annotate("point", x = lowerT, y = exp(-(input$lambdacmean*lowerT)^input$gammacmean), color = "orange", size = 4) # Add a single point
+    #         }
+    #
+    #       } else if (addfeedback[i]=="CI for Treatment Curve (0.1 and 0.9)"){
+    #         shinyjs::show(id = "timeInputFeedback")
+    #         shinyjs::show(id = "feedbackQuantile")
+    #         #This adds the simulated confidence interval lines
+    #         simlineslower <- data.frame(x = treatmentCILines()$TreatmentTime, y = treatmentCILines()$lowerbound)
+    #         simlinesupper <- data.frame(x = treatmentCILines()$TreatmentTime, y = treatmentCILines()$upperbound)
+    #         p1 <- p1 + geom_line(data = simlineslower, aes(x=x, y=y), linetype="dashed")+
+    #           geom_line(data = simlinesupper, aes(x=x, y=y), linetype="dashed")
+    #
+    #
+    #       }
+    #     }
+    #   }
+    #   print(p1)
+    #
+    # })
 
-      if (!is.null(addfeedback)){
-        for (i in 1:length(addfeedback)){
-          if (addfeedback[i]=="CI for Treatment Curve (0.1 and 0.9)"){
-            simlineslower <- data.frame(x = treatmentCILines()$TreatmentTime, y = treatmentCILines()$lowerbound)
-            simlinesupper <- data.frame(x = treatmentCILines()$TreatmentTime, y = treatmentCILines()$upperbound)
 
 
-            CIwidth <- simlinesupper[(which.min(abs(simlinesupper$x-input$timeInputFeedback))),]$y - simlineslower[(which.min(abs(simlineslower$x-input$timeInputFeedback))),]$y
-            midpoint <- (simlinesupper[(which.min(abs(simlinesupper$x-input$timeInputFeedback))),]$y + simlineslower[(which.min(abs(simlineslower$x-input$timeInputFeedback))),]$y)/2
-            n <- (16*midpoint*(1-midpoint))/(CIwidth^2)
-            str1 <- paste0("The confidence interval width at t = ", input$timeInputFeedback, " is equivalent to  ", round(n, 0),
-                           " patients from a Binomial distribution")
-          }
+      # Observe WeibullChoice and update checkboxGroupInput choices
+    observe({
+      # Define the common choices
+      common_choices <- c("Median survival line" = "median_line",
+                          "95% CI for T" = "ci_t",
+                          "CI for Treatment Curve (0.025 and 0.975)" = "ci_treatment_curve")
+
+      # Initialize the final choices
+      final_choices <- common_choices
+
+      # Check ControlDist and respective choices
+      if (input$ControlDist == "Exponential" || input$ControlDist == "Weibull") {
+        if (input$ControlDist == "Exponential" && input$ExpChoice == "Distribution") {
+          # If Exponential and Distribution, add CI for Control
+          final_choices["95% CI for Control"] <- "ci_control"
+        } else if (input$ControlDist == "Weibull" && input$WeibullChoice == "Distribution") {
+          # If Weibull and Distribution, add CI for Control
+          final_choices["95% CI for Control"] <- "ci_control"
         }
       }
 
-      HTML(paste(str1, sep = '<br/>'))
-
+      # Update the checkbox group input with the final choices
+      updateCheckboxGroupInput(session, "showfeedback", choices = final_choices)
     })
 
-    output$medianSurvivalFeedback <- renderUI({
 
-      addfeedback <- radiobuttons()
+    feedbackPlot <- reactive({
+      data <- controlSurvivalData()$controlDF
+      #myData <<- data
+      plotType <- controlSurvivalData()$type
 
-      str1 <- ""
+      if (plotType == "single") {
+       p1 <- ggplot(data, aes(x = controlTime, y = controlSurv)) +
+          geom_line(colour = "blue") +
+          xlim(0, max(data$controlTime)) +
+          ylim(0, 1) +
+          xlab("Time") + ylab("Survival")
 
-      if (!is.null(addfeedback)){
-        for (i in 1:length(addfeedback)){
-          if (addfeedback[i]=="Median survival line"){
-            medianTTime <- round(treatmentCILines()$TreatmentTime[sum(treatmentCILines()$medianTreatment>0.5)], 1)
-            medianCTime <- round((1/input$lambdacmean)*(-log(0.5))^(1/input$gammacmean), 1)
-            str1 <- paste0("The median survival time on the control is ", medianCTime, " and the median survival time on the treatment is ", medianTTime)
-          }
-        }
+       if ("median_line" %in% input$showfeedback){
+         median_time <- approx(data$controlSurv, data$controlTime, xout = 0.5)$y
+         mediandf <- data.frame(x = seq(0, median_time, length=2), y = rep(0.5, 2))
+         mediandf1 <- data.frame(x = rep(median_time, 2), y = seq(0, 0.5, length=2))
+         p1 <- p1 + geom_line(data = mediandf, aes(x = x, y=y), linetype = "dashed") +
+           geom_line(data = mediandf1, aes(x = x, y=y), linetype = "dashed")
+       }
+
+      } else if (plotType == "distribution") {
+        p1 <- ggplot(data, aes(x = controlTime)) +
+          geom_line(aes(y = medVec), colour = "blue")  +
+          xlim(0, max(data$controlTime)) + ylim(0, 1) +
+          xlab("Time") + ylab("Survival")
+
+        #print(input$showfeedback)
+
+        if ("ci_control" %in% input$showfeedback)
+          p1 <- p1 + geom_line(aes(y = UBVec), colour = "blue", linetype = "dashed") +
+            geom_line(aes(y = LBVec), colour = "blue", linetype = "dashed")
       }
 
-      HTML(paste(str1, sep = '<br/>'))
+      p1
 
     })
 
     output$plotFeedback <- renderPlot({
+      feedbackPlot()
 
+  })
 
-      controlPlot <- reactive({
-        data <- controlSurvivalData()$controlDF
-        plotType <- controlSurvivalData()$type
-
-        if (plotType == "single") {
-          ggplot(data, aes(x = controlTime, y = controlSurv)) +
-            geom_line(colour = "blue") +
-            xlim(0, max(data$controlTime)) +
-            ylim(0, 1) +
-            xlab("Time") + ylab("Survival")
-
-        } else if (plotType == "distribution") {
-          ggplot(data, aes(x = controlTime)) +
-            geom_line(aes(y = medVec), colour = "blue") +
-            geom_line(aes(y = UBVec), colour = "blue", linetype = "dashed") +
-            geom_line(aes(y = LBVec), colour = "blue", linetype = "dashed") +
-            xlim(0, max(data$controlTime)) + ylim(0, 1) +
-            xlab("Time") + ylab("Survival")
-        }
-      })
-
-      # Render plot in the UI
-      output$plotControl <- renderPlot({
-        controlPlot()
-      })
-
-      theme_set(theme_grey(base_size = 12))
-      p1 <- ggplot(data=controlDF, aes(x=controlTime, y=controlSurv)) +
-        geom_line(colour="blue") + xlab("Time") + ylab("Survival") + ylim(0,1)
-
-
-      treatmentDF <- data.frame(x = treatmentCILines()$TreatmentTime, y = treatmentCILines()$medianTreatment)
-      p1 <-  p1 + geom_line(data = treatmentDF, aes(x = x, y = y), colour = "red")
-
-      print(p1)
-
-
-      #This code adds the three choices to the plots
-      addfeedback <- input$showfeedback
-      shinyjs::hide(id = "feedbackQuantile")
-      shinyjs::hide(id = "timeInputFeedback")
-
-      if (!is.null(addfeedback)){
-        for (i in 1:length(addfeedback)){
-          #This adds the median survival line (onto the control and treatment)
-          if (addfeedback[i]=="Median survival line"){
-            #Looks at whether the median time is before or after the delay
-            medianTTime <- treatmentCILines()$TreatmentTime[sum(treatmentCILines()$medianTreatment>0.5)]
-            medianCTime <- (1/input$lambdacmean)*(-log(0.5))^(1/input$gammacmean)
-            mediandf <- data.frame(x = seq(0, medianTTime, length=2), y = rep(0.5, 2))
-            mediandf1 <- data.frame(x = rep(medianTTime, 2), y = seq(0, 0.5, length=2))
-            mediandf2 <- data.frame(x = rep(medianCTime, 2), y = seq(0, 0.5, length=2))
-            p1 <- p1 + geom_line(data = mediandf, aes(x = x, y=y), linetype = "dashed") + geom_line(data = mediandf1, aes(x = x, y=y), linetype="dashed") +
-              geom_line(data = mediandf2, aes(x = x, y=y), linetype="dashed")
-
-            #This uses the elicited distribution for T and adds 95% points onto the control curve
-          } else if (addfeedback[i]=="90% CI for T"){
-
-            mySample <- elicitedSamples()$mySample
-            lowerT <- quantile(mySample[,1], 0.05)
-            upperT <- quantile(mySample[,1], 0.95)
-
-            #p1 <- p1 + geom_point(aes(x = as.numeric(upperT), y = exp(-(input$lambdacmean*upperT)^input$gammacmean)), colour="orange", size = 4)
-            p1 <- p1 + annotate("point", x = upperT, y = exp(-(input$lambdacmean*upperT)^input$gammacmean), color = "orange", size = 4) # Add a single point
-            if (lowerT==0){
-              p1 <- p1 + annotate("point", x = lowerT, y = 1, color = "orange", size = 4) # Add a single point
-            } else {
-              p1 <- p1 + annotate("point", x = lowerT, y = exp(-(input$lambdacmean*lowerT)^input$gammacmean), color = "orange", size = 4) # Add a single point
-            }
-
-          } else if (addfeedback[i]=="CI for Treatment Curve (0.1 and 0.9)"){
-            shinyjs::show(id = "timeInputFeedback")
-            shinyjs::show(id = "feedbackQuantile")
-            #This adds the simulated confidence interval lines
-            simlineslower <- data.frame(x = treatmentCILines()$TreatmentTime, y = treatmentCILines()$lowerbound)
-            simlinesupper <- data.frame(x = treatmentCILines()$TreatmentTime, y = treatmentCILines()$upperbound)
-            p1 <- p1 + geom_line(data = simlineslower, aes(x=x, y=y), linetype="dashed")+
-              geom_line(data = simlinesupper, aes(x=x, y=y), linetype="dashed")
-
-
-          }
-        }
-      }
-      print(p1)
-
-    })
-
-
-    radiobuttons <- reactive({
-      addfeedback <- input$showfeedback
-    })
+    # radiobuttons <- reactive({
+    #   addfeedback <- input$showfeedback
+    # })
 
 
 
-    output$quantilePlot <- renderPlot({
+    # output$quantilePlot <- renderPlot({
+    #
+    #   addfeedback <- radiobuttons()
+    #
+    #
+    #   if (!is.null(addfeedback)){
+    #     for (i in 1:length(addfeedback)){
+    #       if (addfeedback[i]=="CI for Treatment Curve (0.1 and 0.9)"){
+    #
+    #         quantileMatrix <- treatmentCILines()$SimMatrix
+    #
+    #         quantileTime <- treatmentCILines()$TreatmentTime
+    #
+    #         quantileVec <- rep(NA, length = nrow(quantileMatrix))
+    #
+    #         for (j in 1:nrow(quantileMatrix)){
+    #           quantileVec[j] <- quantileTime[which.min(abs(quantileMatrix[j,]-input$feedbackQuantile))]
+    #         }
+    #
+    #         quantiledf <- data.frame(quantiletime = quantileVec)
+    #
+    #         theme_set(theme_grey(base_size = 12))
+    #         p1 <- ggplot(data=quantiledf, aes(x=quantiletime)) + geom_histogram(aes(y = after_stat(density)), binwidth = 5) + xlim(0, exp((1.527/input$gammacmean)-log(input$lambdacmean))*1.1) +
+    #           xlab("Time")
+    #
+    #         print(p1)
+    #
+    #       }
+    #     }
+    #   }
+    #
+    #
+    # })
 
-      addfeedback <- radiobuttons()
-
-
-      if (!is.null(addfeedback)){
-        for (i in 1:length(addfeedback)){
-          if (addfeedback[i]=="CI for Treatment Curve (0.1 and 0.9)"){
-
-            quantileMatrix <- treatmentCILines()$SimMatrix
-
-            quantileTime <- treatmentCILines()$TreatmentTime
-
-            quantileVec <- rep(NA, length = nrow(quantileMatrix))
-
-            for (j in 1:nrow(quantileMatrix)){
-              quantileVec[j] <- quantileTime[which.min(abs(quantileMatrix[j,]-input$feedbackQuantile))]
-            }
-
-            quantiledf <- data.frame(quantiletime = quantileVec)
-
-            theme_set(theme_grey(base_size = 12))
-            p1 <- ggplot(data=quantiledf, aes(x=quantiletime)) + geom_histogram(aes(y = after_stat(density)), binwidth = 5) + xlim(0, exp((1.527/input$gammacmean)-log(input$lambdacmean))*1.1) +
-              xlab("Time")
-
-            print(p1)
-
-          }
-        }
-      }
-
-
-    })
-
-    output$quantileFeedback <- renderUI({
-
-      addfeedback <- radiobuttons()
-
-      str1 <- ""
-
-      if (!is.null(addfeedback)){
-        for (i in 1:length(addfeedback)){
-          if (addfeedback[i]=="CI for Treatment Curve (0.1 and 0.9)"){
-            str1 <- paste0("This plot shows the distribution of samples for treatment group for the ", input$feedbackQuantile, " quantile")
-          }
-        }
-      }
-
-      HTML(paste(str1, sep = '<br/>'))
-
-    })
+    # output$quantileFeedback <- renderUI({
+    #
+    #   addfeedback <- radiobuttons()
+    #
+    #   str1 <- ""
+    #
+    #   if (!is.null(addfeedback)){
+    #     for (i in 1:length(addfeedback)){
+    #       if (addfeedback[i]=="CI for Treatment Curve (0.1 and 0.9)"){
+    #         str1 <- paste0("This plot shows the distribution of samples for treatment group for the ", input$feedbackQuantile, " quantile")
+    #       }
+    #     }
+    #   }
+    #
+    #   HTML(paste(str1, sep = '<br/>'))
+    #
+    # })
 
     # Functions for the Assurance tab ---------------------------------
 
