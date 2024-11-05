@@ -149,11 +149,11 @@ x <- y <- quantiletime <- NULL
         tabPanel("Conditional probabilities",
                  fluidRow(
                    column(6,
-                          numericInput("P_S", "Pr(survival curves separate)", value = 0.5, min = 0, max = 1)
+                          numericInput("P_S", "Pr(survival curves separate)", value = 1, min = 0, max = 1)
 
                    ),
                    column(6,
-                          numericInput("P_DTE", "Pr(treatment subject to a delay|survival curves separate)", value = 0.5, min = 0, max = 1)
+                          numericInput("P_DTE", "Pr(treatment subject to a delay|survival curves separate)", value = 0, min = 0, max = 1)
 
                    )
                  )
@@ -593,25 +593,202 @@ x <- y <- quantiletime <- NULL
       # Calculate control survival data based on distribution type and input options
       if (input$ControlDist == "Exponential") {
         if (input$ExpChoice == "Single Value") {
-          print("yes")
-          if (runif(1) > input$P_S){
-            #Curve is same as control
-          } else {
-            if (runif(1) > input$P_DTE){
-              sampleFit(HRFit(), n = 1)
-              print("yes")
+          sampledTrtHazard <- rep(NA, 100)
+          sampledbigT <- rep(NA, 100)
+          for (i in 1:100){
+            if (runif(1) > input$P_S){
+              #Curves do not separate
+              sampledbigT[i] <- 0
+              sampledTrtHazard[i] <- input$ExpRate
+            } else {
+              if (runif(1) > input$P_DTE){
+                #Curves separate with no delay
+                HRSample <- sampleFit(HRFit(), n = 1)
+                sampledTrtHazard[i] <- input$ExpRate*HRSample[,input$HRDist]
+                sampledbigT[i] <- 0
+              } else{
+                #Curves separate with a delay
+                HRSample <- sampleFit(HRFit(), n = 1)
+                bigTSample <- sampleFit(TFit(), n = 1)
+                sampledbigT[i] <- bigTSample[,input$TDist]
+                sampledTrtHazard[i] <- input$ExpRate*HRSample[,input$HRDist]
+              }
             }
           }
 
+          print(sampledTrtHazard)
+          print(sampledbigT)
+          controlTime <- seq(0, 100, length.out = 100)
+          survival_curves <- matrix(NA, nrow = 100, ncol = length(controlTime))
+          for (i in 1:100){
+            survival_curves[i,] <- ifelse(controlTime<sampledbigT[i],
+                                          exp(-input$ExpRate*controlTime), exp(-input$ExpRate*sampledbigT[i]-sampledTrtHazard[i]*(controlTime-sampledbigT[i])))
+          }
+
+          medVec <- apply(survival_curves, 2, median)
+          UBVec <- apply(survival_curves, 2, quantile, 0.975)
+          LBVec <- apply(survival_curves, 2, quantile, 0.025)
+
+          result$treatmentDF <- data.frame(controlTime = controlTime, medVec = medVec, UBVec = UBVec, LBVec = LBVec)
+
         } else if (input$ExpChoice == "Distribution") {
+
+          nSamples <- 1000
+          sampledLambda <- -log(rbeta(nSamples, input$ExpBetaA, input$ExpBetaB)) / input$ExpSurvTime
+          sampledTrtHazard <- rep(NA, nSamples)
+          sampledbigT <- rep(NA, nSamples)
+          for (i in 1:nSamples){
+
+
+            if (runif(1) > input$P_S){
+              #Curves do not separate
+              sampledbigT[i] <- 0
+              sampledTrtHazard[i] <- sampledLambda[i]
+            } else {
+              if (runif(1) > input$P_DTE){
+                #Curves separate with no delay
+                HRSample <- sampleFit(HRFit(), n = 1)
+                sampledTrtHazard[i] <- sampledLambda[i]*HRSample[,input$HRDist]
+                sampledbigT[i] <- 0
+              } else{
+                #Curves separate with a delay
+                HRSample <- sampleFit(HRFit(), n = 1)
+                bigTSample <- sampleFit(TFit(), n = 1)
+                sampledbigT[i] <- bigTSample[,input$TDist]
+                sampledTrtHazard[i] <- sampledLambda[i]*HRSample[,input$HRDist]
+              }
+            }
+          }
+
+          print(sampledTrtHazard)
+          print(sampledbigT)
+          controlTime <- seq(0, 100, length.out = 100)
+          survival_curves <- matrix(NA, nrow = nSamples, ncol = length(controlTime))
+          for (i in 1:nSamples){
+            survival_curves[i,] <- ifelse(controlTime<sampledbigT[i],
+                                          exp(-sampledLambda[i]*controlTime), exp(-sampledLambda[i]*sampledbigT[i]-sampledTrtHazard[i]*(controlTime-sampledbigT[i])))
+          }
+
+          medVec <- apply(survival_curves, 2, median)
+          UBVec <- apply(survival_curves, 2, quantile, 0.975)
+          LBVec <- apply(survival_curves, 2, quantile, 0.025)
+
+          result$treatmentDF <- data.frame(controlTime = controlTime, medVec = medVec, UBVec = UBVec, LBVec = LBVec)
+
+
+
 
         }
 
       } else if (input$ControlDist == "Weibull") {
         if (input$WeibullChoice == "Single Value") {
 
+          sampledTrtHazard <- rep(NA, 100)
+          sampledbigT <- rep(NA, 100)
+          for (i in 1:100){
+            if (runif(1) > input$P_S){
+              #Curves do not separate
+              sampledbigT[i] <- 0
+              sampledTrtHazard[i] <- input$WeibullScale
+            } else {
+              if (runif(1) > input$P_DTE){
+                #Curves separate with no delay
+                HRSample <- sampleFit(HRFit(), n = 1)
+                sampledTrtHazard[i] <- input$WeibullScale*(HRSample[,input$HRDist])^(1/input$WeibullShape)
+                sampledbigT[i] <- 0
+              } else{
+                #Curves separate with a delay
+                HRSample <- sampleFit(HRFit(), n = 1)
+                bigTSample <- sampleFit(TFit(), n = 1)
+                sampledbigT[i] <- bigTSample[,input$TDist]
+                sampledTrtHazard[i] <- input$WeibullScale*(HRSample[,input$HRDist])^(1/input$WeibullShape)
+              }
+            }
+          }
+
+          #print(sampledTrtHazard)
+          #print(sampledbigT)
+          controlTime <- seq(0, 100, length.out = 100)
+          survival_curves <- matrix(NA, nrow = 100, ncol = length(controlTime))
+          for (i in 1:100){
+            survival_curves[i,] <- ifelse(controlTime<sampledbigT[i],
+                                          exp(-(input$WeibullScale*controlTime)^input$WeibullShape),
+                                          exp(-(input$WeibullScale*sampledbigT[i])^input$WeibullShape-(sampledTrtHazard[i])^input$WeibullShape*(controlTime^input$WeibullShape-(sampledbigT[i])^input$WeibullShape)))
+          }
+
+          medVec <- apply(survival_curves, 2, median)
+          UBVec <- apply(survival_curves, 2, quantile, 0.975)
+          LBVec <- apply(survival_curves, 2, quantile, 0.025)
+
+          result$treatmentDF <- data.frame(controlTime = controlTime, medVec = medVec, UBVec = UBVec, LBVec = LBVec)
+
 
         } else if (input$WeibullChoice == "Distribution") {
+
+          nSamples <- 1000
+          lambdaVec <- rep(NA, nSamples)
+          gammaVec <- rep(NA, nSamples)
+
+
+          for (i in 1:nSamples) {
+            sampledS1to <- rbeta(1, input$WeibullDistS1BetaA, input$WeibullDistS1BetaB)
+            sampledDelta1 <- rbeta(1, input$WeibullDistDelta1BetaA, input$WeibullDistDelta1BetaB)
+            sampledS1toPrime <- sampledS1to - sampledDelta1
+
+            # Solve for lambda and gamma using sampled values
+            solution <- nleqslv(c(10, 1), function(params) {
+              lambda <- params[1]
+              k <- params[2]
+              c(exp(-(input$WeibullDistT1 / lambda)^k) - sampledS1to,
+                exp(-(input$WeibullDistT2 / lambda)^k) - sampledS1toPrime)
+            })
+
+            lambdaVec[i] <- 1 / solution$x[1]
+            gammaVec[i] <- solution$x[2]
+          }
+
+
+
+          sampledTrtHazard <- rep(NA, nSamples)
+          sampledbigT <- rep(NA, nSamples)
+          for (i in 1:nSamples){
+
+
+            if (runif(1) > input$P_S){
+              #Curves do not separate
+              sampledbigT[i] <- 0
+              sampledTrtHazard[i] <- lambdaVec[i]
+            } else {
+              if (runif(1) > input$P_DTE){
+                #Curves separate with no delay
+                HRSample <- sampleFit(HRFit(), n = 1)
+                sampledTrtHazard[i] <- lambdaVec[i]*(HRSample[,input$HRDist])^(1/gammaVec[i])
+                sampledbigT[i] <- 0
+              } else{
+                #Curves separate with a delay
+                HRSample <- sampleFit(HRFit(), n = 1)
+                bigTSample <- sampleFit(TFit(), n = 1)
+                sampledbigT[i] <- bigTSample[,input$TDist]
+                sampledTrtHazard[i] <- lambdaVec[i]*(HRSample[,input$HRDist])^(1/gammaVec[i])
+              }
+            }
+          }
+
+          print(sampledTrtHazard)
+          print(sampledbigT)
+          controlTime <- seq(0, 100, length.out = 100)
+          survival_curves <- matrix(NA, nrow = nSamples, ncol = length(controlTime))
+          for (i in 1:100){
+            survival_curves[i,] <- ifelse(controlTime<sampledbigT[i],
+                                          exp(-(lambdaVec[i]*controlTime)^gammaVec[i]),
+                                          exp(-(lambdaVec[i]*sampledbigT[i])^gammaVec[i]-(sampledTrtHazard[i])^gammaVec[i]*(controlTime^gammaVec[i]-(sampledbigT[i])^gammaVec[i])))
+          }
+
+          medVec <- apply(survival_curves, 2, median)
+          UBVec <- apply(survival_curves, 2, quantile, 0.975)
+          LBVec <- apply(survival_curves, 2, quantile, 0.025)
+
+          result$treatmentDF <- data.frame(controlTime = controlTime, medVec = medVec, UBVec = UBVec, LBVec = LBVec)
 
         }
       }
@@ -801,7 +978,6 @@ x <- y <- quantiletime <- NULL
     #         p1 <- p1 + geom_line(data = simlineslower, aes(x=x, y=y), linetype="dashed")+
     #           geom_line(data = simlinesupper, aes(x=x, y=y), linetype="dashed")
     #
-    #
     #       }
     #     }
     #   }
@@ -838,19 +1014,20 @@ x <- y <- quantiletime <- NULL
 
 
     feedbackPlot <- reactive({
-      data <- controlSurvivalData()$controlDF
+      controlData <- controlSurvivalData()$controlDF
+      treatmentData <- treatmentSurvivalData()$treatmentDF
       #myData <<- data
       plotType <- controlSurvivalData()$type
 
       if (plotType == "single") {
-       p1 <- ggplot(data, aes(x = controlTime, y = controlSurv)) +
+       p1 <- ggplot(controlData, aes(x = controlTime, y = controlSurv)) +
           geom_line(colour = "blue") +
-          xlim(0, max(data$controlTime)) +
+          xlim(0, max(controlData$controlTime)) +
           ylim(0, 1) +
           xlab("Time") + ylab("Survival")
 
        if ("median_line" %in% input$showfeedback){
-         median_time <- approx(data$controlSurv, data$controlTime, xout = 0.5)$y
+         median_time <- approx(controlData$controlSurv, controlData$controlTime, xout = 0.5)$y
          mediandf <- data.frame(x = seq(0, median_time, length=2), y = rep(0.5, 2))
          mediandf1 <- data.frame(x = rep(median_time, 2), y = seq(0, 0.5, length=2))
          p1 <- p1 + geom_line(data = mediandf, aes(x = x, y=y), linetype = "dashed") +
@@ -858,9 +1035,9 @@ x <- y <- quantiletime <- NULL
        }
 
       } else if (plotType == "distribution") {
-        p1 <- ggplot(data, aes(x = controlTime)) +
+        p1 <- ggplot(controlData, aes(x = controlTime)) +
           geom_line(aes(y = medVec), colour = "blue")  +
-          xlim(0, max(data$controlTime)) + ylim(0, 1) +
+          xlim(0, max(controlData$controlTime)) + ylim(0, 1) +
           xlab("Time") + ylab("Survival")
 
         #print(input$showfeedback)
@@ -868,6 +1045,13 @@ x <- y <- quantiletime <- NULL
         if ("ci_control" %in% input$showfeedback)
           p1 <- p1 + geom_line(aes(y = UBVec), colour = "blue", linetype = "dashed") +
             geom_line(aes(y = LBVec), colour = "blue", linetype = "dashed")
+      }
+
+      p1 <- p1 + geom_line(data = treatmentData, aes(x=controlTime, y = medVec), colour = "red")
+
+      if ("ci_treatment_curve" %in% input$showfeedback){
+        p1 <- p1 + geom_line(data = treatmentData, aes(x=controlTime, y = UBVec), colour = "red", linetype = "dashed") +
+          geom_line(data = treatmentData, aes(x=controlTime, y = LBVec), colour = "red", linetype = "dashed")
       }
 
       p1
