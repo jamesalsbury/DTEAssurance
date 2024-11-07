@@ -16,7 +16,7 @@ library(utils)
 library(nleqslv)
 
 
-x <- y <- quantiletime <- NULL
+#x <- y <- quantiletime <- NULL
   ui <- fluidPage(
     withMathJax(),
 
@@ -137,7 +137,6 @@ x <- y <- quantiletime <- NULL
 
                      )
 
-
                    ),
                    mainPanel = mainPanel(
                      plotOutput("plotControl")
@@ -253,74 +252,97 @@ x <- y <- quantiletime <- NULL
         # Feedback UI ---------------------------------
         tabPanel("Feedback",
                  sidebarLayout(
-                   sidebarPanel = sidebarPanel(
+                   sidebarPanel(
                      checkboxGroupInput("showfeedback", "Add to plot",
                                         choices = c("Median survival line" = "median_line",
                                                     "95% CI for T" = "ci_t",
-                                                    "CI for Treatment Curve (0.025 and 0.975)" = "ci_treatment_curve")),                     hidden(numericInput("feedbackQuantile", "Uncertainty about the following survival quantile:", value = 0.5, min = 0, max = 1)),
+                                                    "CI for Treatment Curve (0.025 and 0.975)" = "ci_treatment_curve")),
+                     hidden(numericInput("feedbackQuantile", "Uncertainty about the following survival quantile:", value = 0.5, min = 0, max = 1)),
                      hidden(numericInput("timeInputFeedback", "Prior information about time:", value = 25, min = 0, max = 100))
                    ),
-                   mainPanel = mainPanel(
+                   mainPanel(
                      plotOutput("plotFeedback"),
                      htmlOutput("medianSurvivalFeedback"),
                      htmlOutput("priorWorthFeedback"),
                      plotOutput("quantilePlot"),
                      htmlOutput("quantileFeedback")
                    )
-                 ),
+                 )
         ),
+
+        # Recruitment UI ---------------------------------
+
+        tabPanel("Recruitment",
+                 sidebarLayout(
+                   sidebarPanel(
+                     shinyjs::useShinyjs(),
+                     numericInput("numofpatients", "Maximum number of patients in the trial", value=1000),
+                     fluidRow(
+                       column(6,
+                              numericInput("ControlRatio", "Ratio control", value=1, min=1)
+                       ),
+                       column(6,
+                              numericInput("TreatmentRatio", "Ratio treatment", value=2, min=1)
+                       )
+                     ),
+                     selectInput("rec_method", "Recruitment method", choices = c("Power"="power", "Piecewise constant"="PWC"), selected = "power"),
+
+                     conditionalPanel(
+                       condition = "input.rec_method == 'power'",
+                       fluidRow(
+                         column(6,
+                                numericInput("rec_power", "Power", value=1, min=1)
+                         ),
+                         column(6,
+                                numericInput("rec_period", "Period", value=12, min=1)
+                         )
+                       )
+                     ),
+
+                     conditionalPanel(
+                       condition = "input.rec_method == 'PWC'",
+                       fluidRow(
+                         column(6,
+                                textInput("rec_rate", "Rate", value="30, 50")
+                         ),
+                         column(6,
+                                textInput("rec_duration", "Duration", value="10, 5")
+                         )
+                       )
+                     )
+
+
+                   ),
+                   mainPanel(
+                     plotOutput("cdfRec")
+                   )
+                 )
+        ),
+
+
 
         # Assurance UI ---------------------------------
         tabPanel("Calculating assurance",
                  sidebarLayout(
                    sidebarPanel = sidebarPanel(
-                     shinyjs::useShinyjs(),
-                     numericInput("numofpatients", "Maximum number of patients in the trial", value=1000),
-                     selectInput("rec_method", "Recruitment method", choices = c("Power"="power", "Piecewise constant"="PWC"), selected = "power"),
-
-                     splitLayout(
-                       numericInput("rec_power", "Power", value=1, min=1),
-                       numericInput("rec_period", "Period", value=12, min=1)
-
-                     ),
-
-                     splitLayout(
-                       hidden(textInput("rec_rate", "Rate", value="30, 50")),
-                       hidden(textInput("rec_duration", "Duration", value="10, 5"))
-
-                     ),
-
-
-                     splitLayout(
-                       numericInput("n1", "Ratio control", value=1, min=1),
-                       numericInput("n2", "Ratio treatment", value=1, min=1)
-
-                     ),
                      numericInput("chosenLength", "Maximum trial duration (including recruitment time)", value=60),
+
                      selectInput("analysisType", label = "Analysis method", choices = c("Logrank test" = "LRT", "Fleming-Harrington test" = "FHT"), selected = "LRT"),
-                     splitLayout(
-                       hidden(numericInput("t_star", ' \\( t^* \\)', value=3, min=0)),
-                       hidden(numericInput("s_star", ' \\( \\hat{S}(t^*) \\)', value=NA, min=0, max = 1))
-
-                     ),
-                     splitLayout(
-                       hidden(numericInput("rho", ' \\( \\rho \\)', value=0, min=0, max = 1)),
-                       hidden(numericInput("gamma", " \\( \\gamma \\)", value=0, min=0, max = 1))
-
-                     ),
-                     actionButton("calcAssurance", "Calculate Assurance")
-                   ),
-                   mainPanel = mainPanel(
-                     fluidRow(
-                       column(6,
-                              plotOutput("pdfRec")
-                       ),
-                       column(6,
-                              plotOutput("cdfRec")
+                     conditionalPanel(
+                       condition = "input.analysisType == 'FHT'",
+                       fluidRow(
+                         column(6,
+                                numericInput("rho", ' \\( \\rho \\)', value=0, min=0, max = 1)
+                         ),
+                         column(6,
+                                numericInput("gamma", " \\( \\gamma \\)", value=0, min=0, max = 1)
+                         )
                        )
                      ),
 
-
+                     actionButton("calcAssurance", "Calculate Assurance")
+                   ),
+                   mainPanel = mainPanel(
                      plotOutput("assurancePlot"),
                      htmlOutput("assuranceText"),
                      plotOutput("AHRPlot"),
@@ -424,7 +446,7 @@ x <- y <- quantiletime <- NULL
           result$type <- "single"
 
         } else if (input$ExpChoice == "Distribution") {
-          nSamples <- 1000
+          nSamples <- 100
           sampledLambda <- -log(rbeta(nSamples, input$ExpBetaA, input$ExpBetaB)) / input$ExpSurvTime
           finalSurvTime <- -log(0.05) / min(sampledLambda)
           controlTime <- seq(0, finalSurvTime, length.out = 100)
@@ -627,8 +649,6 @@ x <- y <- quantiletime <- NULL
           UBVec <- apply(survival_curves, 2, quantile, 0.975)
           LBVec <- apply(survival_curves, 2, quantile, 0.025)
 
-          #myX <<- sampledbigT
-
           lowerT <- quantile(sampledbigT, 0.025)
           upperT <- quantile(sampledbigT, 0.975)
 
@@ -639,7 +659,7 @@ x <- y <- quantiletime <- NULL
 
         } else if (input$ExpChoice == "Distribution") {
 
-          nSamples <- 1000
+          nSamples <- 100
           sampledLambda <- -log(rbeta(nSamples, input$ExpBetaA, input$ExpBetaB)) / input$ExpSurvTime
           sampledTrtHazard <- rep(NA, nSamples)
           sampledbigT <- rep(NA, nSamples)
@@ -677,7 +697,13 @@ x <- y <- quantiletime <- NULL
           UBVec <- apply(survival_curves, 2, quantile, 0.975)
           LBVec <- apply(survival_curves, 2, quantile, 0.025)
 
-          result$treatmentDF <- data.frame(controlTime = controlTime, medVec = medVec, UBVec = UBVec, LBVec = LBVec)
+          lowerT <- quantile(sampledbigT, 0.025)
+          upperT <- quantile(sampledbigT, 0.975)
+
+          result$treatmentDF <- data.frame(controlTime = controlTime, medVec = medVec,
+                                           UBVec = UBVec, LBVec = LBVec)
+          result$lowerT <- lowerT
+          result$upperT <- upperT
 
         }
 
@@ -707,8 +733,6 @@ x <- y <- quantiletime <- NULL
             }
           }
 
-          #print(sampledTrtHazard)
-          #print(sampledbigT)
           controlTime <- seq(0, 100, length.out = 100)
           survival_curves <- matrix(NA, nrow = 100, ncol = length(controlTime))
           for (i in 1:100){
@@ -721,12 +745,18 @@ x <- y <- quantiletime <- NULL
           UBVec <- apply(survival_curves, 2, quantile, 0.975)
           LBVec <- apply(survival_curves, 2, quantile, 0.025)
 
-          result$treatmentDF <- data.frame(controlTime = controlTime, medVec = medVec, UBVec = UBVec, LBVec = LBVec)
+          lowerT <- quantile(sampledbigT, 0.025)
+          upperT <- quantile(sampledbigT, 0.975)
+
+          result$treatmentDF <- data.frame(controlTime = controlTime, medVec = medVec,
+                                           UBVec = UBVec, LBVec = LBVec)
+          result$lowerT <- lowerT
+          result$upperT <- upperT
 
 
         } else if (input$WeibullChoice == "Distribution") {
 
-          nSamples <- 1000
+          nSamples <- 100
           lambdaVec <- rep(NA, nSamples)
           gammaVec <- rep(NA, nSamples)
 
@@ -747,7 +777,6 @@ x <- y <- quantiletime <- NULL
             lambdaVec[i] <- 1 / solution$x[1]
             gammaVec[i] <- solution$x[2]
           }
-
 
 
           sampledTrtHazard <- rep(NA, nSamples)
@@ -775,22 +804,28 @@ x <- y <- quantiletime <- NULL
             }
           }
 
-          print(sampledTrtHazard)
-          print(sampledbigT)
+         # print(sampledTrtHazard)
+         # print(sampledbigT)
           controlTime <- seq(0, 100, length.out = 100)
           survival_curves <- matrix(NA, nrow = nSamples, ncol = length(controlTime))
-          for (i in 1:100){
+          for (i in 1:nSamples){
             survival_curves[i,] <- ifelse(controlTime<sampledbigT[i],
                                           exp(-(lambdaVec[i]*controlTime)^gammaVec[i]),
                                           exp(-(lambdaVec[i]*sampledbigT[i])^gammaVec[i]-(sampledTrtHazard[i])^gammaVec[i]*(controlTime^gammaVec[i]-(sampledbigT[i])^gammaVec[i])))
           }
 
+
           medVec <- apply(survival_curves, 2, median)
           UBVec <- apply(survival_curves, 2, quantile, 0.975)
           LBVec <- apply(survival_curves, 2, quantile, 0.025)
 
-          result$treatmentDF <- data.frame(controlTime = controlTime, medVec = medVec, UBVec = UBVec, LBVec = LBVec)
+          lowerT <- quantile(sampledbigT, 0.025)
+          upperT <- quantile(sampledbigT, 0.975)
 
+          result$treatmentDF <- data.frame(controlTime = controlTime, medVec = medVec,
+                                           UBVec = UBVec, LBVec = LBVec)
+          result$lowerT <- lowerT
+          result$upperT <- upperT
         }
       }
 
@@ -845,7 +880,6 @@ x <- y <- quantiletime <- NULL
     #
     # })
 
-
       # Observe WeibullChoice and update checkboxGroupInput choices
     observe({
       # Define the common choices
@@ -871,7 +905,6 @@ x <- y <- quantiletime <- NULL
       updateCheckboxGroupInput(session, "showfeedback", choices = final_choices)
     })
 
-
     feedbackPlot <- reactive({
       controlData <- controlSurvivalData()$controlDF
       treatmentData <- treatmentSurvivalData()$treatmentDF
@@ -895,13 +928,6 @@ x <- y <- quantiletime <- NULL
            geom_line(data = mediandf2, aes(x = x, y=y), linetype = "dashed")
        }
 
-      if ("ci_t" %in% input$showfeedback){
-        lowerSurv <- approx(treatmentData$controlTime, treatmentData$medVec, xout = treatmentSurvivalData()$lowerT)$y
-        upperSurv <- approx(treatmentData$controlTime, treatmentData$medVec, xout = treatmentSurvivalData()$upperT)$y
-        p1 <- p1 + annotate("point", x = treatmentSurvivalData()$lowerT, y = lowerSurv) +
-          annotate("point", x = treatmentSurvivalData()$upperT, y = upperSurv)
-        #cat("this is", treatmentSurvivalData()$upperT)
-      }
 
       } else if (plotType == "distribution") {
         p1 <- ggplot(controlData, aes(x = controlTime)) +
@@ -934,6 +960,14 @@ x <- y <- quantiletime <- NULL
           geom_line(data = treatmentData, aes(x=controlTime, y = LBVec), colour = "red", linetype = "dashed")
       }
 
+      if ("ci_t" %in% input$showfeedback){
+        lowerSurv <- approx(treatmentData$controlTime, treatmentData$medVec, xout = treatmentSurvivalData()$lowerT)$y
+        upperSurv <- approx(treatmentData$controlTime, treatmentData$medVec, xout = treatmentSurvivalData()$upperT)$y
+
+        p1 <- p1 + annotate("point", x = treatmentSurvivalData()$lowerT, y = lowerSurv) +
+          annotate("point", x = treatmentSurvivalData()$upperT, y = upperSurv)
+      }
+
       p1
 
     })
@@ -942,10 +976,6 @@ x <- y <- quantiletime <- NULL
       feedbackPlot()
 
   })
-
-    # radiobuttons <- reactive({
-    #   addfeedback <- input$showfeedback
-    # })
 
 
 
@@ -1001,109 +1031,110 @@ x <- y <- quantiletime <- NULL
     #
     # })
 
-    # Functions for the Assurance tab ---------------------------------
-
-    observe({
-      if (input$rec_method=="power"){
-        shinyjs::show("rec_power")
-        shinyjs::show("rec_period")
-      } else{
-        shinyjs::hide("rec_power")
-        shinyjs::hide("rec_period")
-      }
-    })
-
-    observe({
-      if (input$rec_method=="PWC"){
-        shinyjs::show("rec_rate")
-        shinyjs::show("rec_duration")
-      } else{
-        shinyjs::hide("rec_rate")
-        shinyjs::hide("rec_duration")
-      }
-    })
-
-    observe({
-      if (input$analysisType=="FHT"){
-        shinyjs::show("rho")
-        shinyjs::show("gamma")
-      } else{
-        shinyjs::hide("rho")
-        shinyjs::hide("gamma")
-      }
-    })
-
-    output$pdfRec <- renderPlot({
-
-      if (input$rec_method=="power"){
-
-        # Calculate the correct PDF values
-        x_values <- seq(0, input$rec_period, length.out = 1000)
-        pdf_values <- (input$rec_power / input$rec_period) * (x_values/input$rec_period)^(input$rec_power - 1)
-
-        # Overlay correct PDF on the histogram
-        plot(x_values, pdf_values, col = "red", type = "l", xlab = "Recruitment time", ylab = "Density", main = "Probability Density Function")
-      } else if (input$rec_method == "PWC"){
-
-        rec_rate <- as.numeric(unlist(strsplit(input$rec_rate,",")))
-        rec_duration <- as.numeric(unlist(strsplit(input$rec_duration,",")))
-
-        n <- length(rec_rate)
-
-        # Define a function that returns the residuals
-        equations <- function(vars) {
-          x <- vars[1:n]
-          eq1 <- sum(x * rec_duration) - 1
-          eq_rest <- sapply(2:n, function(i) x[1] / x[i] - rec_rate[1] / rec_rate[i])
-          return(c(eq1, eq_rest))
-        }
-
-        # Initial guess
-        initial_guess <- rep(0.1, n)
-
-        # Solve the nonlinear system of equations
-        solution <- nleqslv(initial_guess, equations)
-
-        plot(c(0, rec_duration[1]), c(solution$x[1], solution$x[1]), type= "l", col = "red",
-             xlim = c(0, sum(rec_duration)), ylim = c(0, max(solution$x)), xlab = "Recruitment time", ylab = "Density",
-             main = "Probability Density Function")
-
-        for (i in 1:(n-1)){
-          graphics::lines(c(sum(rec_duration[1:i]), sum(rec_duration[1:i])), c(solution$x[i], solution$x[i+1]), col = "red")
-          graphics::lines(c(sum(rec_duration[1:i]), sum(rec_duration[1:(i+1)])), c(solution$x[i+1], solution$x[i+1]), col = "red")
-        }
-
-      }
-    })
+    # Functions for the Recruitment tab ---------------------------------
 
     output$cdfRec <- renderPlot({
 
       if (input$rec_method=="power"){
 
-        # Calculate the correct CDF values
-        x_values <- seq(0, input$rec_period, length.out = 1000)
-        cdf_values <- (x_values/input$rec_period)^(input$rec_power)*input$numofpatients
+        timeValues <- seq(0, input$rec_period, length.out = 100)
+        Total_Patients <- (timeValues/input$rec_period)^(input$rec_power)*input$numofpatients
 
+        Control_Patients <- (timeValues/input$rec_period)^(input$rec_power)*(input$ControlRatio*input$numofpatients)/(input$ControlRatio+input$TreatmentRatio)
+        Treatment_Patients <- (timeValues/input$rec_period)^(input$rec_power)*(input$TreatmentRatio*input$numofpatients)/(input$ControlRatio+input$TreatmentRatio)
 
-        plot(x_values, cdf_values, col = "red", type = "l", xlab = "Recruitment time", ylab = "Number of patients",  main = "Cumulative Density Function")
+        # Create a data frame for ggplot
+        data <- data.frame(
+          time = rep(timeValues, 3),
+          patients = c(Total_Patients, Control_Patients, Treatment_Patients),
+          type = rep(c("Total", "Control", "Treatment"), each = length(timeValues))
+        )
+
+        # Plot using ggplot
+        ggplot(data, aes(x = time, y = patients, color = type)) +
+          geom_line() +
+          labs(x = "Time", y = "Total Number of Patients") +
+          scale_color_manual(values = c("red", "blue", "green")) +
+          theme_minimal() +
+          theme(legend.title = element_blank())
 
       } else if (input$rec_method == "PWC"){
 
-        rec_rate <- as.numeric(unlist(strsplit(input$rec_rate,",")))
-        rec_duration <- as.numeric(unlist(strsplit(input$rec_duration,",")))
+        rec_rate <- as.numeric(unlist(strsplit(input$rec_rate, ",")))
+        rec_duration <- as.numeric(unlist(strsplit(input$rec_duration, ",")))
 
-        # Calculate cumulative resource allocation over time
+        # Calculate cumulative allocation (number of patients recruited)
         cumulative_allocation <- cumsum(rec_rate * rec_duration)
 
-        # Create x-axis and y-axis data for step function
-        xaxis <- c(0, cumsum(rec_duration))
-        yaxis <- c(0, cumulative_allocation)
+        # Check if the cumulative allocation exceeds the target number of patients
+        if (any(cumulative_allocation >= input$numofpatients)) {
+          # Find the first instance where cumulative allocation meets or exceeds the target
+          first_exceed_idx <- which(cumulative_allocation >= input$numofpatients)[1]
+
+          z <- approx(cumulative_allocation, cumsum(rec_duration), xout = input$numofpatients)$y
+
+          # Cap the cumulative allocation at the target number of patients
+          cumulative_allocation[first_exceed_idx] <- input$numofpatients
+
+          # Zero out any further increments beyond the target patient count
+          if (first_exceed_idx < length(cumulative_allocation)) {
+            cumulative_allocation[(first_exceed_idx + 1):length(cumulative_allocation)] <- input$numofpatients
+
+            rec_duration[(first_exceed_idx + 1):length(rec_duration)] <- 0
+          }
+
+          xaxis <- c(0, cumsum(rec_duration)[1:length(rec_duration)-1], z)
+          yaxis <- c(0, cumulative_allocation)
+
+        } else if (cumulative_allocation[length(cumulative_allocation)] < input$numofpatients) {
+          # If cumulative allocation is below the target, extend the last duration
+          remaining_patients <- input$numofpatients - cumulative_allocation[length(cumulative_allocation)]
+          last_duration_extension <- remaining_patients / rec_rate[length(rec_rate)]
+          rec_duration[length(rec_duration)] <- rec_duration[length(rec_duration)] + last_duration_extension
+          cumulative_allocation <- cumsum(rec_rate * rec_duration)
+          xaxis <- c(0, cumsum(rec_duration))
+          yaxis <- c(0, cumulative_allocation[1:length(cumulative_allocation)-1], input$numofpatients)
+        }
+
+        data <- data.frame(Time = xaxis, Patients = yaxis)
+
+        # Create the plot
+        ggplot(data, aes(x = Time, y = Patients)) +
+          geom_line(color = "blue", size = 1) +  # Line plot for cumulative recruitment
+          geom_point(color = "red", size = 2) +  # Points at each step
+          labs(
+            title = "Cumulative Patient Recruitment Over Time",
+            x = "Time (Duration Units)",
+            y = "Cumulative Number of Patients"
+          ) +
+          theme_minimal() +
+          theme(
+            plot.title = element_text(hjust = 0.5, size = 16),
+            axis.title.x = element_text(size = 14),
+            axis.title.y = element_text(size = 14)
+          )
+
+        # data <- data.frame(
+        #   time = rep(timeValues, 3),
+        #   patients = c(Total_Patients, Control_Patients, Treatment_Patients),
+        #   type = rep(c("Total", "Control", "Treatment"), each = length(timeValues))
+        # )
+        #
+        # # Plot using ggplot
+        # ggplot(data, aes(x = time, y = patients, color = type)) +
+        #   geom_line() +
+        #   labs(x = "Time", y = "Total Number of Patients") +
+        #   scale_color_manual(values = c("red", "blue", "green")) +
+        #   theme_minimal() +
+        #   theme(legend.title = element_blank())
 
         # Plotting
-        plot(xaxis, yaxis, type = "l", xlab = "Recruitment time", ylab = "Number of patients", col = "red",
-             main = "Cumulative Density Function")
+        #plot(xaxis, yaxis, type = "l", xlab = "Recruitment time", ylab = "Number of patients", col = "red",
+             #main = "Cumulative Density Function")
       }
     })
+
+    # Functions for the Assurance tab ---------------------------------
 
 
     #This function calculates the normal assurance given the elicited distributions and other simple questions about the trial
