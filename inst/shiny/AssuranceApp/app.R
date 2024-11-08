@@ -15,9 +15,7 @@ library(shinyjs)
 library(utils)
 library(nleqslv)
 
-
-#x <- y <- quantiletime <- NULL
-  ui <- fluidPage(
+ui <- fluidPage(
     withMathJax(),
 
     # Application title
@@ -605,9 +603,8 @@ library(nleqslv)
 
 
 
-    # Functions for the Feedback tab ---------------------------------
+    # Functions for the feedback tab ---------------------------------
 
-    # Reactive for common calculations based on distribution type and inputs
     treatmentSurvivalData <- reactive({
       # Initialize an empty list to hold output data
       result <- list()
@@ -804,8 +801,6 @@ library(nleqslv)
             }
           }
 
-         # print(sampledTrtHazard)
-         # print(sampledbigT)
           controlTime <- seq(0, 100, length.out = 100)
           survival_curves <- matrix(NA, nrow = nSamples, ncol = length(controlTime))
           for (i in 1:nSamples){
@@ -974,7 +969,6 @@ library(nleqslv)
 
     output$plotFeedback <- renderPlot({
       feedbackPlot()
-
   })
 
 
@@ -1031,290 +1025,354 @@ library(nleqslv)
     #
     # })
 
-    # Functions for the Recruitment tab ---------------------------------
+    # Functions for the recruitment tab ---------------------------------
 
     output$cdfRec <- renderPlot({
 
-      if (input$rec_method=="power"){
-
-        timeValues <- seq(0, input$rec_period, length.out = 100)
-        Total_Patients <- (timeValues/input$rec_period)^(input$rec_power)*input$numofpatients
-
-        Control_Patients <- (timeValues/input$rec_period)^(input$rec_power)*(input$ControlRatio*input$numofpatients)/(input$ControlRatio+input$TreatmentRatio)
-        Treatment_Patients <- (timeValues/input$rec_period)^(input$rec_power)*(input$TreatmentRatio*input$numofpatients)/(input$ControlRatio+input$TreatmentRatio)
-
+      create_plot <- function(time, total, control, treatment) {
         # Create a data frame for ggplot
         data <- data.frame(
-          time = rep(timeValues, 3),
-          patients = c(Total_Patients, Control_Patients, Treatment_Patients),
-          type = rep(c("Total", "Control", "Treatment"), each = length(timeValues))
+          time = rep(time, 3),
+          patients = c(total, control, treatment),
+          type = rep(c("Total", "Control", "Treatment"), each = length(time))
         )
 
-        # Plot using ggplot
+        # Generate the plot using ggplot
         ggplot(data, aes(x = time, y = patients, color = type)) +
           geom_line() +
           labs(x = "Time", y = "Total Number of Patients") +
-          scale_color_manual(values = c("red", "blue", "green")) +
-          theme_minimal() +
-          theme(legend.title = element_blank())
+          scale_color_manual(values = c("red", "blue", "green"))
+      }
 
-      } else if (input$rec_method == "PWC"){
+      # Power Recruitment Method
+      if (input$rec_method == "power") {
+        timeValues <- seq(0, input$rec_period, length.out = 100)
+        Total_Patients <- (timeValues / input$rec_period) ^ input$rec_power * input$numofpatients
 
+        ratio_sum <- input$ControlRatio + input$TreatmentRatio
+        Control_Patients <- Total_Patients * (input$ControlRatio / ratio_sum)
+        Treatment_Patients <- Total_Patients * (input$TreatmentRatio / ratio_sum)
+
+        create_plot(timeValues, Total_Patients, Control_Patients, Treatment_Patients)
+
+      } else if (input$rec_method == "PWC") {
         rec_rate <- as.numeric(unlist(strsplit(input$rec_rate, ",")))
         rec_duration <- as.numeric(unlist(strsplit(input$rec_duration, ",")))
 
-        # Calculate cumulative allocation (number of patients recruited)
+        # Calculate cumulative allocation
         cumulative_allocation <- cumsum(rec_rate * rec_duration)
 
-        # Check if the cumulative allocation exceeds the target number of patients
         if (any(cumulative_allocation >= input$numofpatients)) {
-          # Find the first instance where cumulative allocation meets or exceeds the target
+          # Find first exceed index
           first_exceed_idx <- which(cumulative_allocation >= input$numofpatients)[1]
-
           z <- approx(cumulative_allocation, cumsum(rec_duration), xout = input$numofpatients)$y
 
-          # Cap the cumulative allocation at the target number of patients
+          # Cap the cumulative allocation and zero out remaining durations
           cumulative_allocation[first_exceed_idx] <- input$numofpatients
-
-          # Zero out any further increments beyond the target patient count
           if (first_exceed_idx < length(cumulative_allocation)) {
             cumulative_allocation[(first_exceed_idx + 1):length(cumulative_allocation)] <- input$numofpatients
-
             rec_duration[(first_exceed_idx + 1):length(rec_duration)] <- 0
           }
-
-          xaxis <- c(0, cumsum(rec_duration)[1:length(rec_duration)-1], z)
+          xaxis <- c(0, cumsum(rec_duration)[-length(rec_duration)], z)
           yaxis <- c(0, cumulative_allocation)
 
-        } else if (cumulative_allocation[length(cumulative_allocation)] < input$numofpatients) {
-          # If cumulative allocation is below the target, extend the last duration
+        } else {
+          # Extend the last duration if needed
           remaining_patients <- input$numofpatients - cumulative_allocation[length(cumulative_allocation)]
           last_duration_extension <- remaining_patients / rec_rate[length(rec_rate)]
           rec_duration[length(rec_duration)] <- rec_duration[length(rec_duration)] + last_duration_extension
           cumulative_allocation <- cumsum(rec_rate * rec_duration)
           xaxis <- c(0, cumsum(rec_duration))
-          yaxis <- c(0, cumulative_allocation[1:length(cumulative_allocation)-1], input$numofpatients)
+          yaxis <- c(0, cumulative_allocation[-length(cumulative_allocation)], input$numofpatients)
         }
 
-        data <- data.frame(Time = xaxis, Patients = yaxis)
+        ratio_sum <- input$ControlRatio + input$TreatmentRatio
+        Control_Patients <- yaxis * (input$ControlRatio / ratio_sum)
+        Treatment_Patients <- yaxis * (input$TreatmentRatio / ratio_sum)
 
-        # Create the plot
-        ggplot(data, aes(x = Time, y = Patients)) +
-          geom_line(color = "blue", size = 1) +  # Line plot for cumulative recruitment
-          geom_point(color = "red", size = 2) +  # Points at each step
-          labs(
-            title = "Cumulative Patient Recruitment Over Time",
-            x = "Time (Duration Units)",
-            y = "Cumulative Number of Patients"
-          ) +
-          theme_minimal() +
-          theme(
-            plot.title = element_text(hjust = 0.5, size = 16),
-            axis.title.x = element_text(size = 14),
-            axis.title.y = element_text(size = 14)
-          )
-
-        # data <- data.frame(
-        #   time = rep(timeValues, 3),
-        #   patients = c(Total_Patients, Control_Patients, Treatment_Patients),
-        #   type = rep(c("Total", "Control", "Treatment"), each = length(timeValues))
-        # )
-        #
-        # # Plot using ggplot
-        # ggplot(data, aes(x = time, y = patients, color = type)) +
-        #   geom_line() +
-        #   labs(x = "Time", y = "Total Number of Patients") +
-        #   scale_color_manual(values = c("red", "blue", "green")) +
-        #   theme_minimal() +
-        #   theme(legend.title = element_blank())
-
-        # Plotting
-        #plot(xaxis, yaxis, type = "l", xlab = "Recruitment time", ylab = "Number of patients", col = "red",
-             #main = "Cumulative Density Function")
+        create_plot(xaxis, yaxis, Control_Patients, Treatment_Patients)
       }
     })
 
-    # Functions for the Assurance tab ---------------------------------
 
+    # Functions for the assurance tab ---------------------------------
 
-    #This function calculates the normal assurance given the elicited distributions and other simple questions about the trial
     calculateAssurance <- eventReactive(input$calcAssurance, {
 
+      nControl <- 10000
+      nTreatment <- 10000
 
-      assFunc <- function(n1, n2){
+      if (input$ControlDist == "Exponential") {
+        if (input$ExpChoice == "Single Value") {
 
-
-        #Simulate 400 observations for T and HR given the elicited distributions
-        #For each n1, n2, simulate 400 trials
-        assnum <- 500
-        assvec <- rep(NA, assnum)
-        AHRvec <- rep(NA, assnum)
-        LBAHRvec <- rep(NA, assnum)
-        UBAHRvec <- rep(NA, assnum)
-        eventsvec <- rep(NA, assnum)
-
-        mySample <- elicitedSamples()$mySample
+          controlTimes <- rexp(nControl, rate = input$ExpRate)
 
 
-        for (i in 1:assnum){
-
-
-          if (v$upload=="no"){
-            lambdac <- input$lambdacmean
-            gammac <- input$gammacmean
+          if (runif(1) > input$P_S){
+            #Curves do not separate
+            sampledbigT <- 0
+            sampledTrtHazard <- input$ExpRate
           } else {
-            lambdac <- sample(as.numeric(inputData()$scale), size = 1)
-            gammac <- sample(as.numeric(inputData()$shape), size = 1)
+            if (runif(1) > input$P_DTE){
+              #Curves separate with no delay
+              HRSample <- sampleFit(HRFit(), n = 1)
+              sampledTrtHazard <- input$ExpRate*HRSample[,input$HRDist]
+              sampledbigT <- 0
+            } else{
+              #Curves separate with a delay
+              HRSample <- sampleFit(HRFit(), n = 1)
+              bigTSample <- sampleFit(TFit(), n = 1)
+              sampledbigT <- bigTSample[,input$TDist]
+              sampledTrtHazard <- input$ExpRate*HRSample[,input$HRDist]
+            }
           }
 
-          gammat <- gammac
+          CP <- exp(-input$ExpRate*sampledbigT)
+          u <- runif(nTreatment)
 
-          bigT <- sample(mySample[,1], 1)
-          HR <- sample(mySample[,2], 1)
+          treatmentTimes <- ifelse(u > CP, -log(u)/input$ExpRate, (1/sampledTrtHazard)*(sampledTrtHazard*sampledbigT-log(u)-input$ExpRate*sampledbigT))
 
-          lambdat <- lambdac*HR^(1/gammac)
+          dataCombined <- data.frame(time = c(controlTimes, treatmentTimes), group = c(rep("Control", nControl), rep("Treatment", nTreatment)))
 
-          dataCombined <- SimDTEDataSet(n_C = n1, n_E = n2, lambda_C = lambdac, HRStar = HR, gamma_C = gammac, gamma_E = gammat, delayT = bigT,
-                                        rec_method = input$rec_method, rec_period = input$rec_period, rec_power = input$rec_power, rec_rate = input$rec_rate, rec_duration = input$rec_duration)
+          n_total <- nControl + nTreatment
 
-          dataCombined <- CensFunc(dataCombined = dataCombined, censTime = input$chosenLength)$dataCombined
+          if (input$rec_method=="power"){
 
-          coxmodel <- coxph(Surv(survival_time, status)~group, data = dataCombined)
+            dataCombined$recTime <- input$rec_period * stats::runif(n_total)^(1/input$rec_power)
 
-          AHRvec[i] <- as.numeric(exp(coef(coxmodel)))
+            dataCombined$pseudoTime <- dataCombined$time + dataCombined$recTime
+          }
 
-          CI <- exp(confint(coxmodel))
+          if (input$rec_method=="PWC"){
+            rec_rate <- as.numeric(unlist(strsplit(input$rec_rate, ",")))
+            rec_duration <- as.numeric(unlist(strsplit(input$rec_duration, ",")))
+            if(any(rec_rate<0)){stop("rec_rate should be non-negative")}
+            if(length(rec_rate)==1){#simple case with only one rate
+              rec<-cumsum(stats::rexp(n=n_total,rate=rec_rate))
+            }else{#piecewise
+              if(length(rec_duration)!=length(rec_rate)){stop("Lengths of rec_duration and rec_rate should match")}
+              print("yes")
+              n_periods<-length(rec_duration)
+              df<-data.frame(rate=rec_rate,
+                             duration=rec_duration,
+                             period=1:n_periods,
+                             finish=cumsum(rec_duration),
+                             lambda=rec_duration*rec_rate,
+                             origin=c(0,cumsum(rec_duration)[-n_periods]))
+              print(df)
+              df$N<-sapply(df$lambda,function(x){stats::rpois(n=1,lambda = x)})
+              print(df)
+              if (sum(df$N)==0){
+                if (df$rate[n_periods]==0) stop("Please specify positive rec_rate for the last period; otherwise enrollment cannot finish.")
+                rec<-c(cumsum(stats::rexp(n_total,rate=df$rate[n_periods]))+df$finish[n_periods])
+              }else{
+                rec<-unlist(apply(df,1,function(x){sort(stats::runif(n=x[["N"]],min=x[["origin"]],max=x[["finish"]]))}))
+                print(rec)
+                if (length(rec) >= n_total){rec<-rec[1:n_total]} # if n already achieved, return first n observations
+                # stop with error message if enrollment has not finished but enrollment rate for last period is less or equal with 0
+                else{if (df$rate[n_periods]==0){stop("Please specify positive rec_rate for the last period; otherwise enrollment cannot finish.")}
+                  # Otherwise, return inter-arrival exponential times
+                  rec<-c(rec, cumsum(stats::rexp(n_total-nrow(rec),rate=df$rate[n_periods]))+df$finish[n_periods])
+                }
+              }
 
-          LBAHRvec[i] <- CI[1]
+              dataCombined$recTime <- rec
 
-          UBAHRvec[i] <- CI[2]
+            }
 
-          #Performs a log rank test on the data
-          test <- survdiff(Surv(survival_time, status)~group, data = dataCombined)
-          #If the p-value of the test is less than 0.05 then assvec = 1, 0 otherwise
-          assvec[i] <- test$chisq > qchisq(0.95, 1)
+            dataCombined$pseudoTime <- dataCombined$time + dataCombined$recTime
+          }
 
-          #Counts how many events have been seen up until the total trial length time
-          eventsvec[i] <-  sum(dataCombined$time<input$chosenLength)
 
         }
 
-        AHRvec[is.infinite(AHRvec)]<-NA
-        LBAHRvec[is.infinite(LBAHRvec)]<-NA
-        UBAHRvec[is.infinite(UBAHRvec)]<-NA
-
-
-        return(list(assvec = mean(assvec), LBAHRvec = mean(LBAHRvec, na.rm=T), UBAHRvec = mean(UBAHRvec, na.rm = T),
-                    AHRvec = mean(AHRvec, na.rm=T), eventvec = mean(eventsvec), assnum=assnum))
       }
 
-      #Looking at assurance for varying sample sizes
-      samplesizevec <- seq(30, input$numofpatients, length=15)
-      n1vec <- floor(input$n1*(samplesizevec/(input$n1+input$n2)))
-      n2vec <- ceiling(input$n2*(samplesizevec/(input$n1+input$n2)))
-      calcassvec <- rep(NA, length = length(samplesizevec))
-
-      pboptions(type="shiny", title = "Calculating assurance")
-
-      calcassvec <- pbmapply(assFunc, n1vec, n2vec)
-
-      assvec <- unlist(calcassvec[1,])
-
-      LBAHRvec <- unlist(calcassvec[2,])
-
-      UBAHRvec <- unlist(calcassvec[3,])
-
-      AHRvec <- unlist(calcassvec[4,])
-
-      eventvec <- unlist(calcassvec[5,])
-
-      assnumvec <- unlist(calcassvec[6,])
-
-      LBassvec <- assvec-1.96*sqrt(assvec*(1-assvec)/assnumvec)
-
-      UBassvec <- assvec+1.96*sqrt(assvec*(1-assvec)/assnumvec)
-
-
-      #How many events are seen given this set up
-      eventsseen <- eventvec[length(eventvec)]
-
-      #Smooth the assurance, compared to the the sample size vector
-      asssmooth <- loess(assvec~samplesizevec)
-
-      AHRsmooth <- loess(AHRvec~samplesizevec)
-
-      LBsmooth <- loess(LBAHRvec~samplesizevec)
-
-      UBsmooth <- loess(UBAHRvec~samplesizevec)
-
-      LBasssmooth <- loess(LBassvec~samplesizevec)
-
-      UBasssmooth <- loess(UBassvec~samplesizevec)
-
-
-      return(list(calcassvec = calcassvec, asssmooth = asssmooth, samplesizevec = samplesizevec,
-                  eventsseen = eventsseen, AHRsmooth = AHRsmooth, LBsmooth = LBsmooth, UBsmooth = UBsmooth,
-                  LBasssmooth = LBasssmooth, UBasssmooth = UBasssmooth))
-
     })
+
+
+
+    # #This function calculates the normal assurance given the elicited distributions and other simple questions about the trial
+    # calculateAssurance <- eventReactive(input$calcAssurance, {
+    #
+    # })
+    #
+    #
+    #   assFunc <- function(n1, n2){
+    #
+    #
+    #     #Simulate 400 observations for T and HR given the elicited distributions
+    #     #For each n1, n2, simulate 400 trials
+    #     assnum <- 500
+    #     assvec <- rep(NA, assnum)
+    #     AHRvec <- rep(NA, assnum)
+    #     LBAHRvec <- rep(NA, assnum)
+    #     UBAHRvec <- rep(NA, assnum)
+    #     eventsvec <- rep(NA, assnum)
+    #
+    #     mySample <- elicitedSamples()$mySample
+    #
+    #
+    #     for (i in 1:assnum){
+    #
+    #
+    #       if (v$upload=="no"){
+    #         lambdac <- input$lambdacmean
+    #         gammac <- input$gammacmean
+    #       } else {
+    #         lambdac <- sample(as.numeric(inputData()$scale), size = 1)
+    #         gammac <- sample(as.numeric(inputData()$shape), size = 1)
+    #       }
+    #
+    #       gammat <- gammac
+    #
+    #       bigT <- sample(mySample[,1], 1)
+    #       HR <- sample(mySample[,2], 1)
+    #
+    #       lambdat <- lambdac*HR^(1/gammac)
+    #
+    #       dataCombined <- SimDTEDataSet(n_C = n1, n_E = n2, lambda_C = lambdac, HRStar = HR, gamma_C = gammac, gamma_E = gammat, delayT = bigT,
+    #                                     rec_method = input$rec_method, rec_period = input$rec_period, rec_power = input$rec_power, rec_rate = input$rec_rate, rec_duration = input$rec_duration)
+    #
+    #       dataCombined <- CensFunc(dataCombined = dataCombined, censTime = input$chosenLength)$dataCombined
+    #
+    #       coxmodel <- coxph(Surv(survival_time, status)~group, data = dataCombined)
+    #
+    #       AHRvec[i] <- as.numeric(exp(coef(coxmodel)))
+    #
+    #       CI <- exp(confint(coxmodel))
+    #
+    #       LBAHRvec[i] <- CI[1]
+    #
+    #       UBAHRvec[i] <- CI[2]
+    #
+    #       #Performs a log rank test on the data
+    #       test <- survdiff(Surv(survival_time, status)~group, data = dataCombined)
+    #       #If the p-value of the test is less than 0.05 then assvec = 1, 0 otherwise
+    #       assvec[i] <- test$chisq > qchisq(0.95, 1)
+    #
+    #       #Counts how many events have been seen up until the total trial length time
+    #       eventsvec[i] <-  sum(dataCombined$time<input$chosenLength)
+    #
+    #     }
+    #
+    #     AHRvec[is.infinite(AHRvec)]<-NA
+    #     LBAHRvec[is.infinite(LBAHRvec)]<-NA
+    #     UBAHRvec[is.infinite(UBAHRvec)]<-NA
+    #
+    #
+    #     return(list(assvec = mean(assvec), LBAHRvec = mean(LBAHRvec, na.rm=T), UBAHRvec = mean(UBAHRvec, na.rm = T),
+    #                 AHRvec = mean(AHRvec, na.rm=T), eventvec = mean(eventsvec), assnum=assnum))
+    #   }
+    #
+    #   #Looking at assurance for varying sample sizes
+    #   samplesizevec <- seq(30, input$numofpatients, length=15)
+    #   n1vec <- floor(input$n1*(samplesizevec/(input$n1+input$n2)))
+    #   n2vec <- ceiling(input$n2*(samplesizevec/(input$n1+input$n2)))
+    #   calcassvec <- rep(NA, length = length(samplesizevec))
+    #
+    #   pboptions(type="shiny", title = "Calculating assurance")
+    #
+    #   calcassvec <- pbmapply(assFunc, n1vec, n2vec)
+    #
+    #   assvec <- unlist(calcassvec[1,])
+    #
+    #   LBAHRvec <- unlist(calcassvec[2,])
+    #
+    #   UBAHRvec <- unlist(calcassvec[3,])
+    #
+    #   AHRvec <- unlist(calcassvec[4,])
+    #
+    #   eventvec <- unlist(calcassvec[5,])
+    #
+    #   assnumvec <- unlist(calcassvec[6,])
+    #
+    #   LBassvec <- assvec-1.96*sqrt(assvec*(1-assvec)/assnumvec)
+    #
+    #   UBassvec <- assvec+1.96*sqrt(assvec*(1-assvec)/assnumvec)
+    #
+    #
+    #   #How many events are seen given this set up
+    #   eventsseen <- eventvec[length(eventvec)]
+    #
+    #   #Smooth the assurance, compared to the the sample size vector
+    #   asssmooth <- loess(assvec~samplesizevec)
+    #
+    #   AHRsmooth <- loess(AHRvec~samplesizevec)
+    #
+    #   LBsmooth <- loess(LBAHRvec~samplesizevec)
+    #
+    #   UBsmooth <- loess(UBAHRvec~samplesizevec)
+    #
+    #   LBasssmooth <- loess(LBassvec~samplesizevec)
+    #
+    #   UBasssmooth <- loess(UBassvec~samplesizevec)
+    #
+    #
+    #   return(list(calcassvec = calcassvec, asssmooth = asssmooth, samplesizevec = samplesizevec,
+    #               eventsseen = eventsseen, AHRsmooth = AHRsmooth, LBsmooth = LBsmooth, UBsmooth = UBsmooth,
+    #               LBasssmooth = LBasssmooth, UBasssmooth = UBasssmooth))
+    #
+    # })
 
 
     output$assurancePlot <- renderPlot({
 
-      #Plot the assurance calculated in the function
-      theme_set(theme_grey(base_size = 12))
-      assurancenormaldf <- data.frame(x = calculateAssurance()$samplesizevec, y = predict(calculateAssurance()$asssmooth))
-      assurancenormalLBdf <- data.frame(x = calculateAssurance()$samplesizevec, y = predict(calculateAssurance()$LBasssmooth))
-      assurancenormalUBdf <- data.frame(x = calculateAssurance()$samplesizevec, y = predict(calculateAssurance()$UBasssmooth))
-      p1 <- ggplot() + geom_line(data = assurancenormaldf, aes(x = x, y = y, colour="Assurance"), linetype="solid") + xlab("Total number of patients") +
-        ylab("Assurance") + ylim(0, 1.05) +
-        geom_line(data = assurancenormalLBdf, aes(x=x, y=y, colour = 'Assurance'), linetype='dashed') +
-        geom_line(data = assurancenormalUBdf, aes(x=x, y=y, colour = 'Assurance'), linetype='dashed') +
-        theme(
-          legend.position = c(.05, .95),
-          legend.justification = c("left", "top"),
-          legend.box.just = "left",
-          legend.margin = margin(6, 6, 6, 6)) + scale_color_manual(name=NULL,
-                                                                   breaks=c('Assurance'),
-                                                                   values=c('Assurance'='blue'))
-      print(p1)
+      calculateAssurance()
+
+      # #Plot the assurance calculated in the function
+      # assurancenormaldf <- data.frame(x = calculateAssurance()$samplesizevec, y = predict(calculateAssurance()$asssmooth))
+      # assurancenormalLBdf <- data.frame(x = calculateAssurance()$samplesizevec, y = predict(calculateAssurance()$LBasssmooth))
+      # assurancenormalUBdf <- data.frame(x = calculateAssurance()$samplesizevec, y = predict(calculateAssurance()$UBasssmooth))
+      # p1 <- ggplot() + geom_line(data = assurancenormaldf, aes(x = x, y = y, colour="Assurance"), linetype="solid") + xlab("Total number of patients") +
+      #   ylab("Assurance") + ylim(0, 1.05) +
+      #   geom_line(data = assurancenormalLBdf, aes(x=x, y=y, colour = 'Assurance'), linetype='dashed') +
+      #   geom_line(data = assurancenormalUBdf, aes(x=x, y=y, colour = 'Assurance'), linetype='dashed') +
+      #   theme(
+      #     legend.position = c(.05, .95),
+      #     legend.justification = c("left", "top"),
+      #     legend.box.just = "left",
+      #     legend.margin = margin(6, 6, 6, 6)) + scale_color_manual(name=NULL,
+      #                                                              breaks=c('Assurance'),
+      #                                                              values=c('Assurance'='blue'))
+      # print(p1)
     })
 
 
-    output$AHRPlot <- renderPlot({
+    # output$AHRPlot <- renderPlot({
+    #
+    #   AHRdf <- data.frame(x = calculateAssurance()$samplesizevec, y = predict(calculateAssurance()$AHRsmooth))
+    #   LBdf <- data.frame(x = calculateAssurance()$samplesizevec, y = predict(calculateAssurance()$LBsmooth))
+    #   UBdf <- data.frame(x = calculateAssurance()$samplesizevec, y = predict(calculateAssurance()$UBsmooth))
+    #
+    #   p1 <- ggplot() + geom_line(data = AHRdf, aes(x = x, y = y, colour="Average HR"), linetype="solid") + xlab("Number of patients") +
+    #     ylab("Average hazard ratio") + geom_line(data = LBdf, aes(x=x, y=y, colour = "CI"), linetype="dashed") +
+    #     geom_line(data = UBdf, aes(x=x, y=y, colour = "CI"), linetype="dashed") +
+    #     theme(
+    #       legend.position = c(.95, .95),
+    #       legend.justification = c("right", "top"),
+    #       legend.box.just = "right",
+    #       legend.margin = margin(6, 6, 6, 6)) + scale_color_manual(name=NULL,
+    #                                                                breaks=c('Average HR', 'CI'),
+    #                                                                values=c('Average HR'='red', 'CI' = 'black'))
+    #   print(p1)
+    #
+    # })
 
-      AHRdf <- data.frame(x = calculateAssurance()$samplesizevec, y = predict(calculateAssurance()$AHRsmooth))
-      LBdf <- data.frame(x = calculateAssurance()$samplesizevec, y = predict(calculateAssurance()$LBsmooth))
-      UBdf <- data.frame(x = calculateAssurance()$samplesizevec, y = predict(calculateAssurance()$UBsmooth))
 
-      p1 <- ggplot() + geom_line(data = AHRdf, aes(x = x, y = y, colour="Average HR"), linetype="solid") + xlab("Number of patients") +
-        ylab("Average hazard ratio") + geom_line(data = LBdf, aes(x=x, y=y, colour = "CI"), linetype="dashed") +
-        geom_line(data = UBdf, aes(x=x, y=y, colour = "CI"), linetype="dashed") +
-        theme(
-          legend.position = c(.95, .95),
-          legend.justification = c("right", "top"),
-          legend.box.just = "right",
-          legend.margin = margin(6, 6, 6, 6)) + scale_color_manual(name=NULL,
-                                                                   breaks=c('Average HR', 'CI'),
-                                                                   values=c('Average HR'='red', 'CI' = 'black'))
-      print(p1)
+    # output$assuranceText  <- renderUI({
+    #   #Show how many events are seen given the set up
+    #   str1 <- paste0("The ","<font color=\"#0000FF\"><b>blue</b></font>", " line is the proportion of trials that give rise to a 'successful' outcome.")
+    #   str2 <- paste0("On average, ", round(calculateAssurance()$eventsseen), " events are seen when ", input$numofpatients, " patients are enroled for ", input$chosenLength, " months.")
+    #   HTML(paste(str1, str2, sep = '<br/>'))
+    # })
 
-    })
-
-
-    output$assuranceText  <- renderUI({
-      #Show how many events are seen given the set up
-      str1 <- paste0("The ","<font color=\"#0000FF\"><b>blue</b></font>", " line is the proportion of trials that give rise to a 'successful' outcome.")
-      str2 <- paste0("On average, ", round(calculateAssurance()$eventsseen), " events are seen when ", input$numofpatients, " patients are enroled for ", input$chosenLength, " months.")
-      HTML(paste(str1, str2, sep = '<br/>'))
-    })
-
-    output$AHRFeedback  <- renderUI({
-      #Show how many events are seen given the set up
-      x <-  round(calculateAssurance()$eventsseen)
-      str1 <- paste0("The ","<font color=\"##FF0000\"><b>red</b></font>", " line is the average estimated hazard ratio.")
-      HTML(paste(str1, sep = '<br/>'))
-    })
+    # output$AHRFeedback  <- renderUI({
+    #   #Show how many events are seen given the set up
+    #   x <-  round(calculateAssurance()$eventsseen)
+    #   str1 <- paste0("The ","<font color=\"##FF0000\"><b>red</b></font>", " line is the average estimated hazard ratio.")
+    #   HTML(paste(str1, sep = '<br/>'))
+    # })
 
 
 
