@@ -1109,401 +1109,47 @@ ui <- fluidPage(
 
       nSamples <- input$nSamples
 
-      nTotal <- seq(10, input$numofpatients, length = 10)
-      nControl <- round(nTotal*((input$ControlRatio)/(input$ControlRatio+input$TreatmentRatio)))
-      nTreatment <- round(nTotal*((input$TreatmentRatio)/(input$ControlRatio+input$TreatmentRatio)))
 
-      overallAssVec <- rep(NA, length(nTotal))
-
-      for (j in 1:length(nTotal)){
-
-        assVec <- rep(NA, nSamples)
-
-        for (i in 1:nSamples){
-
-          if (input$ControlDist == "Exponential") {
-            if (input$ExpChoice == "Single Value") {
-
-              controlTimes <- rexp(nControl[j], rate = input$ExpRate)
-
-              if (runif(1) > input$P_S){
-                #Curves do not separate
-                sampledbigT <- 0
-                sampledTrtHazard <- input$ExpRate
-              } else {
-                if (runif(1) > input$P_DTE){
-                  #Curves separate with no delay
-                  HRSample <- sampleFit(HRFit(), n = 1)
-                  sampledTrtHazard <- input$ExpRate*HRSample[,input$HRDist]
-                  sampledbigT <- 0
-                } else{
-                  #Curves separate with a delay
-                  HRSample <- sampleFit(HRFit(), n = 1)
-                  bigTSample <- sampleFit(TFit(), n = 1)
-                  sampledbigT <- bigTSample[,input$TDist]
-                  sampledTrtHazard <- input$ExpRate*HRSample[,input$HRDist]
-                }
-              }
-
-              CP <- exp(-input$ExpRate*sampledbigT)
-              u <- runif(nTreatment[j])
-
-              treatmentTimes <- ifelse(u > CP, -log(u)/input$ExpRate, (1/sampledTrtHazard)*(sampledTrtHazard*sampledbigT-log(u)-input$ExpRate*sampledbigT))
-
-              dataCombined <- data.frame(time = c(controlTimes, treatmentTimes), group = c(rep("Control", nControl[j]), rep("Treatment", nTreatment[j])))
-
-              n_total <- nControl[j] + nTreatment[j]
-
-              if (input$rec_method=="power"){
-
-                dataCombined$recTime <- input$rec_period * stats::runif(n_total)^(1/input$rec_power)
-
-                dataCombined$pseudoTime <- dataCombined$time + dataCombined$recTime
-              }
-
-              if (input$rec_method=="PWC"){
-                rec_rate <- as.numeric(unlist(strsplit(input$rec_rate, ",")))
-                rec_duration <- as.numeric(unlist(strsplit(input$rec_duration, ",")))
-                if(any(rec_rate<0)){stop("rec_rate should be non-negative")}
-                if(length(rec_rate)==1){#simple case with only one rate
-                  rec<-cumsum(stats::rexp(n=n_total,rate=rec_rate))
-                }else{#piecewise
-                  if(length(rec_duration)!=length(rec_rate)){stop("Lengths of rec_duration and rec_rate should match")}
-                  n_periods<-length(rec_duration)
-                  df<-data.frame(rate=rec_rate,
-                                 duration=rec_duration,
-                                 period=1:n_periods,
-                                 finish=cumsum(rec_duration),
-                                 lambda=rec_duration*rec_rate,
-                                 origin=c(0,cumsum(rec_duration)[-n_periods]))
-                  print(df)
-                  df$N<-sapply(df$lambda,function(x){stats::rpois(n=1,lambda = x)})
-                  print(df)
-                  if (sum(df$N)==0){
-                    if (df$rate[n_periods]==0) stop("Please specify positive rec_rate for the last period; otherwise enrollment cannot finish.")
-                    rec<-c(cumsum(stats::rexp(n_total,rate=df$rate[n_periods]))+df$finish[n_periods])
-                  }else{
-                    rec<-unlist(apply(df,1,function(x){sort(stats::runif(n=x[["N"]],min=x[["origin"]],max=x[["finish"]]))}))
-                    print(rec)
-                    if (length(rec) >= n_total){rec<-rec[1:n_total]} # if n already achieved, return first n observations
-                    # stop with error message if enrollment has not finished but enrollment rate for last period is less or equal with 0
-                    else{if (df$rate[n_periods]==0){stop("Please specify positive rec_rate for the last period; otherwise enrollment cannot finish.")}
-                      # Otherwise, return inter-arrival exponential times
-                      rec<-c(rec, cumsum(stats::rexp(n_total-nrow(rec),rate=df$rate[n_periods]))+df$finish[n_periods])
-                    }
-                  }
-
-                  dataCombined$recTime <- rec
-
-                }
-
-                dataCombined$pseudoTime <- dataCombined$time + dataCombined$recTime
-              }
+        assFunc <- function(nControl, nTreatment){
 
 
-              #order the pseudo times
-              dataCombined <- dataCombined[order(dataCombined$pseudoTime),]
+          assVec <- rep(NA, nSamples)
+          eventVec <- rep(NA, nSamples)
 
-              #remove any observation which will not be recruited by the censoring time
-              dataCombined <- dataCombined %>%
-                filter(recTime <= input$chosenLength)
+          for (i in 1:nSamples){
 
-              #censor observations
-              dataCombined$status <- dataCombined$pseudoTime < input$chosenLength
+            if (input$ControlDist == "Exponential") {
+              if (input$ExpChoice == "Single Value") {
 
-              #redefine survival times
-              dataCombined$survivalTime <- ifelse(dataCombined$status==TRUE, dataCombined$time, input$chosenLength - dataCombined$recTime)
-
-              coxmodel <- coxph(Surv(survivalTime, status)~group, data = dataCombined)
-              deltad <- as.numeric(exp(coef(coxmodel)))
-
-              Signif <- 0
-
-              if (input$analysisType=="LRT"){
-                test <- survdiff(Surv(survivalTime, status)~group, data = dataCombined)
-                Signif <- (test$chisq > qchisq(1-input$alphaLevel, 1) & deltad<1)
-              } else if (input$analysisType=="WLRT"){
-                test <- nph::logrank.test(dataCombined$survivalTime, dataCombined$status, dataCombined$group, rho = rho, gamma = gamma)
-                Signif <- (test$test$Chisq > qchisq(1-input$alphaLevel, 1) & deltad<1)
-              }
-
-              assVec[i] <- Signif
-            } else if (input$ExpChoice == "Distribution") {
-
-              sampledLambda <- -log(rbeta(1, input$ExpBetaA, input$ExpBetaB)) / input$ExpSurvTime
+                controlTimes <- rexp(nControl, rate = input$ExpRate)
 
                 if (runif(1) > input$P_S){
                   #Curves do not separate
                   sampledbigT <- 0
-                  sampledTrtHazard <- sampledLambda
+                  sampledTrtHazard <- input$ExpRate
                 } else {
                   if (runif(1) > input$P_DTE){
                     #Curves separate with no delay
                     HRSample <- sampleFit(HRFit(), n = 1)
-                    sampledTrtHazard <- sampledLambda*HRSample[,input$HRDist]
+                    sampledTrtHazard <- input$ExpRate*HRSample[,input$HRDist]
                     sampledbigT <- 0
                   } else{
                     #Curves separate with a delay
                     HRSample <- sampleFit(HRFit(), n = 1)
                     bigTSample <- sampleFit(TFit(), n = 1)
                     sampledbigT <- bigTSample[,input$TDist]
-                    sampledTrtHazard <- sampledLambda*HRSample[,input$HRDist]
+                    sampledTrtHazard <- input$ExpRate*HRSample[,input$HRDist]
                   }
                 }
 
-              controlTimes <- rexp(nControl[j], rate = sampledLambda)
+                CP <- exp(-input$ExpRate*sampledbigT)
+                u <- runif(nTreatment)
 
-              CP <- exp(-input$ExpRate*sampledbigT)
-              u <- runif(nTreatment[j])
+                treatmentTimes <- ifelse(u > CP, -log(u)/input$ExpRate, (1/sampledTrtHazard)*(sampledTrtHazard*sampledbigT-log(u)-input$ExpRate*sampledbigT))
 
-              treatmentTimes <- ifelse(u > CP, -log(u)/input$ExpRate, (1/sampledTrtHazard)*(sampledTrtHazard*sampledbigT-log(u)-input$ExpRate*sampledbigT))
+                dataCombined <- data.frame(time = c(controlTimes, treatmentTimes), group = c(rep("Control", nControl), rep("Treatment", nTreatment)))
 
-              dataCombined <- data.frame(time = c(controlTimes, treatmentTimes), group = c(rep("Control", nControl[j]), rep("Treatment", nTreatment[j])))
-
-              n_total <- nControl[j] + nTreatment[j]
-
-              if (input$rec_method=="power"){
-
-                dataCombined$recTime <- input$rec_period * stats::runif(n_total)^(1/input$rec_power)
-
-                dataCombined$pseudoTime <- dataCombined$time + dataCombined$recTime
-              }
-
-              if (input$rec_method=="PWC"){
-                rec_rate <- as.numeric(unlist(strsplit(input$rec_rate, ",")))
-                rec_duration <- as.numeric(unlist(strsplit(input$rec_duration, ",")))
-                if(any(rec_rate<0)){stop("rec_rate should be non-negative")}
-                if(length(rec_rate)==1){#simple case with only one rate
-                  rec<-cumsum(stats::rexp(n=n_total,rate=rec_rate))
-                }else{#piecewise
-                  if(length(rec_duration)!=length(rec_rate)){stop("Lengths of rec_duration and rec_rate should match")}
-                  n_periods<-length(rec_duration)
-                  df<-data.frame(rate=rec_rate,
-                                 duration=rec_duration,
-                                 period=1:n_periods,
-                                 finish=cumsum(rec_duration),
-                                 lambda=rec_duration*rec_rate,
-                                 origin=c(0,cumsum(rec_duration)[-n_periods]))
-                  print(df)
-                  df$N<-sapply(df$lambda,function(x){stats::rpois(n=1,lambda = x)})
-                  print(df)
-                  if (sum(df$N)==0){
-                    if (df$rate[n_periods]==0) stop("Please specify positive rec_rate for the last period; otherwise enrollment cannot finish.")
-                    rec<-c(cumsum(stats::rexp(n_total,rate=df$rate[n_periods]))+df$finish[n_periods])
-                  }else{
-                    rec<-unlist(apply(df,1,function(x){sort(stats::runif(n=x[["N"]],min=x[["origin"]],max=x[["finish"]]))}))
-                    print(rec)
-                    if (length(rec) >= n_total){rec<-rec[1:n_total]} # if n already achieved, return first n observations
-                    # stop with error message if enrollment has not finished but enrollment rate for last period is less or equal with 0
-                    else{if (df$rate[n_periods]==0){stop("Please specify positive rec_rate for the last period; otherwise enrollment cannot finish.")}
-                      # Otherwise, return inter-arrival exponential times
-                      rec<-c(rec, cumsum(stats::rexp(n_total-nrow(rec),rate=df$rate[n_periods]))+df$finish[n_periods])
-                    }
-                  }
-
-                  dataCombined$recTime <- rec
-
-                }
-
-                dataCombined$pseudoTime <- dataCombined$time + dataCombined$recTime
-              }
-
-
-              #order the pseudo times
-              dataCombined <- dataCombined[order(dataCombined$pseudoTime),]
-
-              #remove any observation which will not be recruited by the censoring time
-              dataCombined <- dataCombined %>%
-                filter(recTime <= input$chosenLength)
-
-              #censor observations
-              dataCombined$status <- dataCombined$pseudoTime < input$chosenLength
-
-              #redefine survival times
-              dataCombined$survivalTime <- ifelse(dataCombined$status==TRUE, dataCombined$time, input$chosenLength - dataCombined$recTime)
-
-              coxmodel <- coxph(Surv(survivalTime, status)~group, data = dataCombined)
-              deltad <- as.numeric(exp(coef(coxmodel)))
-
-              Signif <- 0
-
-              if (input$analysisType=="LRT"){
-                test <- survdiff(Surv(survivalTime, status)~group, data = dataCombined)
-                Signif <- (test$chisq > qchisq(1-input$alphaLevel, 1) & deltad<1)
-              } else if (input$analysisType=="WLRT"){
-                test <- nph::logrank.test(dataCombined$survivalTime, dataCombined$status, dataCombined$group, rho = rho, gamma = gamma)
-                Signif <- (test$test$Chisq > qchisq(1-input$alphaLevel, 1) & deltad<1)
-              }
-
-              assVec[i] <- Signif
-
-
-            }
-
-          } else if (input$ControlDist == "Weibull") {
-            if (input$WeibullChoice == "Single Value") {
-
-              u <- runif(nControl[j])
-              controlTimes <- (1/input$WeibullScale)*(-log(u))^(1/input$WeibullShape)
-
-
-                if (runif(1) > input$P_S){
-                  #Curves do not separate
-                  sampledbigT <- 0
-                  sampledTrtHazard <- input$WeibullScale
-                } else {
-                  if (runif(1) > input$P_DTE){
-                    #Curves separate with no delay
-                    HRSample <- sampleFit(HRFit(), n = 1)
-                    sampledTrtHazard <- input$WeibullScale*(HRSample[,input$HRDist])^(1/input$WeibullShape)
-                    sampledbigT <- 0
-                  } else{
-                    #Curves separate with a delay
-                    HRSample <- sampleFit(HRFit(), n = 1)
-                    bigTSample <- sampleFit(TFit(), n = 1)
-                    sampledbigT <- bigTSample[,input$TDist]
-                    sampledTrtHazard <- input$WeibullScale*(HRSample[,input$HRDist])^(1/input$WeibullShape)
-                  }
-                }
-
-
-              CP <- exp(-(input$WeibullScale*sampledbigT)^input$WeibullShape)
-              u <- runif(nTreatment[j])
-
-              treatmentTimes <- ifelse(u > CP, (1/input$WeibullScale)*(-log(u))^(1/input$WeibullShape),
-                                       (1/sampledTrtHazard)*(-log(u)+(sampledTrtHazard*sampledbigT)^input$WeibullShape-(input$WeibullScale*sampledbigT)^input$WeibullShape)^(1/input$WeibullShape))
-
-              dataCombined <- data.frame(time = c(controlTimes, treatmentTimes), group = c(rep("Control", nControl[j]), rep("Treatment", nTreatment[j])))
-
-              n_total <- nControl[j] + nTreatment[j]
-
-              if (input$rec_method=="power"){
-
-                dataCombined$recTime <- input$rec_period * stats::runif(n_total)^(1/input$rec_power)
-
-                dataCombined$pseudoTime <- dataCombined$time + dataCombined$recTime
-              }
-
-              if (input$rec_method=="PWC"){
-                rec_rate <- as.numeric(unlist(strsplit(input$rec_rate, ",")))
-                rec_duration <- as.numeric(unlist(strsplit(input$rec_duration, ",")))
-                if(any(rec_rate<0)){stop("rec_rate should be non-negative")}
-                if(length(rec_rate)==1){#simple case with only one rate
-                  rec<-cumsum(stats::rexp(n=n_total,rate=rec_rate))
-                }else{#piecewise
-                  if(length(rec_duration)!=length(rec_rate)){stop("Lengths of rec_duration and rec_rate should match")}
-                  n_periods<-length(rec_duration)
-                  df<-data.frame(rate=rec_rate,
-                                 duration=rec_duration,
-                                 period=1:n_periods,
-                                 finish=cumsum(rec_duration),
-                                 lambda=rec_duration*rec_rate,
-                                 origin=c(0,cumsum(rec_duration)[-n_periods]))
-                  print(df)
-                  df$N<-sapply(df$lambda,function(x){stats::rpois(n=1,lambda = x)})
-                  print(df)
-                  if (sum(df$N)==0){
-                    if (df$rate[n_periods]==0) stop("Please specify positive rec_rate for the last period; otherwise enrollment cannot finish.")
-                    rec<-c(cumsum(stats::rexp(n_total,rate=df$rate[n_periods]))+df$finish[n_periods])
-                  }else{
-                    rec<-unlist(apply(df,1,function(x){sort(stats::runif(n=x[["N"]],min=x[["origin"]],max=x[["finish"]]))}))
-                    print(rec)
-                    if (length(rec) >= n_total){rec<-rec[1:n_total]} # if n already achieved, return first n observations
-                    # stop with error message if enrollment has not finished but enrollment rate for last period is less or equal with 0
-                    else{if (df$rate[n_periods]==0){stop("Please specify positive rec_rate for the last period; otherwise enrollment cannot finish.")}
-                      # Otherwise, return inter-arrival exponential times
-                      rec<-c(rec, cumsum(stats::rexp(n_total-nrow(rec),rate=df$rate[n_periods]))+df$finish[n_periods])
-                    }
-                  }
-
-                  dataCombined$recTime <- rec
-
-                }
-
-                dataCombined$pseudoTime <- dataCombined$time + dataCombined$recTime
-              }
-
-
-              #order the pseudo times
-              dataCombined <- dataCombined[order(dataCombined$pseudoTime),]
-
-              #remove any observation which will not be recruited by the censoring time
-              dataCombined <- dataCombined %>%
-                filter(recTime <= input$chosenLength)
-
-              #censor observations
-              dataCombined$status <- dataCombined$pseudoTime < input$chosenLength
-
-              #redefine survival times
-              dataCombined$survivalTime <- ifelse(dataCombined$status==TRUE, dataCombined$time, input$chosenLength - dataCombined$recTime)
-
-              coxmodel <- coxph(Surv(survivalTime, status)~group, data = dataCombined)
-              deltad <- as.numeric(exp(coef(coxmodel)))
-
-              Signif <- 0
-
-              if (input$analysisType=="LRT"){
-                test <- survdiff(Surv(survivalTime, status)~group, data = dataCombined)
-                Signif <- (test$chisq > qchisq(1-input$alphaLevel, 1) & deltad<1)
-              } else if (input$analysisType=="WLRT"){
-                test <- nph::logrank.test(dataCombined$survivalTime, dataCombined$status, dataCombined$group, rho = rho, gamma = gamma)
-                Signif <- (test$test$Chisq > qchisq(1-input$alphaLevel, 1) & deltad<1)
-              }
-
-              assVec[i] <- Signif
-
-
-            } else if (input$WeibullChoice == "Distribution") {
-
-
-                sampledS1to <- rbeta(1, input$WeibullDistS1BetaA, input$WeibullDistS1BetaB)
-                sampledDelta1 <- rbeta(1, input$WeibullDistDelta1BetaA, input$WeibullDistDelta1BetaB)
-                sampledS1toPrime <- sampledS1to - sampledDelta1
-
-                # Solve for lambda and gamma using sampled values
-                solution <- nleqslv(c(10, 1), function(params) {
-                  lambda <- params[1]
-                  k <- params[2]
-                  c(exp(-(input$WeibullDistT1 / lambda)^k) - sampledS1to,
-                    exp(-(input$WeibullDistT2 / lambda)^k) - sampledS1toPrime)
-                })
-
-                lambda <- 1 / solution$x[1]
-                gamma <- solution$x[2]
-
-
-                if (runif(1) > input$P_S){
-                  #Curves do not separate
-                  sampledbigT <- 0
-                  sampledTrtHazard <- lambda
-                } else {
-                  if (runif(1) > input$P_DTE){
-                    #Curves separate with no delay
-                    HRSample <- sampleFit(HRFit(), n = 1)
-                    sampledTrtHazard <- lambda*(HRSample[,input$HRDist])^(1/gamma)
-                    sampledbigT <- 0
-                  } else{
-                    #Curves separate with a delay
-                    HRSample <- sampleFit(HRFit(), n = 1)
-                    bigTSample <- sampleFit(TFit(), n = 1)
-                    sampledbigT <- bigTSample[,input$TDist]
-                    sampledTrtHazard <- lambda*(HRSample[,input$HRDist])^(1/gamma)
-                  }
-                }
-
-                u <- runif(nControl[j])
-                controlTimes <- (1/lambda)*(-log(u))^(1/gamma)
-
-                CP <- exp(-(lambda*sampledbigT)^gamma)
-                u <- runif(nTreatment[j])
-
-                treatmentTimes <- ifelse(u > CP, (1/lambda)*(-log(u))^(1/gamma),
-                                         (1/sampledTrtHazard)*(-log(u)+(sampledTrtHazard*sampledbigT)^gamma-(lambda*sampledbigT)^gamma)^(1/gamma))
-
-
-                dataCombined <- data.frame(time = c(controlTimes, treatmentTimes), group = c(rep("Control", nControl[j]), rep("Treatment", nTreatment[j])))
-
-                n_total <- nControl[j] + nTreatment[j]
+                n_total <- nControl + nTreatment
 
                 if (input$rec_method=="power"){
 
@@ -1565,6 +1211,118 @@ ui <- fluidPage(
                 #redefine survival times
                 dataCombined$survivalTime <- ifelse(dataCombined$status==TRUE, dataCombined$time, input$chosenLength - dataCombined$recTime)
 
+                eventVec[i] <- sum(dataCombined$status==1)
+
+                coxmodel <- coxph(Surv(survivalTime, status)~group, data = dataCombined)
+                deltad <- as.numeric(exp(coef(coxmodel)))
+
+                Signif <- 0
+
+                if (input$analysisType=="LRT"){
+                  test <- survdiff(Surv(survivalTime, status)~group, data = dataCombined)
+                  Signif <- (test$chisq > qchisq(1-input$alphaLevel, 1) & deltad<1)
+                } else if (input$analysisType=="WLRT"){
+                  test <- nph::logrank.test(dataCombined$survivalTime, dataCombined$status, dataCombined$group, rho = rho, gamma = gamma)
+                  Signif <- (test$test$Chisq > qchisq(1-input$alphaLevel, 1) & deltad<1)
+                }
+
+                assVec[i] <- Signif
+              } else if (input$ExpChoice == "Distribution") {
+
+                sampledLambda <- -log(rbeta(1, input$ExpBetaA, input$ExpBetaB)) / input$ExpSurvTime
+
+                if (runif(1) > input$P_S){
+                  #Curves do not separate
+                  sampledbigT <- 0
+                  sampledTrtHazard <- sampledLambda
+                } else {
+                  if (runif(1) > input$P_DTE){
+                    #Curves separate with no delay
+                    HRSample <- sampleFit(HRFit(), n = 1)
+                    sampledTrtHazard <- sampledLambda*HRSample[,input$HRDist]
+                    sampledbigT <- 0
+                  } else{
+                    #Curves separate with a delay
+                    HRSample <- sampleFit(HRFit(), n = 1)
+                    bigTSample <- sampleFit(TFit(), n = 1)
+                    sampledbigT <- bigTSample[,input$TDist]
+                    sampledTrtHazard <- sampledLambda*HRSample[,input$HRDist]
+                  }
+                }
+
+                controlTimes <- rexp(nControl, rate = sampledLambda)
+
+                CP <- exp(-input$ExpRate*sampledbigT)
+                u <- runif(nTreatment)
+
+                treatmentTimes <- ifelse(u > CP, -log(u)/input$ExpRate, (1/sampledTrtHazard)*(sampledTrtHazard*sampledbigT-log(u)-input$ExpRate*sampledbigT))
+
+                dataCombined <- data.frame(time = c(controlTimes, treatmentTimes), group = c(rep("Control", nControl), rep("Treatment", nTreatment)))
+
+                n_total <- nControl + nTreatment
+
+                if (input$rec_method=="power"){
+
+                  dataCombined$recTime <- input$rec_period * stats::runif(n_total)^(1/input$rec_power)
+
+                  dataCombined$pseudoTime <- dataCombined$time + dataCombined$recTime
+                }
+
+                if (input$rec_method=="PWC"){
+                  rec_rate <- as.numeric(unlist(strsplit(input$rec_rate, ",")))
+                  rec_duration <- as.numeric(unlist(strsplit(input$rec_duration, ",")))
+                  if(any(rec_rate<0)){stop("rec_rate should be non-negative")}
+                  if(length(rec_rate)==1){#simple case with only one rate
+                    rec<-cumsum(stats::rexp(n=n_total,rate=rec_rate))
+                  }else{#piecewise
+                    if(length(rec_duration)!=length(rec_rate)){stop("Lengths of rec_duration and rec_rate should match")}
+                    n_periods<-length(rec_duration)
+                    df<-data.frame(rate=rec_rate,
+                                   duration=rec_duration,
+                                   period=1:n_periods,
+                                   finish=cumsum(rec_duration),
+                                   lambda=rec_duration*rec_rate,
+                                   origin=c(0,cumsum(rec_duration)[-n_periods]))
+                    print(df)
+                    df$N<-sapply(df$lambda,function(x){stats::rpois(n=1,lambda = x)})
+                    print(df)
+                    if (sum(df$N)==0){
+                      if (df$rate[n_periods]==0) stop("Please specify positive rec_rate for the last period; otherwise enrollment cannot finish.")
+                      rec<-c(cumsum(stats::rexp(n_total,rate=df$rate[n_periods]))+df$finish[n_periods])
+                    }else{
+                      rec<-unlist(apply(df,1,function(x){sort(stats::runif(n=x[["N"]],min=x[["origin"]],max=x[["finish"]]))}))
+                      print(rec)
+                      if (length(rec) >= n_total){rec<-rec[1:n_total]} # if n already achieved, return first n observations
+                      # stop with error message if enrollment has not finished but enrollment rate for last period is less or equal with 0
+                      else{if (df$rate[n_periods]==0){stop("Please specify positive rec_rate for the last period; otherwise enrollment cannot finish.")}
+                        # Otherwise, return inter-arrival exponential times
+                        rec<-c(rec, cumsum(stats::rexp(n_total-nrow(rec),rate=df$rate[n_periods]))+df$finish[n_periods])
+                      }
+                    }
+
+                    dataCombined$recTime <- rec
+
+                  }
+
+                  dataCombined$pseudoTime <- dataCombined$time + dataCombined$recTime
+                }
+
+
+                #order the pseudo times
+                dataCombined <- dataCombined[order(dataCombined$pseudoTime),]
+
+                #remove any observation which will not be recruited by the censoring time
+                dataCombined <- dataCombined %>%
+                  filter(recTime <= input$chosenLength)
+
+                #censor observations
+                dataCombined$status <- dataCombined$pseudoTime < input$chosenLength
+
+                #redefine survival times
+                dataCombined$survivalTime <- ifelse(dataCombined$status==TRUE, dataCombined$time, input$chosenLength - dataCombined$recTime)
+
+                eventVec[i] <- sum(dataCombined$status==1)
+
                 coxmodel <- coxph(Surv(survivalTime, status)~group, data = dataCombined)
                 deltad <- as.numeric(exp(coef(coxmodel)))
 
@@ -1580,21 +1338,290 @@ ui <- fluidPage(
 
                 assVec[i] <- Signif
 
-            }
 
+              }
+
+            } else if (input$ControlDist == "Weibull") {
+              if (input$WeibullChoice == "Single Value") {
+
+                u <- runif(nControl)
+                controlTimes <- (1/input$WeibullScale)*(-log(u))^(1/input$WeibullShape)
+
+
+                if (runif(1) > input$P_S){
+                  #Curves do not separate
+                  sampledbigT <- 0
+                  sampledTrtHazard <- input$WeibullScale
+                } else {
+                  if (runif(1) > input$P_DTE){
+                    #Curves separate with no delay
+                    HRSample <- sampleFit(HRFit(), n = 1)
+                    sampledTrtHazard <- input$WeibullScale*(HRSample[,input$HRDist])^(1/input$WeibullShape)
+                    sampledbigT <- 0
+                  } else{
+                    #Curves separate with a delay
+                    HRSample <- sampleFit(HRFit(), n = 1)
+                    bigTSample <- sampleFit(TFit(), n = 1)
+                    sampledbigT <- bigTSample[,input$TDist]
+                    sampledTrtHazard <- input$WeibullScale*(HRSample[,input$HRDist])^(1/input$WeibullShape)
+                  }
+                }
+
+
+                CP <- exp(-(input$WeibullScale*sampledbigT)^input$WeibullShape)
+                u <- runif(nTreatment)
+
+                treatmentTimes <- ifelse(u > CP, (1/input$WeibullScale)*(-log(u))^(1/input$WeibullShape),
+                                         (1/sampledTrtHazard)*(-log(u)+(sampledTrtHazard*sampledbigT)^input$WeibullShape-(input$WeibullScale*sampledbigT)^input$WeibullShape)^(1/input$WeibullShape))
+
+                dataCombined <- data.frame(time = c(controlTimes, treatmentTimes), group = c(rep("Control", nControl), rep("Treatment", nTreatment)))
+
+                n_total <- nControl + nTreatment
+
+                if (input$rec_method=="power"){
+
+                  dataCombined$recTime <- input$rec_period * stats::runif(n_total)^(1/input$rec_power)
+
+                  dataCombined$pseudoTime <- dataCombined$time + dataCombined$recTime
+                }
+
+                if (input$rec_method=="PWC"){
+                  rec_rate <- as.numeric(unlist(strsplit(input$rec_rate, ",")))
+                  rec_duration <- as.numeric(unlist(strsplit(input$rec_duration, ",")))
+                  if(any(rec_rate<0)){stop("rec_rate should be non-negative")}
+                  if(length(rec_rate)==1){#simple case with only one rate
+                    rec<-cumsum(stats::rexp(n=n_total,rate=rec_rate))
+                  }else{#piecewise
+                    if(length(rec_duration)!=length(rec_rate)){stop("Lengths of rec_duration and rec_rate should match")}
+                    n_periods<-length(rec_duration)
+                    df<-data.frame(rate=rec_rate,
+                                   duration=rec_duration,
+                                   period=1:n_periods,
+                                   finish=cumsum(rec_duration),
+                                   lambda=rec_duration*rec_rate,
+                                   origin=c(0,cumsum(rec_duration)[-n_periods]))
+                    print(df)
+                    df$N<-sapply(df$lambda,function(x){stats::rpois(n=1,lambda = x)})
+                    print(df)
+                    if (sum(df$N)==0){
+                      if (df$rate[n_periods]==0) stop("Please specify positive rec_rate for the last period; otherwise enrollment cannot finish.")
+                      rec<-c(cumsum(stats::rexp(n_total,rate=df$rate[n_periods]))+df$finish[n_periods])
+                    }else{
+                      rec<-unlist(apply(df,1,function(x){sort(stats::runif(n=x[["N"]],min=x[["origin"]],max=x[["finish"]]))}))
+                      print(rec)
+                      if (length(rec) >= n_total){rec<-rec[1:n_total]} # if n already achieved, return first n observations
+                      # stop with error message if enrollment has not finished but enrollment rate for last period is less or equal with 0
+                      else{if (df$rate[n_periods]==0){stop("Please specify positive rec_rate for the last period; otherwise enrollment cannot finish.")}
+                        # Otherwise, return inter-arrival exponential times
+                        rec<-c(rec, cumsum(stats::rexp(n_total-nrow(rec),rate=df$rate[n_periods]))+df$finish[n_periods])
+                      }
+                    }
+
+                    dataCombined$recTime <- rec
+
+                  }
+
+                  dataCombined$pseudoTime <- dataCombined$time + dataCombined$recTime
+                }
+
+
+                #order the pseudo times
+                dataCombined <- dataCombined[order(dataCombined$pseudoTime),]
+
+                #remove any observation which will not be recruited by the censoring time
+                dataCombined <- dataCombined %>%
+                  filter(recTime <= input$chosenLength)
+
+                #censor observations
+                dataCombined$status <- dataCombined$pseudoTime < input$chosenLength
+
+                #redefine survival times
+                dataCombined$survivalTime <- ifelse(dataCombined$status==TRUE, dataCombined$time, input$chosenLength - dataCombined$recTime)
+
+                eventVec[i] <- sum(dataCombined$status==1)
+
+                coxmodel <- coxph(Surv(survivalTime, status)~group, data = dataCombined)
+                deltad <- as.numeric(exp(coef(coxmodel)))
+
+                Signif <- 0
+
+                if (input$analysisType=="LRT"){
+                  test <- survdiff(Surv(survivalTime, status)~group, data = dataCombined)
+                  Signif <- (test$chisq > qchisq(1-input$alphaLevel, 1) & deltad<1)
+                } else if (input$analysisType=="WLRT"){
+                  test <- nph::logrank.test(dataCombined$survivalTime, dataCombined$status, dataCombined$group, rho = rho, gamma = gamma)
+                  Signif <- (test$test$Chisq > qchisq(1-input$alphaLevel, 1) & deltad<1)
+                }
+
+                assVec[i] <- Signif
+
+
+              } else if (input$WeibullChoice == "Distribution") {
+
+
+                sampledS1to <- rbeta(1, input$WeibullDistS1BetaA, input$WeibullDistS1BetaB)
+                sampledDelta1 <- rbeta(1, input$WeibullDistDelta1BetaA, input$WeibullDistDelta1BetaB)
+                sampledS1toPrime <- sampledS1to - sampledDelta1
+
+                # Solve for lambda and gamma using sampled values
+                solution <- nleqslv(c(10, 1), function(params) {
+                  lambda <- params[1]
+                  k <- params[2]
+                  c(exp(-(input$WeibullDistT1 / lambda)^k) - sampledS1to,
+                    exp(-(input$WeibullDistT2 / lambda)^k) - sampledS1toPrime)
+                })
+
+                lambda <- 1 / solution$x[1]
+                gamma <- solution$x[2]
+
+
+                if (runif(1) > input$P_S){
+                  #Curves do not separate
+                  sampledbigT <- 0
+                  sampledTrtHazard <- lambda
+                } else {
+                  if (runif(1) > input$P_DTE){
+                    #Curves separate with no delay
+                    HRSample <- sampleFit(HRFit(), n = 1)
+                    sampledTrtHazard <- lambda*(HRSample[,input$HRDist])^(1/gamma)
+                    sampledbigT <- 0
+                  } else{
+                    #Curves separate with a delay
+                    HRSample <- sampleFit(HRFit(), n = 1)
+                    bigTSample <- sampleFit(TFit(), n = 1)
+                    sampledbigT <- bigTSample[,input$TDist]
+                    sampledTrtHazard <- lambda*(HRSample[,input$HRDist])^(1/gamma)
+                  }
+                }
+
+                u <- runif(nControl)
+                controlTimes <- (1/lambda)*(-log(u))^(1/gamma)
+
+                CP <- exp(-(lambda*sampledbigT)^gamma)
+                u <- runif(nTreatment)
+
+                treatmentTimes <- ifelse(u > CP, (1/lambda)*(-log(u))^(1/gamma),
+                                         (1/sampledTrtHazard)*(-log(u)+(sampledTrtHazard*sampledbigT)^gamma-(lambda*sampledbigT)^gamma)^(1/gamma))
+
+
+                dataCombined <- data.frame(time = c(controlTimes, treatmentTimes), group = c(rep("Control", nControl), rep("Treatment", nTreatment)))
+
+                n_total <- nControl + nTreatment
+
+                if (input$rec_method=="power"){
+
+                  dataCombined$recTime <- input$rec_period * stats::runif(n_total)^(1/input$rec_power)
+
+                  dataCombined$pseudoTime <- dataCombined$time + dataCombined$recTime
+                }
+
+                if (input$rec_method=="PWC"){
+                  rec_rate <- as.numeric(unlist(strsplit(input$rec_rate, ",")))
+                  rec_duration <- as.numeric(unlist(strsplit(input$rec_duration, ",")))
+                  if(any(rec_rate<0)){stop("rec_rate should be non-negative")}
+                  if(length(rec_rate)==1){#simple case with only one rate
+                    rec<-cumsum(stats::rexp(n=n_total,rate=rec_rate))
+                  }else{#piecewise
+                    if(length(rec_duration)!=length(rec_rate)){stop("Lengths of rec_duration and rec_rate should match")}
+                    n_periods<-length(rec_duration)
+                    df<-data.frame(rate=rec_rate,
+                                   duration=rec_duration,
+                                   period=1:n_periods,
+                                   finish=cumsum(rec_duration),
+                                   lambda=rec_duration*rec_rate,
+                                   origin=c(0,cumsum(rec_duration)[-n_periods]))
+                    print(df)
+                    df$N<-sapply(df$lambda,function(x){stats::rpois(n=1,lambda = x)})
+                    print(df)
+                    if (sum(df$N)==0){
+                      if (df$rate[n_periods]==0) stop("Please specify positive rec_rate for the last period; otherwise enrollment cannot finish.")
+                      rec<-c(cumsum(stats::rexp(n_total,rate=df$rate[n_periods]))+df$finish[n_periods])
+                    }else{
+                      rec<-unlist(apply(df,1,function(x){sort(stats::runif(n=x[["N"]],min=x[["origin"]],max=x[["finish"]]))}))
+                      print(rec)
+                      if (length(rec) >= n_total){rec<-rec[1:n_total]} # if n already achieved, return first n observations
+                      # stop with error message if enrollment has not finished but enrollment rate for last period is less or equal with 0
+                      else{if (df$rate[n_periods]==0){stop("Please specify positive rec_rate for the last period; otherwise enrollment cannot finish.")}
+                        # Otherwise, return inter-arrival exponential times
+                        rec<-c(rec, cumsum(stats::rexp(n_total-nrow(rec),rate=df$rate[n_periods]))+df$finish[n_periods])
+                      }
+                    }
+
+                    dataCombined$recTime <- rec
+
+                  }
+
+                  dataCombined$pseudoTime <- dataCombined$time + dataCombined$recTime
+                }
+
+
+                #order the pseudo times
+                dataCombined <- dataCombined[order(dataCombined$pseudoTime),]
+
+                #remove any observation which will not be recruited by the censoring time
+                dataCombined <- dataCombined %>%
+                  filter(recTime <= input$chosenLength)
+
+                #censor observations
+                dataCombined$status <- dataCombined$pseudoTime < input$chosenLength
+
+                #redefine survival times
+                dataCombined$survivalTime <- ifelse(dataCombined$status==TRUE, dataCombined$time, input$chosenLength - dataCombined$recTime)
+
+                eventVec[i] <- sum(dataCombined$status==1)
+
+                coxmodel <- coxph(Surv(survivalTime, status)~group, data = dataCombined)
+                deltad <- as.numeric(exp(coef(coxmodel)))
+
+                Signif <- 0
+
+                if (input$analysisType=="LRT"){
+                  test <- survdiff(Surv(survivalTime, status)~group, data = dataCombined)
+                  Signif <- (test$chisq > qchisq(1-input$alphaLevel, 1) & deltad<1)
+                } else if (input$analysisType=="WLRT"){
+                  test <- nph::logrank.test(dataCombined$survivalTime, dataCombined$status, dataCombined$group, rho = rho, gamma = gamma)
+                  Signif <- (test$test$Chisq > qchisq(1-input$alphaLevel, 1) & deltad<1)
+                }
+
+                assVec[i] <- Signif
+
+              }
+
+            }
 
           }
 
+          AssVec <- mean(assVec)
+          EventVec <- mean(eventVec)
+
+          return(list(AssVec = AssVec, EventVec = EventVec))
+
         }
 
-        overallAssVec[j] <- mean(assVec)
 
-      }
+        nTotal <- seq(10, input$numofpatients, length = 10)
+        nControlVec <- round(nTotal*((input$ControlRatio)/(input$ControlRatio+input$TreatmentRatio)))
+        nTreatmentVec <- round(nTotal*((input$TreatmentRatio)/(input$ControlRatio+input$TreatmentRatio)))
 
+        pboptions(type="shiny", title = "Calculating assurance")
 
-      asssmooth <- loess(overallAssVec~nTotal)
+        calcassvec <- pbmapply(assFunc, nControlVec, nTreatmentVec)
 
-     return(list(asssmooth = asssmooth, nTotal = nTotal))
+        print(calcassvec)
+
+        overallAssVec <- unlist(calcassvec[1,])
+
+        LBAss <- overallAssVec-1.96*sqrt(overallAssVec*(1-overallAssVec)/nSamples)
+
+        UBAss <- overallAssVec+1.96*sqrt(overallAssVec*(1-overallAssVec)/nSamples)
+
+        LBSmooth <- loess(LBAss~nTotal)
+
+        UBSmooth <- loess(UBAss~nTotal)
+
+        asssmooth <- loess(overallAssVec~nTotal)
+
+        return(list(asssmooth = asssmooth, nTotal = nTotal, LBSmooth = LBSmooth, UBSmooth = UBSmooth))
 
     })
 
@@ -1726,11 +1753,12 @@ ui <- fluidPage(
 
     output$assurancePlot <- renderPlot({
 
-      #calculateAssurance()
-
       # #Plot the assurance calculated in the function
       assurancenormaldf <- data.frame(x = calculateAssurance()$nTotal, y = predict(calculateAssurance()$asssmooth))
-      plot(assurancenormaldf)
+      plot(assurancenormaldf, ylim = c(0,1), type = "l", ylab = "Assurance", xlab = "Total Number of Patients")
+      lines(calculateAssurance()$nTotal, predict(calculateAssurance()$LBSmooth))
+      lines(calculateAssurance()$nTotal, predict(calculateAssurance()$UBSmooth))
+
       # assurancenormalLBdf <- data.frame(x = calculateAssurance()$samplesizevec, y = predict(calculateAssurance()$LBasssmooth))
       # assurancenormalUBdf <- data.frame(x = calculateAssurance()$samplesizevec, y = predict(calculateAssurance()$UBasssmooth))
       # p1 <- ggplot() + geom_line(data = assurancenormaldf, aes(x = x, y = y, colour="Assurance"), linetype="solid") + xlab("Total number of patients") +
@@ -1748,39 +1776,12 @@ ui <- fluidPage(
     })
 
 
-    # output$AHRPlot <- renderPlot({
-    #
-    #   AHRdf <- data.frame(x = calculateAssurance()$samplesizevec, y = predict(calculateAssurance()$AHRsmooth))
-    #   LBdf <- data.frame(x = calculateAssurance()$samplesizevec, y = predict(calculateAssurance()$LBsmooth))
-    #   UBdf <- data.frame(x = calculateAssurance()$samplesizevec, y = predict(calculateAssurance()$UBsmooth))
-    #
-    #   p1 <- ggplot() + geom_line(data = AHRdf, aes(x = x, y = y, colour="Average HR"), linetype="solid") + xlab("Number of patients") +
-    #     ylab("Average hazard ratio") + geom_line(data = LBdf, aes(x=x, y=y, colour = "CI"), linetype="dashed") +
-    #     geom_line(data = UBdf, aes(x=x, y=y, colour = "CI"), linetype="dashed") +
-    #     theme(
-    #       legend.position = c(.95, .95),
-    #       legend.justification = c("right", "top"),
-    #       legend.box.just = "right",
-    #       legend.margin = margin(6, 6, 6, 6)) + scale_color_manual(name=NULL,
-    #                                                                breaks=c('Average HR', 'CI'),
-    #                                                                values=c('Average HR'='red', 'CI' = 'black'))
-    #   print(p1)
-    #
-    # })
-
 
     # output$assuranceText  <- renderUI({
     #   #Show how many events are seen given the set up
     #   str1 <- paste0("The ","<font color=\"#0000FF\"><b>blue</b></font>", " line is the proportion of trials that give rise to a 'successful' outcome.")
     #   str2 <- paste0("On average, ", round(calculateAssurance()$eventsseen), " events are seen when ", input$numofpatients, " patients are enroled for ", input$chosenLength, " months.")
     #   HTML(paste(str1, str2, sep = '<br/>'))
-    # })
-
-    # output$AHRFeedback  <- renderUI({
-    #   #Show how many events are seen given the set up
-    #   x <-  round(calculateAssurance()$eventsseen)
-    #   str1 <- paste0("The ","<font color=\"##FF0000\"><b>red</b></font>", " line is the average estimated hazard ratio.")
-    #   HTML(paste(str1, sep = '<br/>'))
     # })
 
 
