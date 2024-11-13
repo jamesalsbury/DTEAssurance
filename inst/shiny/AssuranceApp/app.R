@@ -38,7 +38,7 @@ ui <- fluidPage(
                        selectInput("ExpChoice", "Choice", choices = c("Single Value", "Distribution", "rBEST"), selected = "Single Value"),
                        conditionalPanel(
                          condition = "input.ExpChoice == 'Single Value'",
-                         numericInput("ExpRate", label =  HTML(paste0("rate (\u03bb)")), value = 0.08, min=0)
+                         numericInput("ExpRate", label =  HTML(paste0("Rate (\u03bb",tags$sub("c"), ")")), value = 0.08, min=0)
                        ),
                        conditionalPanel(
                          condition = "input.ExpChoice == 'Distribution'",
@@ -76,11 +76,11 @@ ui <- fluidPage(
                          condition = "input.WeibullChoice == 'Single Value'",
                          fluidRow(
                            column(6,
-                                  numericInput("WeibullScale", label =  HTML(paste0("scale (\u03bb",tags$sub("c"), ")")), value = 0.08, min=0)
+                                  numericInput("WeibullScale", label =  HTML(paste0("Scale (\u03bb",tags$sub("c"), ")")), value = 0.08, min=0)
 
                            ),
                            column(6,
-                                  numericInput("WeibullShape", label =  HTML(paste0("shape (\u03b3",tags$sub("c"), ")")), value = 1, min=0)
+                                  numericInput("WeibullShape", label =  HTML(paste0("Shape (\u03b3",tags$sub("c"), ")")), value = 1, min=0)
 
                            )
                          )
@@ -352,40 +352,55 @@ ui <- fluidPage(
                    ),
                    mainPanel = mainPanel(
                      plotOutput("assurancePlot"),
-                     htmlOutput("assuranceText")
+                     htmlOutput("assuranceText"),
+                     plotOutput("eventPlot")
                    )
                  ),
 
         ),
 
         #Help UI ---------------------------------
-        #Need to say what files can be uploaded in the control sample
-        #Link to SHELF for the elicitation
         tabPanel("Help",
-                 HTML("<p>This app implements the method as outlined in this <a href='https://onlinelibrary.wiley.com/doi/full/10.1002/sim.10136'>paper</a>. For every tab, there is a brief summary below, for any other questions, comments or
-                  feedback, please contact <a href='mailto:jsalsbury1@sheffield.ac.uk'>James Salsbury</a>.</p>"),
-                 HTML("<p><u>Control</u></p>"),
-                 HTML("<p>Here, the parameters for the control survival are specified, the parameterisation for the control survival curve is:</p>"),
-                 withMathJax(paste0(" $$S_c(t) = \\text{exp}\\{-(\\lambda_ct)^{\\gamma_c}\\}$$")),
-                 HTML("<p>The control tab also allows an upload of an Excel file containing survival data for the control sample.
-                  The Excel file needs to have two columns: the first column containing the survival time, and the second column containing the event status (1 for dead, 0 for alive).</p>"),
-                 HTML("<p><u>Eliciting the two parameters: T and post-delay HR</u></p>"),
-                 HTML("<p>These two tabs elicit beliefs from the user about two quantities: the length of delay, T, and the post-delay HR. The parameterisation for the treatment survival curve is:</p>"),
-                 withMathJax(paste0(" $$S_t(t) = \\text{exp}\\{-(\\lambda_ct)^{\\gamma_c}\\}, t \\leq T$$")),
-                 withMathJax(paste0(" $$S_t(t) = \\text{exp}\\{-(\\lambda_cT)^{\\gamma_c}-\\lambda_t^{\\gamma_t}(t^{\\gamma+t}-T^{\\gamma_t})\\}, t > T$$")),
-                 HTML("<p>The elicitation technique is based on SHELF, more guidance can be found <a href='https://shelf.sites.sheffield.ac.uk/'>here.</a></p>"),
-                 HTML("<p>There is also an option to include some mass at T = 0 and HR = 1.</p>"),
+                 HTML("<p><u>Introduction</u></p>"),
+                 HTML("<p>This app implements the method as outlined in the following <a href='https://onlinelibrary.wiley.com/doi/full/10.1002/sim.10136'>paper</a>. For each tab, a brief summary is provided below. For further questions, comments, or feedback, please contact <a href='mailto:jsalsbury1@sheffield.ac.uk'>James Salsbury</a>.</p>"),
+
+                 HTML("<p><u>Control Group Parameterization</u></p>"),
+                 HTML("<p>This section specifies the parameters for the control group's survival distribution, which can be modeled using either an Exponential or a Weibull distribution.</p>"),
+
+                 HTML("<p><b>Exponential Distribution:</b></p>"),
+                 HTML("<p>The parameterization for the Exponential distribution is:</p>"),
+                 withMathJax("$$S_c(t) = \\exp\\{-\\lambda_c t\\}$$"),
+
+                 HTML("<p><b>Weibull Distribution:</b></p>"),
+                 HTML("<p>The parameterization for the Weibull distribution is:</p>"),
+                 withMathJax("$$S_c(t) = \\exp\\{-(\\lambda_c t)^{\\gamma_c}\\}$$"),
+
+                 HTML("<p>In both cases, users have the option to directly input parameter values or account for uncertainty by specifying probability distributions for survival probabilities.</p>"),
+
+                 HTML("<p><b>Exponential Distribution Parameters:</b></p>"),
+                 HTML("<p>For the Exponential distribution, specify a single time point, \\( t_1 \\). You are asked to quantify your uncertainty regarding the survival probability at \\( t_1 \\) using a \\( Beta(a, b) \\) distribution.</p>"),
+
+                 HTML("<p><b>Weibull Distribution Parameters:</b></p>"),
+                 HTML("<p>For the Weibull distribution, specify two time points, \\( t_1 \\) and \\( t_2 \\). First, quantify your uncertainty regarding the survival probability at \\( t_1 \\) using a \\( Beta(a, b) \\) distribution.</p>"),
+                 HTML("<p>Next, quantify the uncertainty in the difference between survival probabilities at the two time points as:</p>"),
+                 withMathJax("$$S(t_1) - S(t_2) \\sim Beta(c, d)$$"),
+
+                 HTML("<p><u>Conditional Probabilities</u></p>"),
+                 HTML("<p>In this section, there are two probabilities to specify. The first is the probability that the survival curves will separate, indicating that the treatment will show some benefit over the control. The second is the conditional probability that, given the survival curves separate, the separation occurs with a delay. In other words, there may be a period where the control and treatment curves follow a similar trajectory before diverging.</p>"),
+
+                 HTML("<p><u>Eliciting the Length of Delay and Post-Delay Hazard Ratio</u></p>"),
+                 HTML("<p>These two tabs are used to elicit the length of delay (assuming a delay in treatment effect) and the post-delay hazard ratio (assuming the treatment eventually has an effect). The quantile method, as outlined in the <a href='https://shelf.sites.sheffield.ac.uk/'>SHELF</a> framework, is used. You specify limits, values, and cumulative probabilities, and the app identifies the best-fitting distribution based on your inputs.</p>"),
+
                  HTML("<p><u>Feedback</u></p>"),
-                 HTML("<p>The plot shows the control survival curve (from the control tab), along with the median elicited treatment line (calculated from the previous two tabs).
-                  There are also three optional quantities to view: the first is the median survival time for both groups, the second is a 95% confidence interval for T and the
-                  third shows a 80% confidence interval for the treatment curve. When the median survival time is added to the plot, a second plot is shown below. Initially, this plot is a histogram for the
-                  treatment median survival time. However, the user is able to change this median to any other quantile of interest.</p>"),
-                 HTML("<p><u>Calculating assurance</u></p>"),
-                 HTML("<p>This tab allows the user to calculate assurance, given the control parameters and elicited prior distributions  for T and post-delay HR. Some additional questions
-                  about the trial are found on the left-hand panel. The app assumes uniform recruitment and uses a log-rank test for analysis of the simulated data. Depending on your processor speed, this
-                  calculation can take between 30-40 seconds. Once the calculation is complete, the app shows two plots. The top plot shows assurance (along with standard error curves) and target effect curve - which
-                  shows the proportion of trials in which the target effect was observed. The bottom plot shows the average hazard ratio observed and the corresponding confidence intervals for this. </p>")
-        ),
+                 HTML("<p>This section displays the median survival curve for the control group, along with the median elicited treatment curve (calculated from the previous tabs). Additionally, it includes three optional quantities: (1) the median survival time for both groups, (2) a 95% confidence interval for \\( T \\), and (3) a 95% confidence interval for the treatment curve. If uncertainty was provided for the control curve, a 95% confidence interval for this can also be viewed.</p>"),
+
+                 HTML("<p><u>Recruitment</u></p>"),
+                 HTML("<p>This tab allows users to specify the recruitment schedule for the prospective trial. Two options are available: 'power' or 'piecewise constant' recruitment. The plot shows the total number of patients recruited over time and, if applicable, the breakdown of control versus treatment group recruitment.</p>"),
+
+                 HTML("<p><u>Calculating Assurance</u></p>"),
+                 HTML("<p>This tab enables the calculation of assurance based on all previous inputs. The app simulates \\( N \\) trials using a Fleming-Harrington log-rank test for analysis. Once the simulations are complete, an assurance plot (similar to a power curve) is displayed, showing the proportion of successful trials for different sample sizes.</p>")
+        )
+
 
 
       ), style='width: 1200px; height: 600px',
@@ -1153,49 +1168,68 @@ ui <- fluidPage(
 
                 if (input$rec_method=="power"){
 
-                  dataCombined$recTime <- input$rec_period * stats::runif(n_total)^(1/input$rec_power)
+                  recTimes <- input$rec_period * stats::runif(input$numofpatients)^(1/input$rec_power)
+
+                  dataCombined$recTime <- sample(sort(recTimes)[1:n_total])
 
                   dataCombined$pseudoTime <- dataCombined$time + dataCombined$recTime
                 }
 
-                if (input$rec_method=="PWC"){
+                if (input$rec_method == "PWC") {
+                  # Parse recruitment rate and duration inputs
                   rec_rate <- as.numeric(unlist(strsplit(input$rec_rate, ",")))
                   rec_duration <- as.numeric(unlist(strsplit(input$rec_duration, ",")))
-                  if(any(rec_rate<0)){stop("rec_rate should be non-negative")}
-                  if(length(rec_rate)==1){#simple case with only one rate
-                    rec<-cumsum(stats::rexp(n=n_total,rate=rec_rate))
-                  }else{#piecewise
-                    if(length(rec_duration)!=length(rec_rate)){stop("Lengths of rec_duration and rec_rate should match")}
-                    n_periods<-length(rec_duration)
-                    df<-data.frame(rate=rec_rate,
-                                   duration=rec_duration,
-                                   period=1:n_periods,
-                                   finish=cumsum(rec_duration),
-                                   lambda=rec_duration*rec_rate,
-                                   origin=c(0,cumsum(rec_duration)[-n_periods]))
-                    print(df)
-                    df$N<-sapply(df$lambda,function(x){stats::rpois(n=1,lambda = x)})
-                    print(df)
-                    if (sum(df$N)==0){
-                      if (df$rate[n_periods]==0) stop("Please specify positive rec_rate for the last period; otherwise enrollment cannot finish.")
-                      rec<-c(cumsum(stats::rexp(n_total,rate=df$rate[n_periods]))+df$finish[n_periods])
-                    }else{
-                      rec<-unlist(apply(df,1,function(x){sort(stats::runif(n=x[["N"]],min=x[["origin"]],max=x[["finish"]]))}))
-                      print(rec)
-                      if (length(rec) >= n_total){rec<-rec[1:n_total]} # if n already achieved, return first n observations
-                      # stop with error message if enrollment has not finished but enrollment rate for last period is less or equal with 0
-                      else{if (df$rate[n_periods]==0){stop("Please specify positive rec_rate for the last period; otherwise enrollment cannot finish.")}
-                        # Otherwise, return inter-arrival exponential times
-                        rec<-c(rec, cumsum(stats::rexp(n_total-nrow(rec),rate=df$rate[n_periods]))+df$finish[n_periods])
+
+                  # Ensure valid inputs
+                  if (any(rec_rate < 0)) stop("rec_rate should be non-negative")
+                  if (length(rec_rate) != length(rec_duration)) stop("Lengths of rec_rate and rec_duration should match")
+
+                  n_periods <- length(rec_duration)
+
+                  if (length(rec_rate) == 1) { # Simple case with only one rate
+                    rec <- cumsum(stats::rexp(n = n_total, rate = rec_rate))
+                  } else { # Piecewise recruitment
+                    # Create a data frame for the piecewise periods
+                    df <- data.frame(
+                      rate = rec_rate,
+                      duration = rec_duration,
+                      period = 1:n_periods,
+                      finish = cumsum(rec_duration),
+                      lambda = rec_duration * rec_rate,
+                      origin = c(0, cumsum(rec_duration)[-n_periods])
+                    )
+
+                    # Generate the number of recruits in each period using Poisson distribution
+                    df$N <- sapply(df$lambda, function(x) stats::rpois(n = 1, lambda = x))
+
+                    # Check if any recruits were generated
+                    if (sum(df$N) == 0) {
+                      if (df$rate[n_periods] == 0) stop("Please specify positive rec_rate for the last period; otherwise, enrollment cannot finish.")
+                      rec <- cumsum(stats::rexp(n = n_total, rate = df$rate[n_periods])) + df$finish[n_periods]
+                    } else {
+                      # Generate recruitment times for each period
+                      rec <- unlist(apply(df, 1, function(x) {
+                        sort(stats::runif(n = x[["N"]], min = x[["origin"]], max = x[["finish"]]))
+                      }))
+
+                      # Check if we have enough recruits
+                      if (length(rec) >= n_total) {
+                        rec <- rec[1:n_total]
+                      } else {
+                        # Ensure enrollment completion if needed
+                        if (df$rate[n_periods] == 0) stop("Please specify positive rec_rate for the last period; otherwise, enrollment cannot finish.")
+
+                        # Generate additional recruitment times if needed
+                        rec <- c(rec, cumsum(stats::rexp(n_total - length(rec), rate = df$rate[n_periods])) + df$finish[n_periods])
                       }
                     }
-
-                    dataCombined$recTime <- rec
-
                   }
 
+                  # Assign recruitment times to the data frame
+                  dataCombined$recTime <- rec
                   dataCombined$pseudoTime <- dataCombined$time + dataCombined$recTime
                 }
+
 
 
                 #order the pseudo times
@@ -1220,10 +1254,20 @@ ui <- fluidPage(
 
                 if (input$analysisType=="LRT"){
                   test <- survdiff(Surv(survivalTime, status)~group, data = dataCombined)
-                  Signif <- (test$chisq > qchisq(1-input$alphaLevel, 1) & deltad<1)
+                  if (input$test_type=="one.sided"){
+                    Signif <- (test$chisq > qchisq(1-input$alphaLevel, 1) & deltad<1)
+                  } else {
+                    Signif <- test$chisq > qchisq(1-input$alphaLevel, 1)
+                  }
+
                 } else if (input$analysisType=="WLRT"){
                   test <- nph::logrank.test(dataCombined$survivalTime, dataCombined$status, dataCombined$group, rho = rho, gamma = gamma)
-                  Signif <- (test$test$Chisq > qchisq(1-input$alphaLevel, 1) & deltad<1)
+                  if (input$test_type=="one.sided"){
+                    Signif <- (test$test$Chisq > qchisq(1-input$alphaLevel, 1) & deltad<1)
+                  } else{
+                    Signif <- test$test$Chisq > qchisq(1-input$alphaLevel, 1)
+                  }
+
                 }
 
                 assVec[i] <- Signif
@@ -1263,47 +1307,65 @@ ui <- fluidPage(
 
                 if (input$rec_method=="power"){
 
-                  dataCombined$recTime <- input$rec_period * stats::runif(n_total)^(1/input$rec_power)
+                  recTimes <- input$rec_period * stats::runif(input$numofpatients)^(1/input$rec_power)
+
+                  dataCombined$recTime <- sample(sort(recTimes)[1:n_total])
 
                   dataCombined$pseudoTime <- dataCombined$time + dataCombined$recTime
                 }
 
-                if (input$rec_method=="PWC"){
+                if (input$rec_method == "PWC") {
+                  # Parse recruitment rate and duration inputs
                   rec_rate <- as.numeric(unlist(strsplit(input$rec_rate, ",")))
                   rec_duration <- as.numeric(unlist(strsplit(input$rec_duration, ",")))
-                  if(any(rec_rate<0)){stop("rec_rate should be non-negative")}
-                  if(length(rec_rate)==1){#simple case with only one rate
-                    rec<-cumsum(stats::rexp(n=n_total,rate=rec_rate))
-                  }else{#piecewise
-                    if(length(rec_duration)!=length(rec_rate)){stop("Lengths of rec_duration and rec_rate should match")}
-                    n_periods<-length(rec_duration)
-                    df<-data.frame(rate=rec_rate,
-                                   duration=rec_duration,
-                                   period=1:n_periods,
-                                   finish=cumsum(rec_duration),
-                                   lambda=rec_duration*rec_rate,
-                                   origin=c(0,cumsum(rec_duration)[-n_periods]))
-                    print(df)
-                    df$N<-sapply(df$lambda,function(x){stats::rpois(n=1,lambda = x)})
-                    print(df)
-                    if (sum(df$N)==0){
-                      if (df$rate[n_periods]==0) stop("Please specify positive rec_rate for the last period; otherwise enrollment cannot finish.")
-                      rec<-c(cumsum(stats::rexp(n_total,rate=df$rate[n_periods]))+df$finish[n_periods])
-                    }else{
-                      rec<-unlist(apply(df,1,function(x){sort(stats::runif(n=x[["N"]],min=x[["origin"]],max=x[["finish"]]))}))
-                      print(rec)
-                      if (length(rec) >= n_total){rec<-rec[1:n_total]} # if n already achieved, return first n observations
-                      # stop with error message if enrollment has not finished but enrollment rate for last period is less or equal with 0
-                      else{if (df$rate[n_periods]==0){stop("Please specify positive rec_rate for the last period; otherwise enrollment cannot finish.")}
-                        # Otherwise, return inter-arrival exponential times
-                        rec<-c(rec, cumsum(stats::rexp(n_total-nrow(rec),rate=df$rate[n_periods]))+df$finish[n_periods])
+
+                  # Ensure valid inputs
+                  if (any(rec_rate < 0)) stop("rec_rate should be non-negative")
+                  if (length(rec_rate) != length(rec_duration)) stop("Lengths of rec_rate and rec_duration should match")
+
+                  n_periods <- length(rec_duration)
+
+                  if (length(rec_rate) == 1) { # Simple case with only one rate
+                    rec <- cumsum(stats::rexp(n = n_total, rate = rec_rate))
+                  } else { # Piecewise recruitment
+                    # Create a data frame for the piecewise periods
+                    df <- data.frame(
+                      rate = rec_rate,
+                      duration = rec_duration,
+                      period = 1:n_periods,
+                      finish = cumsum(rec_duration),
+                      lambda = rec_duration * rec_rate,
+                      origin = c(0, cumsum(rec_duration)[-n_periods])
+                    )
+
+                    # Generate the number of recruits in each period using Poisson distribution
+                    df$N <- sapply(df$lambda, function(x) stats::rpois(n = 1, lambda = x))
+
+                    # Check if any recruits were generated
+                    if (sum(df$N) == 0) {
+                      if (df$rate[n_periods] == 0) stop("Please specify positive rec_rate for the last period; otherwise, enrollment cannot finish.")
+                      rec <- cumsum(stats::rexp(n = n_total, rate = df$rate[n_periods])) + df$finish[n_periods]
+                    } else {
+                      # Generate recruitment times for each period
+                      rec <- unlist(apply(df, 1, function(x) {
+                        sort(stats::runif(n = x[["N"]], min = x[["origin"]], max = x[["finish"]]))
+                      }))
+
+                      # Check if we have enough recruits
+                      if (length(rec) >= n_total) {
+                        rec <- rec[1:n_total]
+                      } else {
+                        # Ensure enrollment completion if needed
+                        if (df$rate[n_periods] == 0) stop("Please specify positive rec_rate for the last period; otherwise, enrollment cannot finish.")
+
+                        # Generate additional recruitment times if needed
+                        rec <- c(rec, cumsum(stats::rexp(n_total - length(rec), rate = df$rate[n_periods])) + df$finish[n_periods])
                       }
                     }
-
-                    dataCombined$recTime <- rec
-
                   }
 
+                  # Assign recruitment times to the data frame
+                  dataCombined$recTime <- rec
                   dataCombined$pseudoTime <- dataCombined$time + dataCombined$recTime
                 }
 
@@ -1330,10 +1392,20 @@ ui <- fluidPage(
 
                 if (input$analysisType=="LRT"){
                   test <- survdiff(Surv(survivalTime, status)~group, data = dataCombined)
-                  Signif <- (test$chisq > qchisq(1-input$alphaLevel, 1) & deltad<1)
+                  if (input$test_type=="one.sided"){
+                    Signif <- (test$chisq > qchisq(1-input$alphaLevel, 1) & deltad<1)
+                  } else {
+                    Signif <- test$chisq > qchisq(1-input$alphaLevel, 1)
+                  }
+
                 } else if (input$analysisType=="WLRT"){
                   test <- nph::logrank.test(dataCombined$survivalTime, dataCombined$status, dataCombined$group, rho = rho, gamma = gamma)
-                  Signif <- (test$test$Chisq > qchisq(1-input$alphaLevel, 1) & deltad<1)
+                  if (input$test_type=="one.sided"){
+                    Signif <- (test$test$Chisq > qchisq(1-input$alphaLevel, 1) & deltad<1)
+                  } else{
+                    Signif <- test$test$Chisq > qchisq(1-input$alphaLevel, 1)
+                  }
+
                 }
 
                 assVec[i] <- Signif
@@ -1380,47 +1452,65 @@ ui <- fluidPage(
 
                 if (input$rec_method=="power"){
 
-                  dataCombined$recTime <- input$rec_period * stats::runif(n_total)^(1/input$rec_power)
+                  recTimes <- input$rec_period * stats::runif(input$numofpatients)^(1/input$rec_power)
+
+                  dataCombined$recTime <- sample(sort(recTimes)[1:n_total])
 
                   dataCombined$pseudoTime <- dataCombined$time + dataCombined$recTime
                 }
 
-                if (input$rec_method=="PWC"){
+                if (input$rec_method == "PWC") {
+                  # Parse recruitment rate and duration inputs
                   rec_rate <- as.numeric(unlist(strsplit(input$rec_rate, ",")))
                   rec_duration <- as.numeric(unlist(strsplit(input$rec_duration, ",")))
-                  if(any(rec_rate<0)){stop("rec_rate should be non-negative")}
-                  if(length(rec_rate)==1){#simple case with only one rate
-                    rec<-cumsum(stats::rexp(n=n_total,rate=rec_rate))
-                  }else{#piecewise
-                    if(length(rec_duration)!=length(rec_rate)){stop("Lengths of rec_duration and rec_rate should match")}
-                    n_periods<-length(rec_duration)
-                    df<-data.frame(rate=rec_rate,
-                                   duration=rec_duration,
-                                   period=1:n_periods,
-                                   finish=cumsum(rec_duration),
-                                   lambda=rec_duration*rec_rate,
-                                   origin=c(0,cumsum(rec_duration)[-n_periods]))
-                    print(df)
-                    df$N<-sapply(df$lambda,function(x){stats::rpois(n=1,lambda = x)})
-                    print(df)
-                    if (sum(df$N)==0){
-                      if (df$rate[n_periods]==0) stop("Please specify positive rec_rate for the last period; otherwise enrollment cannot finish.")
-                      rec<-c(cumsum(stats::rexp(n_total,rate=df$rate[n_periods]))+df$finish[n_periods])
-                    }else{
-                      rec<-unlist(apply(df,1,function(x){sort(stats::runif(n=x[["N"]],min=x[["origin"]],max=x[["finish"]]))}))
-                      print(rec)
-                      if (length(rec) >= n_total){rec<-rec[1:n_total]} # if n already achieved, return first n observations
-                      # stop with error message if enrollment has not finished but enrollment rate for last period is less or equal with 0
-                      else{if (df$rate[n_periods]==0){stop("Please specify positive rec_rate for the last period; otherwise enrollment cannot finish.")}
-                        # Otherwise, return inter-arrival exponential times
-                        rec<-c(rec, cumsum(stats::rexp(n_total-nrow(rec),rate=df$rate[n_periods]))+df$finish[n_periods])
+
+                  # Ensure valid inputs
+                  if (any(rec_rate < 0)) stop("rec_rate should be non-negative")
+                  if (length(rec_rate) != length(rec_duration)) stop("Lengths of rec_rate and rec_duration should match")
+
+                  n_periods <- length(rec_duration)
+
+                  if (length(rec_rate) == 1) { # Simple case with only one rate
+                    rec <- cumsum(stats::rexp(n = n_total, rate = rec_rate))
+                  } else { # Piecewise recruitment
+                    # Create a data frame for the piecewise periods
+                    df <- data.frame(
+                      rate = rec_rate,
+                      duration = rec_duration,
+                      period = 1:n_periods,
+                      finish = cumsum(rec_duration),
+                      lambda = rec_duration * rec_rate,
+                      origin = c(0, cumsum(rec_duration)[-n_periods])
+                    )
+
+                    # Generate the number of recruits in each period using Poisson distribution
+                    df$N <- sapply(df$lambda, function(x) stats::rpois(n = 1, lambda = x))
+
+                    # Check if any recruits were generated
+                    if (sum(df$N) == 0) {
+                      if (df$rate[n_periods] == 0) stop("Please specify positive rec_rate for the last period; otherwise, enrollment cannot finish.")
+                      rec <- cumsum(stats::rexp(n = n_total, rate = df$rate[n_periods])) + df$finish[n_periods]
+                    } else {
+                      # Generate recruitment times for each period
+                      rec <- unlist(apply(df, 1, function(x) {
+                        sort(stats::runif(n = x[["N"]], min = x[["origin"]], max = x[["finish"]]))
+                      }))
+
+                      # Check if we have enough recruits
+                      if (length(rec) >= n_total) {
+                        rec <- rec[1:n_total]
+                      } else {
+                        # Ensure enrollment completion if needed
+                        if (df$rate[n_periods] == 0) stop("Please specify positive rec_rate for the last period; otherwise, enrollment cannot finish.")
+
+                        # Generate additional recruitment times if needed
+                        rec <- c(rec, cumsum(stats::rexp(n_total - length(rec), rate = df$rate[n_periods])) + df$finish[n_periods])
                       }
                     }
-
-                    dataCombined$recTime <- rec
-
                   }
 
+                  # Assign recruitment times to the data frame
+                  dataCombined$recTime <- rec
                   dataCombined$pseudoTime <- dataCombined$time + dataCombined$recTime
                 }
 
@@ -1447,10 +1537,20 @@ ui <- fluidPage(
 
                 if (input$analysisType=="LRT"){
                   test <- survdiff(Surv(survivalTime, status)~group, data = dataCombined)
-                  Signif <- (test$chisq > qchisq(1-input$alphaLevel, 1) & deltad<1)
+                  if (input$test_type=="one.sided"){
+                    Signif <- (test$chisq > qchisq(1-input$alphaLevel, 1) & deltad<1)
+                  } else {
+                    Signif <- test$chisq > qchisq(1-input$alphaLevel, 1)
+                  }
+
                 } else if (input$analysisType=="WLRT"){
                   test <- nph::logrank.test(dataCombined$survivalTime, dataCombined$status, dataCombined$group, rho = rho, gamma = gamma)
-                  Signif <- (test$test$Chisq > qchisq(1-input$alphaLevel, 1) & deltad<1)
+                  if (input$test_type=="one.sided"){
+                    Signif <- (test$test$Chisq > qchisq(1-input$alphaLevel, 1) & deltad<1)
+                  } else{
+                    Signif <- test$test$Chisq > qchisq(1-input$alphaLevel, 1)
+                  }
+
                 }
 
                 assVec[i] <- Signif
@@ -1510,47 +1610,65 @@ ui <- fluidPage(
 
                 if (input$rec_method=="power"){
 
-                  dataCombined$recTime <- input$rec_period * stats::runif(n_total)^(1/input$rec_power)
+                  recTimes <- input$rec_period * stats::runif(input$numofpatients)^(1/input$rec_power)
+
+                  dataCombined$recTime <- sample(sort(recTimes)[1:n_total])
 
                   dataCombined$pseudoTime <- dataCombined$time + dataCombined$recTime
                 }
 
-                if (input$rec_method=="PWC"){
+                if (input$rec_method == "PWC") {
+                  # Parse recruitment rate and duration inputs
                   rec_rate <- as.numeric(unlist(strsplit(input$rec_rate, ",")))
                   rec_duration <- as.numeric(unlist(strsplit(input$rec_duration, ",")))
-                  if(any(rec_rate<0)){stop("rec_rate should be non-negative")}
-                  if(length(rec_rate)==1){#simple case with only one rate
-                    rec<-cumsum(stats::rexp(n=n_total,rate=rec_rate))
-                  }else{#piecewise
-                    if(length(rec_duration)!=length(rec_rate)){stop("Lengths of rec_duration and rec_rate should match")}
-                    n_periods<-length(rec_duration)
-                    df<-data.frame(rate=rec_rate,
-                                   duration=rec_duration,
-                                   period=1:n_periods,
-                                   finish=cumsum(rec_duration),
-                                   lambda=rec_duration*rec_rate,
-                                   origin=c(0,cumsum(rec_duration)[-n_periods]))
-                    print(df)
-                    df$N<-sapply(df$lambda,function(x){stats::rpois(n=1,lambda = x)})
-                    print(df)
-                    if (sum(df$N)==0){
-                      if (df$rate[n_periods]==0) stop("Please specify positive rec_rate for the last period; otherwise enrollment cannot finish.")
-                      rec<-c(cumsum(stats::rexp(n_total,rate=df$rate[n_periods]))+df$finish[n_periods])
-                    }else{
-                      rec<-unlist(apply(df,1,function(x){sort(stats::runif(n=x[["N"]],min=x[["origin"]],max=x[["finish"]]))}))
-                      print(rec)
-                      if (length(rec) >= n_total){rec<-rec[1:n_total]} # if n already achieved, return first n observations
-                      # stop with error message if enrollment has not finished but enrollment rate for last period is less or equal with 0
-                      else{if (df$rate[n_periods]==0){stop("Please specify positive rec_rate for the last period; otherwise enrollment cannot finish.")}
-                        # Otherwise, return inter-arrival exponential times
-                        rec<-c(rec, cumsum(stats::rexp(n_total-nrow(rec),rate=df$rate[n_periods]))+df$finish[n_periods])
+
+                  # Ensure valid inputs
+                  if (any(rec_rate < 0)) stop("rec_rate should be non-negative")
+                  if (length(rec_rate) != length(rec_duration)) stop("Lengths of rec_rate and rec_duration should match")
+
+                  n_periods <- length(rec_duration)
+
+                  if (length(rec_rate) == 1) { # Simple case with only one rate
+                    rec <- cumsum(stats::rexp(n = n_total, rate = rec_rate))
+                  } else { # Piecewise recruitment
+                    # Create a data frame for the piecewise periods
+                    df <- data.frame(
+                      rate = rec_rate,
+                      duration = rec_duration,
+                      period = 1:n_periods,
+                      finish = cumsum(rec_duration),
+                      lambda = rec_duration * rec_rate,
+                      origin = c(0, cumsum(rec_duration)[-n_periods])
+                    )
+
+                    # Generate the number of recruits in each period using Poisson distribution
+                    df$N <- sapply(df$lambda, function(x) stats::rpois(n = 1, lambda = x))
+
+                    # Check if any recruits were generated
+                    if (sum(df$N) == 0) {
+                      if (df$rate[n_periods] == 0) stop("Please specify positive rec_rate for the last period; otherwise, enrollment cannot finish.")
+                      rec <- cumsum(stats::rexp(n = n_total, rate = df$rate[n_periods])) + df$finish[n_periods]
+                    } else {
+                      # Generate recruitment times for each period
+                      rec <- unlist(apply(df, 1, function(x) {
+                        sort(stats::runif(n = x[["N"]], min = x[["origin"]], max = x[["finish"]]))
+                      }))
+
+                      # Check if we have enough recruits
+                      if (length(rec) >= n_total) {
+                        rec <- rec[1:n_total]
+                      } else {
+                        # Ensure enrollment completion if needed
+                        if (df$rate[n_periods] == 0) stop("Please specify positive rec_rate for the last period; otherwise, enrollment cannot finish.")
+
+                        # Generate additional recruitment times if needed
+                        rec <- c(rec, cumsum(stats::rexp(n_total - length(rec), rate = df$rate[n_periods])) + df$finish[n_periods])
                       }
                     }
-
-                    dataCombined$recTime <- rec
-
                   }
 
+                  # Assign recruitment times to the data frame
+                  dataCombined$recTime <- rec
                   dataCombined$pseudoTime <- dataCombined$time + dataCombined$recTime
                 }
 
@@ -1577,10 +1695,20 @@ ui <- fluidPage(
 
                 if (input$analysisType=="LRT"){
                   test <- survdiff(Surv(survivalTime, status)~group, data = dataCombined)
-                  Signif <- (test$chisq > qchisq(1-input$alphaLevel, 1) & deltad<1)
+                  if (input$test_type=="one.sided"){
+                    Signif <- (test$chisq > qchisq(1-input$alphaLevel, 1) & deltad<1)
+                  } else {
+                    Signif <- test$chisq > qchisq(1-input$alphaLevel, 1)
+                  }
+
                 } else if (input$analysisType=="WLRT"){
                   test <- nph::logrank.test(dataCombined$survivalTime, dataCombined$status, dataCombined$group, rho = rho, gamma = gamma)
-                  Signif <- (test$test$Chisq > qchisq(1-input$alphaLevel, 1) & deltad<1)
+                  if (input$test_type=="one.sided"){
+                    Signif <- (test$test$Chisq > qchisq(1-input$alphaLevel, 1) & deltad<1)
+                  } else{
+                    Signif <- test$test$Chisq > qchisq(1-input$alphaLevel, 1)
+                  }
+
                 }
 
                 assVec[i] <- Signif
@@ -1607,9 +1735,11 @@ ui <- fluidPage(
 
         calcassvec <- pbmapply(assFunc, nControlVec, nTreatmentVec)
 
-        print(calcassvec)
+        #print(calcassvec)
 
         overallAssVec <- unlist(calcassvec[1,])
+
+        overallEventVec <- unlist(calcassvec[2,])
 
         LBAss <- overallAssVec-1.96*sqrt(overallAssVec*(1-overallAssVec)/nSamples)
 
@@ -1621,159 +1751,40 @@ ui <- fluidPage(
 
         asssmooth <- loess(overallAssVec~nTotal)
 
-        return(list(asssmooth = asssmooth, nTotal = nTotal, LBSmooth = LBSmooth, UBSmooth = UBSmooth))
+        eventsmooth <- loess(overallEventVec~nTotal)
+
+        return(list(asssmooth = asssmooth, nTotal = nTotal, LBSmooth = LBSmooth, UBSmooth = UBSmooth, eventsmooth = eventsmooth))
 
     })
-
-
-
-    # #This function calculates the normal assurance given the elicited distributions and other simple questions about the trial
-    # calculateAssurance <- eventReactive(input$calcAssurance, {
-    #
-    # })
-    #
-    #
-    #   assFunc <- function(n1, n2){
-    #
-    #
-    #     #Simulate 400 observations for T and HR given the elicited distributions
-    #     #For each n1, n2, simulate 400 trials
-    #     assnum <- 500
-    #     assvec <- rep(NA, assnum)
-    #     AHRvec <- rep(NA, assnum)
-    #     LBAHRvec <- rep(NA, assnum)
-    #     UBAHRvec <- rep(NA, assnum)
-    #     eventsvec <- rep(NA, assnum)
-    #
-    #     mySample <- elicitedSamples()$mySample
-    #
-    #
-    #     for (i in 1:assnum){
-    #
-    #
-    #       if (v$upload=="no"){
-    #         lambdac <- input$lambdacmean
-    #         gammac <- input$gammacmean
-    #       } else {
-    #         lambdac <- sample(as.numeric(inputData()$scale), size = 1)
-    #         gammac <- sample(as.numeric(inputData()$shape), size = 1)
-    #       }
-    #
-    #       gammat <- gammac
-    #
-    #       bigT <- sample(mySample[,1], 1)
-    #       HR <- sample(mySample[,2], 1)
-    #
-    #       lambdat <- lambdac*HR^(1/gammac)
-    #
-    #       dataCombined <- SimDTEDataSet(n_C = n1, n_E = n2, lambda_C = lambdac, HRStar = HR, gamma_C = gammac, gamma_E = gammat, delayT = bigT,
-    #                                     rec_method = input$rec_method, rec_period = input$rec_period, rec_power = input$rec_power, rec_rate = input$rec_rate, rec_duration = input$rec_duration)
-    #
-    #       dataCombined <- CensFunc(dataCombined = dataCombined, censTime = input$chosenLength)$dataCombined
-    #
-    #       coxmodel <- coxph(Surv(survival_time, status)~group, data = dataCombined)
-    #
-    #       AHRvec[i] <- as.numeric(exp(coef(coxmodel)))
-    #
-    #       CI <- exp(confint(coxmodel))
-    #
-    #       LBAHRvec[i] <- CI[1]
-    #
-    #       UBAHRvec[i] <- CI[2]
-    #
-    #       #Performs a log rank test on the data
-    #       test <- survdiff(Surv(survival_time, status)~group, data = dataCombined)
-    #       #If the p-value of the test is less than 0.05 then assvec = 1, 0 otherwise
-    #       assvec[i] <- test$chisq > qchisq(0.95, 1)
-    #
-    #       #Counts how many events have been seen up until the total trial length time
-    #       eventsvec[i] <-  sum(dataCombined$time<input$chosenLength)
-    #
-    #     }
-    #
-    #     AHRvec[is.infinite(AHRvec)]<-NA
-    #     LBAHRvec[is.infinite(LBAHRvec)]<-NA
-    #     UBAHRvec[is.infinite(UBAHRvec)]<-NA
-    #
-    #
-    #     return(list(assvec = mean(assvec), LBAHRvec = mean(LBAHRvec, na.rm=T), UBAHRvec = mean(UBAHRvec, na.rm = T),
-    #                 AHRvec = mean(AHRvec, na.rm=T), eventvec = mean(eventsvec), assnum=assnum))
-    #   }
-    #
-    #   #Looking at assurance for varying sample sizes
-    #   samplesizevec <- seq(30, input$numofpatients, length=15)
-    #   n1vec <- floor(input$n1*(samplesizevec/(input$n1+input$n2)))
-    #   n2vec <- ceiling(input$n2*(samplesizevec/(input$n1+input$n2)))
-    #   calcassvec <- rep(NA, length = length(samplesizevec))
-    #
-    #   pboptions(type="shiny", title = "Calculating assurance")
-    #
-    #   calcassvec <- pbmapply(assFunc, n1vec, n2vec)
-    #
-    #   assvec <- unlist(calcassvec[1,])
-    #
-    #   LBAHRvec <- unlist(calcassvec[2,])
-    #
-    #   UBAHRvec <- unlist(calcassvec[3,])
-    #
-    #   AHRvec <- unlist(calcassvec[4,])
-    #
-    #   eventvec <- unlist(calcassvec[5,])
-    #
-    #   assnumvec <- unlist(calcassvec[6,])
-    #
-    #   LBassvec <- assvec-1.96*sqrt(assvec*(1-assvec)/assnumvec)
-    #
-    #   UBassvec <- assvec+1.96*sqrt(assvec*(1-assvec)/assnumvec)
-    #
-    #
-    #   #How many events are seen given this set up
-    #   eventsseen <- eventvec[length(eventvec)]
-    #
-    #   #Smooth the assurance, compared to the the sample size vector
-    #   asssmooth <- loess(assvec~samplesizevec)
-    #
-    #   AHRsmooth <- loess(AHRvec~samplesizevec)
-    #
-    #   LBsmooth <- loess(LBAHRvec~samplesizevec)
-    #
-    #   UBsmooth <- loess(UBAHRvec~samplesizevec)
-    #
-    #   LBasssmooth <- loess(LBassvec~samplesizevec)
-    #
-    #   UBasssmooth <- loess(UBassvec~samplesizevec)
-    #
-    #
-    #   return(list(calcassvec = calcassvec, asssmooth = asssmooth, samplesizevec = samplesizevec,
-    #               eventsseen = eventsseen, AHRsmooth = AHRsmooth, LBsmooth = LBsmooth, UBsmooth = UBsmooth,
-    #               LBasssmooth = LBasssmooth, UBasssmooth = UBasssmooth))
-    #
-    # })
-
 
     output$assurancePlot <- renderPlot({
 
-      # #Plot the assurance calculated in the function
-      assurancenormaldf <- data.frame(x = calculateAssurance()$nTotal, y = predict(calculateAssurance()$asssmooth))
-      plot(assurancenormaldf, ylim = c(0,1), type = "l", ylab = "Assurance", xlab = "Total Number of Patients")
-      lines(calculateAssurance()$nTotal, predict(calculateAssurance()$LBSmooth))
-      lines(calculateAssurance()$nTotal, predict(calculateAssurance()$UBSmooth))
+      assuranceDF <- data.frame(N = calculateAssurance()$nTotal, Ass = predict(calculateAssurance()$asssmooth),
+                                LB = predict(calculateAssurance()$LBSmooth),
+                                UB = predict(calculateAssurance()$UBSmooth))
 
-      # assurancenormalLBdf <- data.frame(x = calculateAssurance()$samplesizevec, y = predict(calculateAssurance()$LBasssmooth))
-      # assurancenormalUBdf <- data.frame(x = calculateAssurance()$samplesizevec, y = predict(calculateAssurance()$UBasssmooth))
-      # p1 <- ggplot() + geom_line(data = assurancenormaldf, aes(x = x, y = y, colour="Assurance"), linetype="solid") + xlab("Total number of patients") +
-      #   ylab("Assurance") + ylim(0, 1.05) +
-      #   geom_line(data = assurancenormalLBdf, aes(x=x, y=y, colour = 'Assurance'), linetype='dashed') +
-      #   geom_line(data = assurancenormalUBdf, aes(x=x, y=y, colour = 'Assurance'), linetype='dashed') +
-      #   theme(
-      #     legend.position = c(.05, .95),
-      #     legend.justification = c("left", "top"),
-      #     legend.box.just = "left",
-      #     legend.margin = margin(6, 6, 6, 6)) + scale_color_manual(name=NULL,
-      #                                                              breaks=c('Assurance'),
-      #                                                              values=c('Assurance'='blue'))
-      # print(p1)
+      # Generate the plot using ggplot
+      ggplot(assuranceDF, aes(x = N)) +
+        geom_line(aes(y = Ass), colour = "blue")+
+        geom_line(aes(y = LB), colour = "blue", linetype = "dashed") +
+        geom_line(aes(y = UB), colour = "blue", linetype = "dashed") +
+        labs(x = "Number of Patients", y = "Assurance") +
+        ylim(0, 1.05)
+
     })
+
+
+    # output$eventPlot <- renderPlot({
+    #
+    #   assuranceDF <- data.frame(N = calculateAssurance()$nTotal, Events = predict(calculateAssurance()$eventsmooth))
+    #
+    #
+    #   # Generate the plot using ggplot
+    #   ggplot(assuranceDF, aes(x = N)) +
+    #     geom_line(aes(y = Events), colour = "orange")+
+    #     labs(x = "Number of Patients", y = "Number of Events")
+    #
+    # })
 
 
 
