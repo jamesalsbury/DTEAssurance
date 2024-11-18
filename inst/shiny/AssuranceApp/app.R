@@ -345,7 +345,7 @@ ui <- fluidPage(
                        selected = "one.sided"
                      ),
                      numericInput("alphaLevel", "Alpha", value=0.05),
-                     numericInput("nSamples", "N", value=1000),
+                     numericInput("nSamples", "N", value=250),
 
 
                      actionButton("calcAssurance", "Calculate Assurance")
@@ -398,7 +398,7 @@ ui <- fluidPage(
                  HTML("<p>This tab allows users to specify the recruitment schedule for the prospective trial. Two options are available: 'power' or 'piecewise constant' recruitment. The plot shows the total number of patients recruited over time and, if applicable, the breakdown of control versus treatment group recruitment.</p>"),
 
                  HTML("<p><u>Calculating Assurance</u></p>"),
-                 HTML("<p>This tab enables the calculation of assurance based on all previous inputs. The app simulates \\( N \\) trials using a Fleming-Harrington log-rank test for analysis. Once the simulations are complete, an assurance plot (similar to a power curve) is displayed, showing the proportion of successful trials for different sample sizes.</p>")
+                 HTML("<p>This tab enables the calculation of assurance based on all previous inputs. The app simulates \\( N \\) trials using a log-rank test (can be Fleming-Harrington) for analysis. Once the simulations are complete, an assurance plot (akin to a power curve) is displayed, showing the proportion of successful trials for different sample sizes.</p>")
         )
 
 
@@ -631,13 +631,13 @@ ui <- fluidPage(
     treatmentSurvivalData <- reactive({
       # Initialize an empty list to hold output data
       result <- list()
-
+      nSamples <- 500
       # Calculate treatment survival data based on distribution type and input options
       if (input$ControlDist == "Exponential") {
         if (input$ExpChoice == "Single Value") {
-          sampledTrtHazard <- rep(NA, 100)
-          sampledbigT <- rep(NA, 100)
-          for (i in 1:100){
+          sampledTrtHazard <- rep(NA, nSamples)
+          sampledbigT <- rep(NA, nSamples)
+          for (i in 1:nSamples){
             if (runif(1) > input$P_S){
               #Curves do not separate
               sampledbigT[i] <- 0
@@ -659,8 +659,8 @@ ui <- fluidPage(
           }
 
           controlTime <- seq(0, 100, length.out = 100)
-          survival_curves <- matrix(NA, nrow = 100, ncol = length(controlTime))
-          for (i in 1:100){
+          survival_curves <- matrix(NA, nrow = nSamples, ncol = length(controlTime))
+          for (i in 1:nSamples){
             survival_curves[i,] <- ifelse(controlTime<sampledbigT[i],
                                           exp(-input$ExpRate*controlTime), exp(-input$ExpRate*sampledbigT[i]-sampledTrtHazard[i]*(controlTime-sampledbigT[i])))
           }
@@ -679,7 +679,6 @@ ui <- fluidPage(
 
         } else if (input$ExpChoice == "Distribution") {
 
-          nSamples <- 100
           sampledLambda <- -log(rbeta(nSamples, input$ExpBetaA, input$ExpBetaB)) / input$ExpSurvTime
           sampledTrtHazard <- rep(NA, nSamples)
           sampledbigT <- rep(NA, nSamples)
@@ -730,9 +729,9 @@ ui <- fluidPage(
       } else if (input$ControlDist == "Weibull") {
         if (input$WeibullChoice == "Single Value") {
 
-          sampledTrtHazard <- rep(NA, 100)
-          sampledbigT <- rep(NA, 100)
-          for (i in 1:100){
+          sampledTrtHazard <- rep(NA, nSamples)
+          sampledbigT <- rep(NA, nSamples)
+          for (i in 1:nSamples){
             if (runif(1) > input$P_S){
               #Curves do not separate
               sampledbigT[i] <- 0
@@ -754,8 +753,8 @@ ui <- fluidPage(
           }
 
           controlTime <- seq(0, 100, length.out = 100)
-          survival_curves <- matrix(NA, nrow = 100, ncol = length(controlTime))
-          for (i in 1:100){
+          survival_curves <- matrix(NA, nrow = nSamples, ncol = length(controlTime))
+          for (i in 1:nSamples){
             survival_curves[i,] <- ifelse(controlTime<sampledbigT[i],
                                           exp(-(input$WeibullScale*controlTime)^input$WeibullShape),
                                           exp(-(input$WeibullScale*sampledbigT[i])^input$WeibullShape-(sampledTrtHazard[i])^input$WeibullShape*(controlTime^input$WeibullShape-(sampledbigT[i])^input$WeibullShape)))
@@ -776,7 +775,6 @@ ui <- fluidPage(
 
         } else if (input$WeibullChoice == "Distribution") {
 
-          nSamples <- 100
           lambdaVec <- rep(NA, nSamples)
           gammaVec <- rep(NA, nSamples)
 
@@ -878,27 +876,26 @@ ui <- fluidPage(
     #
     # })
 
-    # output$medianSurvivalFeedback <- renderUI({
-    #
-    #   addfeedback <- radiobuttons()
-    #
-    #   str1 <- ""
-    #
-    #   if (!is.null(addfeedback)){
-    #     for (i in 1:length(addfeedback)){
-    #       if (addfeedback[i]=="Median survival line"){
-    #         medianTTime <- round(treatmentCILines()$TreatmentTime[sum(treatmentCILines()$medianTreatment>0.5)], 1)
-    #         medianCTime <- round((1/input$lambdacmean)*(-log(0.5))^(1/input$gammacmean), 1)
-    #         str1 <- paste0("The median survival time on the control is ", medianCTime, " and the median survival time on the treatment is ", medianTTime)
-    #       }
-    #     }
-    #   }
-    #
-    #   HTML(paste(str1, sep = '<br/>'))
-    #
-    # })
+    output$medianSurvivalFeedback <- renderUI({
 
-      # Observe WeibullChoice and update checkboxGroupInput choices
+      str1 <- ""
+
+      if ("median_line" %in% input$showfeedback){
+
+        controlData <- controlSurvivalData()$controlDF
+        treatmentData <- treatmentSurvivalData()$treatmentDF
+
+        median_time_control <- approx(controlData$controlSurv, controlData$controlTime, xout = 0.5)$y
+        median_time_treatment <- approx(treatmentData$medVec, treatmentData$controlTime, xout = 0.5)$y
+        str1 <- paste0("The median survival in the control group is ", round(median_time_control,1),
+                       " and the median survival time in the treatment group is ", round(median_time_treatment, 1))
+
+      }
+
+      HTML(paste(str1, sep = '<br/>'))
+
+    })
+
     observe({
       # Define the common choices
       common_choices <- c("Median survival line" = "median_line",
