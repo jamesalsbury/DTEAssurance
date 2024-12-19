@@ -31,117 +31,29 @@ ui <- fluidPage(
       tabPanel("Upload",
                sidebarLayout(
                  sidebarPanel = sidebarPanel(
-                   fileInput("file", "Choose a File",
+                   fileInput("file", "Choose an RDS File",
                              multiple = FALSE,
-                             accept = c("text/csv", "text/comma-separated-values,text/plain", ".csv")),
+                             accept = c(".rds")),
+
+                     ),
+
+
+
+                 mainPanel = mainPanel(
+                   plotOutput("plotControl")
+                 )
+               ),
+      ),
+
+      tabPanel("MLEs",
+               sidebarLayout(
+                 sidebarPanel = sidebarPanel(
                    selectInput("ControlDist", "Distribution", choices = c("Exponential", "Weibull"), selected = "Exponential"),
-                   # Conditional UI for Exponential distribution
-                   conditionalPanel(
-                     condition = "input.ControlDist == 'Exponential'",
-                     selectInput("ExpChoice", "Choice", choices = c("Single Value", "Distribution", "rBEST"), selected = "Single Value"),
-                     conditionalPanel(
-                       condition = "input.ExpChoice == 'Single Value'",
-                       numericInput("ExpRate", label =  HTML(paste0("Rate (\u03bb",tags$sub("c"), ")")), value = 0.08, min=0)
-                     ),
-                     conditionalPanel(
-                       condition = "input.ExpChoice == 'Distribution'",
-                       numericInput("ExpSurvTime", label = "Survival Time", value = 12),
-                       fluidRow(
-                         column(6,
-                                uiOutput("ExpDistText")
-                         ),
-                         column(4,
-                                numericInput("ExpBetaA", label = NULL, value = 20)
-                         ),
-                         column(1,
-                                tags$div(", ")
-                         ),
-                         column(4,
-                                numericInput("ExpBetaB", label = NULL, value = 32)
-                         ),
-                         column(1,
-                                tags$div(")")
-                         )
-                       )
 
-
-                     ),
-                     conditionalPanel(
-                       condition = "input.ExpChoice == 'rBEST'",
-
-                     ),
-                   ),
-                   # Conditional UI for Weibull distribution
-                   conditionalPanel(
-                     condition = "input.ControlDist == 'Weibull'",
-                     selectInput("WeibullChoice", "Choice", choices = c("Single Value", "Distribution"), selected = "Single Value"),
-                     conditionalPanel(
-                       condition = "input.WeibullChoice == 'Single Value'",
-                       fluidRow(
-                         column(6,
-                                numericInput("WeibullScale", label =  HTML(paste0("Scale (\u03bb",tags$sub("c"), ")")), value = 0.08, min=0)
-
-                         ),
-                         column(6,
-                                numericInput("WeibullShape", label =  HTML(paste0("Shape (\u03b3",tags$sub("c"), ")")), value = 1, min=0)
-
-                         )
-                       )
-                     ),
-
-                     conditionalPanel(
-                       condition = "input.WeibullChoice == 'Distribution'",
-                       fluidRow(
-                         column(6,
-                                numericInput("WeibullDistT1", label =  HTML(paste0("t",tags$sub("1"))), value = 12)
-
-                         ),
-                         column(6,
-                                numericInput("WeibullDistT2", label =  HTML(paste0("t",tags$sub("2"))), value = 18)
-
-                         )
-                       ),
-                       fluidRow(
-                         column(6,
-                                uiOutput("WeibullDistS1Text")
-                         ),
-                         column(4,
-                                numericInput("WeibullDistS1BetaA", label = NULL, value = 20)
-                         ),
-                         column(1,
-                                tags$div(", ")
-                         ),
-                         column(4,
-                                numericInput("WeibullDistS1BetaB", label = NULL, value = 32)
-                         ),
-                         column(1,
-                                tags$div(")")
-                         )
-                       ),
-                       fluidRow(
-                         column(6,
-                                uiOutput("WeibullDistDelta1Text")
-                         ),
-                         column(4,
-                                numericInput("WeibullDistDelta1BetaA", label = NULL, value = 20)
-                         ),
-                         column(1,
-                                tags$div(", ")
-                         ),
-                         column(4,
-                                numericInput("WeibullDistDelta1BetaB", label = NULL, value = 120)
-                         ),
-                         column(1,
-                                tags$div(")")
-                         )
-                       )
-                     ),
-
-                   )
 
                  ),
                  mainPanel = mainPanel(
-                   plotOutput("plotControl")
+
                  )
                ),
       ),
@@ -338,7 +250,10 @@ server = function(input, output, session) {
 
   # Render plot in the UI
   output$plotControl <- renderPlot({
-    controlPlot()
+    req(input$file)
+    dataCombined <- readRDS(input$file$datapath)
+    kmfit <- survfit(Surv(survivalTime, status)~group, data = dataCombined)
+    plot(kmfit, col = c("blue", "red"))
   })
 
 
