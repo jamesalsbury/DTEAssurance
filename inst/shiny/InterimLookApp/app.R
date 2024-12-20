@@ -1,20 +1,20 @@
-library(SHELF)
-library(survMisc)
-library(ggplot2)
-library(pbapply)
-library(readxl)
-library(shiny)
-library(shinydashboard)
-library(survival)
-library(plyr)
-library(rmarkdown)
-library(stats)
-library(nleqslv)
-library(graphics)
-library(shinyjs)
-library(utils)
-library(nleqslv)
-library(dplyr)
+# library(SHELF)
+# library(survMisc)
+# library(ggplot2)
+# library(pbapply)
+# library(readxl)
+# library(shiny)
+# library(shinydashboard)
+# library(survival)
+# library(plyr)
+# library(rmarkdown)
+# library(stats)
+# library(nleqslv)
+# library(graphics)
+# library(shinyjs)
+# library(utils)
+# library(nleqslv)
+# library(dplyr)
 
 ui <- fluidPage(
   withMathJax(),
@@ -40,7 +40,7 @@ ui <- fluidPage(
 
 
                  mainPanel = mainPanel(
-                   plotOutput("plotControl")
+                   plotOutput("plotKM")
                  )
                ),
       ),
@@ -49,11 +49,11 @@ ui <- fluidPage(
                sidebarLayout(
                  sidebarPanel = sidebarPanel(
                    selectInput("ControlDist", "Distribution", choices = c("Exponential", "Weibull"), selected = "Exponential"),
-
-
+                   actionButton("calcMLE", "Calculate MLEs"),
                  ),
                  mainPanel = mainPanel(
-
+                   plotOutput("plotMLEs"),
+                   verbatimTextOutput("mleOutput")
                  )
                ),
       ),
@@ -138,122 +138,142 @@ server = function(input, output, session) {
 
   # Functions for the control tab ---------------------------------
 
-  output$ExpDistText <- renderUI({
-    paste0("S(", input$ExpSurvTime, ") ~ Beta(")
-  })
-
-  output$WeibullDistS1Text <- renderUI({
-    paste0("S(", input$WeibullDistT1, ") ~ Beta(")
-  })
-
-  output$WeibullDistDelta1Text <- renderUI({
-    paste0("S(", input$WeibullDistT2, ") - S(", input$WeibullDistT1,") ~ Beta(")
-  })
-
-
-  # Reactive for common calculations based on distribution type and inputs
-  controlSurvivalData <- reactive({
-    # Initialize an empty list to hold output data
-    result <- list()
-
-    # Calculate control survival data based on distribution type and input options
-    if (input$ControlDist == "Exponential") {
-      if (input$ExpChoice == "Single Value") {
-        finalSurvTime <- -log(0.01) / input$ExpRate
-        controlTime <- seq(0, finalSurvTime, length.out = 100)
-        controlSurv <- exp(-input$ExpRate * controlTime)
-
-        result$controlDF <- data.frame(controlTime = controlTime, controlSurv = controlSurv)
-        result$type <- "single"
-
-      } else if (input$ExpChoice == "Distribution") {
-        nSamples <- 100
-        sampledLambda <- -log(rbeta(nSamples, input$ExpBetaA, input$ExpBetaB)) / input$ExpSurvTime
-        finalSurvTime <- -log(0.05) / min(sampledLambda)
-        controlTime <- seq(0, finalSurvTime, length.out = 100)
-
-        # Vectorized calculation for survival curves
-        survivalMatrix <- exp(-outer(sampledLambda, controlTime, "*"))
-        medVec <- apply(survivalMatrix, 2, median)
-        UBVec <- apply(survivalMatrix, 2, quantile, 0.975)
-        LBVec <- apply(survivalMatrix, 2, quantile, 0.025)
-
-        result$controlDF <- data.frame(controlTime = controlTime, medVec = medVec, UBVec = UBVec, LBVec = LBVec)
-        result$type <- "distribution"
-      }
-
-    } else if (input$ControlDist == "Weibull") {
-      if (input$WeibullChoice == "Single Value") {
-        finalSurvTime <- (1 / input$WeibullScale) * (-log(0.01))^(1 / input$WeibullShape)
-        controlTime <- seq(0, finalSurvTime, length.out = 100)
-        controlSurv <- exp(-(input$WeibullScale * controlTime)^input$WeibullShape)
-
-        result$controlDF <- data.frame(controlTime = controlTime, controlSurv = controlSurv)
-        result$type <- "single"
-
-      } else if (input$WeibullChoice == "Distribution") {
-        n <- 500
-        controlTime <- seq(0, 100, length.out = 100)
-        survival_curves <- matrix(NA, nrow = n, ncol = length(controlTime))
-
-        for (i in 1:n) {
-          sampledS1to <- rbeta(1, input$WeibullDistS1BetaA, input$WeibullDistS1BetaB)
-          sampledDelta1 <- rbeta(1, input$WeibullDistDelta1BetaA, input$WeibullDistDelta1BetaB)
-          sampledS1toPrime <- sampledS1to - sampledDelta1
-
-          # Solve for lambda and gamma using sampled values
-          solution <- nleqslv(c(10, 1), function(params) {
-            lambda <- params[1]
-            k <- params[2]
-            c(exp(-(input$WeibullDistT1 / lambda)^k) - sampledS1to,
-              exp(-(input$WeibullDistT2 / lambda)^k) - sampledS1toPrime)
-          })
-
-          lambda <- 1 / solution$x[1]
-          gamma <- solution$x[2]
-          survival_curves[i, ] <- exp(-(lambda * controlTime)^gamma)
-        }
-
-        medVec <- apply(survival_curves, 2, median)
-        UBVec <- apply(survival_curves, 2, quantile, 0.975)
-        LBVec <- apply(survival_curves, 2, quantile, 0.025)
-
-        result$controlDF <- data.frame(controlTime = controlTime, medVec = medVec, UBVec = UBVec, LBVec = LBVec)
-        result$type <- "distribution"
-      }
-    }
-
-    return(result)
-  })
-
-  # Reactive for plotting
-  controlPlot <- reactive({
-    data <- controlSurvivalData()$controlDF
-    plotType <- controlSurvivalData()$type
-
-    if (plotType == "single") {
-      ggplot(data, aes(x = controlTime, y = controlSurv)) +
-        geom_line(colour = "blue") +
-        xlim(0, max(data$controlTime)) +
-        ylim(0, 1) +
-        xlab("Time") + ylab("Survival")
-
-    } else if (plotType == "distribution") {
-      ggplot(data, aes(x = controlTime)) +
-        geom_line(aes(y = medVec), colour = "blue") +
-        geom_line(aes(y = UBVec), colour = "blue", linetype = "dashed") +
-        geom_line(aes(y = LBVec), colour = "blue", linetype = "dashed") +
-        xlim(0, max(data$controlTime)) + ylim(0, 1) +
-        xlab("Time") + ylab("Survival")
-    }
-  })
-
   # Render plot in the UI
-  output$plotControl <- renderPlot({
+  output$plotKM <- renderPlot({
     req(input$file)
     dataCombined <- readRDS(input$file$datapath)
     kmfit <- survfit(Surv(survivalTime, status)~group, data = dataCombined)
     plot(kmfit, col = c("blue", "red"))
+  })
+
+  output$plotMLEs <- renderPlot({
+    req(input$file)
+    dataCombined <- readRDS(input$file$datapath)
+    #kmfit <- survfit(Surv(survivalTime, status)~group, data = dataCombined)
+    #plot(kmfit, col = c("blue", "red"))
+
+    # Optimized custom log-likelihood function with improved performance
+    loglikExp <- function(params) {
+
+      lambda <- params[1]
+      HR2 <- params[2]
+      delayT <- params[3]
+
+      # Precompute values for different groups
+      control_mask <- data$group == "Control"
+      treatment_mask <- !control_mask
+
+      # Control group
+      control_status <- data$status[control_mask]
+      control_time <- data$survivalTime[control_mask]
+
+      control_loglik <- ifelse(
+        control_status,
+        log(lambda) - lambda * control_time,   # Event
+        -lambda * control_time                # Censoring
+      )
+
+      # Treatment group
+      treatment_status <- data$status[treatment_mask]
+      treatment_time <- data$survivalTime[treatment_mask]
+
+      # Delayed hazard calculation
+      treatment_loglik <- ifelse(
+        treatment_status,
+        ifelse(
+          treatment_time < delayT,
+          log(lambda) - lambda * treatment_time,                        # Event before delay
+          log(HR2 * lambda) - lambda * delayT - HR2 * lambda * (treatment_time - delayT)  # Event after delay
+        ),
+        ifelse(
+          treatment_time < delayT,
+          -lambda * treatment_time,                                     # Censoring before delay
+          -lambda * delayT - HR2 * lambda * (treatment_time - delayT)   # Censoring after delay
+        )
+      )
+
+      # Combine log-likelihoods
+      logL <- sum(control_loglik) + sum(treatment_loglik)
+
+      return(-logL)
+    }
+
+    loglikWeibull <- function(params) {
+      lambda <- params[1]
+      gamma <- params[2]
+      lambda_e <- params[3]
+      delayT <- params[4]
+
+      survival_times <- data$survivalTime
+      statuses <- as.integer(data$status)  # Convert TRUE/FALSE to 1/0
+      groups <- data$group
+
+      log_gamma <- log(gamma)
+      log_lambda <- log(lambda)
+      log_lambda_e <- log(lambda_e)
+      gamma_minus_1 <- gamma - 1
+
+      # Vectorize log-likelihood calculations
+      log_lik_control <- log_gamma + gamma * log_lambda + gamma_minus_1 * log(survival_times) - (lambda * survival_times)^gamma
+      log_lik_treatment_before_delay <- log_gamma + gamma * log_lambda + gamma_minus_1 * log(survival_times) - (lambda * survival_times)^gamma
+
+      delayed_term <- ifelse(survival_times >= delayT,
+                             log_lambda_e + (gamma - 1) * log(survival_times) - lambda_e^gamma * (survival_times^gamma - delayT^gamma) - (lambda * delayT)^gamma,
+                             0)
+
+      log_lik_treatment_after_delay <- log_gamma + delayed_term
+
+      logLik <- ifelse(groups == "Control" & statuses == 1, log_lik_control, 0) +
+        ifelse(groups == "Control" & statuses == 0, - (lambda * survival_times)^gamma, 0) +
+        ifelse(groups == "Treatment" & statuses == 1, log_lik_treatment_after_delay, 0) +
+        ifelse(groups == "Treatment" & statuses == 0, - lambda_e^gamma * (survival_times^gamma - delayT^gamma) - (lambda * delayT)^gamma, 0)
+
+      return(-sum(logLik))
+    }
+
+    if (input$ControlDist=="Exponential"){
+      data <- dataCombined
+      # Initial guesses for the parameters
+      # lambda_control, lambda_treatment, tau
+      initial_params <- c(0.1, 0.1, 2)
+
+      # Optimization using optim()
+      result <- GenSA(
+        par = initial_params,
+        fn = loglik,
+        lower = c(1e-6, 1e-6, 0),  # Lower bounds for parameters
+        upper = c(1, 1, 10)  # Upper bounds
+      )
+
+      # Extract results
+      lambda_control_mle <- result$par[1]
+      lambda_treatment_mle <- result$par[2]
+      tau_mle <- result$par[3]
+
+      output$mleOutput <- renderText({
+        paste0(
+          "MLE Estimates:\n",
+          "Control Hazard: ", round(lambda_control_mle, 4), "\n",
+          "Post-Delay Hazard Ratio: ", round(lambda_treatment_mle, 4), "\n",
+          "Length of Delay: ", round(tau_mle, 4), "\n"
+        )
+      })
+
+      kmFit <- survfit(Surv(survivalTime, status)~group, data = data)
+      plot(kmFit, col = c("blue", "red"))
+
+      trialTime <- seq(0, 60, by=0.1)
+      survControl <- exp(-lambda_control_mle*trialTime)
+      lines(trialTime, survControl, col = "blue", lty = 2)
+      survTreatment <- ifelse(trialTime < tau_mle,
+                              exp(-lambda_control_mle*trialTime),
+                              exp(-lambda_control_mle*tau_mle - lambda_control_mle*lambda_treatment_mle*(trialTime-tau_mle)))
+      lines(trialTime, survTreatment, col = "red", lty = 2)
+    } else{
+      print("yes")
+    }
+
+
   })
 
 
