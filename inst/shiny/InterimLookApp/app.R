@@ -5,7 +5,7 @@
 # library(readxl)
 # library(shiny)
 # library(shinydashboard)
-# library(survival)
+library(survival)
 # library(plyr)
 # library(rmarkdown)
 # library(stats)
@@ -15,6 +15,7 @@
 # library(utils)
 # library(nleqslv)
 # library(dplyr)
+library(GenSA)
 
 ui <- fluidPage(
   withMathJax(),
@@ -240,7 +241,7 @@ server = function(input, output, session) {
       # Optimization using optim()
       result <- GenSA(
         par = initial_params,
-        fn = loglik,
+        fn = loglikExp,
         lower = c(1e-6, 1e-6, 0),  # Lower bounds for parameters
         upper = c(1, 1, 10)  # Upper bounds
       )
