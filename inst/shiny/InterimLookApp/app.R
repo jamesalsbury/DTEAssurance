@@ -16,18 +16,19 @@ library(survival)
 # library(nleqslv)
 # library(dplyr)
 library(GenSA)
+library(survminer)
 
 ui <- fluidPage(
   withMathJax(),
 
   # Application title
-  titlePanel("Assurance: Delayed Treatment Effects"),
+  titlePanel("Interim Analysis: Delayed Treatment Effects"),
 
   # sidebarLayout(
   mainPanel(
 
     tabsetPanel(
-      # Control UI ---------------------------------
+      # Upload UI ---------------------------------
 
       tabPanel("Upload",
                sidebarLayout(
@@ -38,14 +39,14 @@ ui <- fluidPage(
 
                      ),
 
-
-
                  mainPanel = mainPanel(
-                   plotOutput("plotKM")
+                   plotOutput("plotKM"),
+                   verbatimTextOutput("summaryOutput")
                  )
                ),
       ),
 
+      # MLEs UI ---------------------------------
       tabPanel("MLEs",
                sidebarLayout(
                  sidebarPanel = sidebarPanel(
@@ -58,6 +59,21 @@ ui <- fluidPage(
                  )
                ),
       ),
+
+
+      # Prediction UI ---------------------------------
+      tabPanel("Prediction",
+               sidebarLayout(
+                 sidebarPanel = sidebarPanel(
+                   selectInput("modelInput", "Modelling", choices = c("Proportional Hazards (Exp)", "Exponential with Delay", "Weibull with Delay"), selected = "Exponential"),
+                   actionButton("calcCP", "Calculate Conditional Power"),
+                 ),
+                 mainPanel = mainPanel(
+                   verbatimTextOutput("predictionOutput")
+                 )
+               ),
+      ),
+
 
 
       #Help UI ---------------------------------
@@ -137,21 +153,65 @@ ui <- fluidPage(
 
 server = function(input, output, session) {
 
-  # Functions for the control tab ---------------------------------
+  # Functions for the upload tab ---------------------------------
 
-  # Render plot in the UI
-  output$plotKM <- renderPlot({
-    req(input$file)
+  uploadedData <- reactive({
+    req(input$file)  # Ensure the file is uploaded
     dataCombined <- readRDS(input$file$datapath)
-    kmfit <- survfit(Surv(survivalTime, status)~group, data = dataCombined)
-    plot(kmfit, col = c("blue", "red"))
+
+    dataCombined
   })
 
-  output$plotMLEs <- renderPlot({
+  output$plotKM <- renderPlot({
+    dataCombined <- uploadedData()
+    kmfit <- survfit(Surv(survivalTime, status)~group, data = dataCombined)
+
+    ggsurvplot(
+      kmfit,
+      data = dataCombined,
+      risk.table = TRUE,         # Add number at risk table
+      risk.table.col = "strata", # Color by strata (group)
+      ggtheme = theme_minimal(), # Apply minimal theme
+      xlab = "Time",      # X-axis label
+      ylab = "Survival Probability", # Y-axis label
+      risk.table.y.text.col = TRUE,  # Use colored text for groups
+      risk.table.y.text = F      # Turn off group names on the y-axis of the risk table
+    )
+    #plot(kmfit, col = c("blue", "red"), xlab = "Time", ylab = "Survival Probability")
+  })
+
+
+  output$summaryOutput <- renderText({
+    # Access uploaded data
+    dataCombined <- uploadedData()
+
+    # Fit Cox PH model
+    cox_model <- coxph(Surv(survivalTime, status) ~ group, data = dataCombined)
+
+    # Extract key results
+    cox_summary <- summary(cox_model)
+    hazard_ratio <- exp(cox_summary$coefficients[, "coef"])
+    conf_int <-cox_summary$conf.int[, c("lower .95", "upper .95")]
+    p_value <- cox_summary$coefficients[, "Pr(>|z|)"]
+
+    # Create a formatted output
+    paste0(
+      "Cox Proportional Hazards Model Summary:\n",
+      "--------------------------------------\n",
+      "Variable: group\n",
+      "Hazard Ratio: ", round(hazard_ratio, 2), "\n",
+      "95% Confidence Interval: (", round(conf_int[1], 2), ", ", round(conf_int[2], 2), ")\n",
+      "p-value: ", signif(p_value, 3), "\n"
+    )
+  })
+
+
+  # Functions for the MLE tab ---------------------------------
+
+  observeEvent(input$calcMLE, {
+
     req(input$file)
     dataCombined <- readRDS(input$file$datapath)
-    #kmfit <- survfit(Surv(survivalTime, status)~group, data = dataCombined)
-    #plot(kmfit, col = c("blue", "red"))
 
     # Optimized custom log-likelihood function with improved performance
     loglikExp <- function(params) {
@@ -200,36 +260,49 @@ server = function(input, output, session) {
     }
 
     loglikWeibull <- function(params) {
-      lambda <- params[1]
+
+      lambda_c <- params[1]
       gamma <- params[2]
       lambda_e <- params[3]
       delayT <- params[4]
 
-      survival_times <- data$survivalTime
-      statuses <- as.integer(data$status)  # Convert TRUE/FALSE to 1/0
-      groups <- data$group
+      # Precompute values for different groups
+      control_mask <- data$group == "Control"
+      treatment_mask <- !control_mask
 
-      log_gamma <- log(gamma)
-      log_lambda <- log(lambda)
-      log_lambda_e <- log(lambda_e)
-      gamma_minus_1 <- gamma - 1
+      # Control group
+      control_status <- data$status[control_mask]
+      control_time <- data$survivalTime[control_mask]
 
-      # Vectorize log-likelihood calculations
-      log_lik_control <- log_gamma + gamma * log_lambda + gamma_minus_1 * log(survival_times) - (lambda * survival_times)^gamma
-      log_lik_treatment_before_delay <- log_gamma + gamma * log_lambda + gamma_minus_1 * log(survival_times) - (lambda * survival_times)^gamma
+      control_loglik <- ifelse(
+        control_status,
+        log(gamma) + gamma*log(lambda_c) + gamma*log(control_time) - (lambda_c*control_time)^gamma - log(control_time),   # Event
+        -(lambda_c*control_time)^gamma                # Censoring
+      )
 
-      delayed_term <- ifelse(survival_times >= delayT,
-                             log_lambda_e + (gamma - 1) * log(survival_times) - lambda_e^gamma * (survival_times^gamma - delayT^gamma) - (lambda * delayT)^gamma,
-                             0)
+      # Treatment group
+      treatment_status <- data$status[treatment_mask]
+      treatment_time <- data$survivalTime[treatment_mask]
 
-      log_lik_treatment_after_delay <- log_gamma + delayed_term
+      # Delayed hazard calculation
+      treatment_loglik <- ifelse(
+        treatment_status,
+        ifelse(
+          treatment_time < delayT,
+          log(gamma) + gamma*log(lambda_c) + gamma*log(treatment_time) - (lambda_c*treatment_time)^gamma - log(treatment_time),                        # Event before delay
+          log(gamma) + gamma*log(lambda_e) + (gamma-1)*log(treatment_time) - lambda_e^gamma*(treatment_time^gamma - delayT^gamma) - (lambda_c*delayT)^gamma  # Event after delay
+        ),
+        ifelse(
+          treatment_time < delayT,
+          -(lambda_c*treatment_time)^gamma,                                     # Censoring before delay
+          -(lambda_c*delayT)^gamma - lambda_e^gamma*(treatment_time^gamma - delayT^gamma)   # Censoring after delay
+        )
+      )
 
-      logLik <- ifelse(groups == "Control" & statuses == 1, log_lik_control, 0) +
-        ifelse(groups == "Control" & statuses == 0, - (lambda * survival_times)^gamma, 0) +
-        ifelse(groups == "Treatment" & statuses == 1, log_lik_treatment_after_delay, 0) +
-        ifelse(groups == "Treatment" & statuses == 0, - lambda_e^gamma * (survival_times^gamma - delayT^gamma) - (lambda * delayT)^gamma, 0)
+      # Combine log-likelihoods
+      logL <- sum(control_loglik) + sum(treatment_loglik)
 
-      return(-sum(logLik))
+      return(-logL)
     }
 
     if (input$ControlDist=="Exponential"){
@@ -260,18 +333,67 @@ server = function(input, output, session) {
         )
       })
 
+      output$plotMLEs <- renderPlot({
+
+        kmFit <- survfit(Surv(survivalTime, status)~group, data = data)
+        plot(kmFit, col = c("blue", "red"), xlab = "Time", ylab = "Survival Probability")
+        legend("topright", legend = c("Control", "Treatment"), col = c("blue", "red"), lty = 1)
+
+        trialTime <- seq(0, 60, by=0.1)
+        survControl <- exp(-lambda_control_mle*trialTime)
+        lines(trialTime, survControl, col = "blue", lty = 2)
+        survTreatment <- ifelse(trialTime < tau_mle,
+                                exp(-lambda_control_mle*trialTime),
+                                exp(-lambda_control_mle*tau_mle - lambda_control_mle*lambda_treatment_mle*(trialTime-tau_mle)))
+        lines(trialTime, survTreatment, col = "red", lty = 2)
+
+      })
+
+    } else{
+      data <- dataCombined
+      # Initial guesses for the parameters
+      # lambda_control, lambda_treatment, tau
+      initial_params <- c(0.1, 0.1, 0.1, 2)
+
+      # Optimization using optim()
+      result <- GenSA(
+        par = initial_params,
+        fn = loglikWeibull,
+        lower = c(1e-6, 1e-6, 1e-6, 0),  # Lower bounds for parameters
+        upper = c(10, 10, 10, 10)  # Upper bounds
+      )
+
+      # Extract results
+      lambda_control_mle <- result$par[1]
+      gamma_mle <- result$par[2]
+      lambda_treatment_mle <- result$par[3]
+      tau_mle <- result$par[4]
+
+      output$mleOutput <- renderText({
+        paste0(
+          "MLE Estimates:\n",
+          "Lambda_c: ", round(lambda_control_mle, 4), "\n",
+          "Gamma: ", round(gamma_mle, 4), "\n",
+          "Lambda_t: ", round(lambda_treatment_mle, 4), "\n",
+          "Length of Delay: ", round(tau_mle, 4), "\n"
+        )
+      })
+
+      output$plotMLEs <- renderPlot({
       kmFit <- survfit(Surv(survivalTime, status)~group, data = data)
-      plot(kmFit, col = c("blue", "red"))
+      plot(kmFit, col = c("blue", "red"), xlab = "Time", ylab = "Survival Probability")
+      legend("topright", legend = c("Control", "Treatment"), col = c("blue", "red"), lty = 1)
 
       trialTime <- seq(0, 60, by=0.1)
-      survControl <- exp(-lambda_control_mle*trialTime)
+      survControl <- exp(-(lambda_control_mle*trialTime)^gamma_mle)
       lines(trialTime, survControl, col = "blue", lty = 2)
       survTreatment <- ifelse(trialTime < tau_mle,
-                              exp(-lambda_control_mle*trialTime),
-                              exp(-lambda_control_mle*tau_mle - lambda_control_mle*lambda_treatment_mle*(trialTime-tau_mle)))
+                              exp(-(lambda_control_mle*trialTime)^gamma_mle),
+                              exp(-(lambda_control_mle*tau_mle)^gamma_mle - lambda_treatment_mle^gamma_mle*(trialTime^gamma_mle-tau_mle^gamma_mle)))
       lines(trialTime, survTreatment, col = "red", lty = 2)
-    } else{
-      print("yes")
+
+
+      })
     }
 
 
