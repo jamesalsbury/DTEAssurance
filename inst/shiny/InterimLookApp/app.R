@@ -66,10 +66,15 @@ ui <- fluidPage(
                sidebarLayout(
                  sidebarPanel = sidebarPanel(
                    selectInput("modelInput", "Modelling", choices = c("Proportional Hazards (Exp)", "Exponential with Delay", "Weibull with Delay"), selected = "Exponential"),
+                   numericInput("totalEvents", "Total Number of Events", value = 0),
+                   numericInput("critValue", "Critical Z-Value", value = 1.96),
+                   numericInput("DeltaPrime", "Projected trend", value = 0),
                    actionButton("calcCP", "Calculate Conditional Power"),
                  ),
                  mainPanel = mainPanel(
-                   verbatimTextOutput("predictionOutput")
+                   verbatimTextOutput("predictionOutput"),
+                   verbatimTextOutput("CPOutput")
+
                  )
                ),
       ),
@@ -159,6 +164,14 @@ server = function(input, output, session) {
     req(input$file)  # Ensure the file is uploaded
     dataCombined <- readRDS(input$file$datapath)
 
+    updateNumericInput(session, "totalEvents", value = sum(dataCombined$status))
+
+    # Extract HR from Cox
+    cox_model <- coxph(Surv(survivalTime, status) ~ group, data = dataCombined)
+    cox_summary <- summary(cox_model)
+    hazard_ratio <- exp(cox_summary$coefficients[, "coef"])
+    updateNumericInput(session, "DeltaPrime", value = round(hazard_ratio, 3))
+
     dataCombined
   })
 
@@ -210,8 +223,7 @@ server = function(input, output, session) {
 
   observeEvent(input$calcMLE, {
 
-    req(input$file)
-    dataCombined <- readRDS(input$file$datapath)
+    dataCombined <- uploadedData()
 
     # Optimized custom log-likelihood function with improved performance
     loglikExp <- function(params) {
@@ -400,6 +412,63 @@ server = function(input, output, session) {
   })
 
 
+  # Functions for the Predictions tab ---------------------------------
+
+
+  output$predictionOutput <- renderText({
+
+    dataCombined <- uploadedData()
+
+    n_control <- sum(dataCombined$group=="Control")
+    n_treatment <- sum(dataCombined$group=="Treatment")
+
+    cox_model <- coxph(Surv(survivalTime, status) ~ group, data = dataCombined)
+    cox_summary <- summary(cox_model)
+    hazard_ratio <- exp(cox_summary$coefficients[, "coef"])
+
+    paste0(
+      "Total number of events: ", input$totalEvents, "\n",
+      "Current number of events: ", sum(dataCombined$status), "\n",
+      "Ratio of control to treatment: 1:", n_treatment/n_control, "\n",
+      "Current trend: ", round(hazard_ratio, 3), "\n",
+      "Critical Z-Value: ", input$critValue, "\n",
+      "Projected HR: ", input$DeltaPrime, "\n"
+    )
+
+  })
+
+  observeEvent(input$calcCP, {
+
+    output$CPOutput <- renderText({
+
+      dataCombined <- uploadedData()
+
+      n_control <- sum(dataCombined$group=="Control")
+      n_treatment <- sum(dataCombined$group=="Treatment")
+
+      cox_model <- coxph(Surv(survivalTime, status) ~ group, data = dataCombined)
+      cox_summary <- summary(cox_model)
+      hazard_ratio <- exp(cox_summary$coefficients[, "coef"])
+
+      delta_d <- hazard_ratio
+
+      d <- sum(dataCombined$status)
+      a <- n_treatment/n_control
+      r <- (a+1)/sqrt(a)
+
+      Delta1 <- 1
+
+      result <- (1 / r) * sqrt(input$totalEvents / (input$totalEvents - d)) * ( (d / sqrt(input$totalEvents)) * log(Delta1 / delta_d) +
+                                                  ((input$totalEvents - d) / sqrt(input$totalEvents)) * log(Delta1 / input$DeltaPrime) - r * input$critValue )
+
+      pnorm(result)
+
+
+      paste0("The conditional power is calculated to be: ", round(pnorm(result), 3))
+
+    })
+
+  })
 
   # Functions for the well panel ---------------------------------
 
