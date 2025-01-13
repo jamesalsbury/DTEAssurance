@@ -18,6 +18,53 @@ library(survival)
 library(GenSA)
 library(survminer)
 
+
+loglikWeibull <- function(params) {
+
+  lambda_c <- params[1]
+  gamma <- params[2]
+  lambda_e <- params[3]
+  delayT <- params[4]
+
+  # Precompute values for different groups
+  control_mask <- data$group == "Control"
+  treatment_mask <- !control_mask
+
+  # Control group
+  control_status <- data$status[control_mask]
+  control_time <- data$survivalTime[control_mask]
+
+  control_loglik <- ifelse(
+    control_status,
+    log(gamma) + gamma*log(lambda_c) + gamma*log(control_time) - (lambda_c*control_time)^gamma - log(control_time),   # Event
+    -(lambda_c*control_time)^gamma                # Censoring
+  )
+
+  # Treatment group
+  treatment_status <- data$status[treatment_mask]
+  treatment_time <- data$survivalTime[treatment_mask]
+
+  # Delayed hazard calculation
+  treatment_loglik <- ifelse(
+    treatment_status,
+    ifelse(
+      treatment_time < delayT,
+      log(gamma) + gamma*log(lambda_c) + gamma*log(treatment_time) - (lambda_c*treatment_time)^gamma - log(treatment_time),                        # Event before delay
+      log(gamma) + gamma*log(lambda_e) + (gamma-1)*log(treatment_time) - lambda_e^gamma*(treatment_time^gamma - delayT^gamma) - (lambda_c*delayT)^gamma  # Event after delay
+    ),
+    ifelse(
+      treatment_time < delayT,
+      -(lambda_c*treatment_time)^gamma,                                     # Censoring before delay
+      -(lambda_c*delayT)^gamma - lambda_e^gamma*(treatment_time^gamma - delayT^gamma)   # Censoring after delay
+    )
+  )
+
+  # Combine log-likelihoods
+  logL <- sum(control_loglik) + sum(treatment_loglik)
+
+  return(-logL)
+}
+
 ui <- fluidPage(
   withMathJax(),
 
@@ -65,10 +112,18 @@ ui <- fluidPage(
       tabPanel("Prediction",
                sidebarLayout(
                  sidebarPanel = sidebarPanel(
-                   selectInput("modelInput", "Modelling", choices = c("Proportional Hazards (Exp)", "Exponential with Delay", "Weibull with Delay"), selected = "Exponential"),
-                   numericInput("totalEvents", "Total Number of Events", value = 0),
-                   numericInput("critValue", "Critical Z-Value", value = 1.96),
-                   numericInput("DeltaPrime", "Projected trend", value = 0),
+                   selectInput("modelInput", "Modelling", choices = c("Assuming No Delay", "Exponential with Delay", "Weibull with Delay"), selected = "Exponential"),
+                   conditionalPanel(
+                     condition = "input.modelInput == 'Assuming No Delay'",
+                     numericInput("totalEvents_noDelay", "Total Number of Events", value = 0),
+                     numericInput("critValue_noDelay", "Critical Z-Value", value = 1.96),
+                     numericInput("DeltaPrime_noDelay", "Projected trend", value = 0),
+                   ),
+                   conditionalPanel(
+                     condition = "input.modelInput == 'Exponential with Delay'",
+                     numericInput("totalEvents_ExpDelay", "Total Number of Events", value = 0),
+                   ),
+
                    actionButton("calcCP", "Calculate Conditional Power"),
                  ),
                  mainPanel = mainPanel(
@@ -164,13 +219,13 @@ server = function(input, output, session) {
     req(input$file)  # Ensure the file is uploaded
     dataCombined <- readRDS(input$file$datapath)
 
-    updateNumericInput(session, "totalEvents", value = sum(dataCombined$status))
+    updateNumericInput(session, "totalEvents_nodelay", value = sum(dataCombined$status))
 
     # Extract HR from Cox
     cox_model <- coxph(Surv(survivalTime, status) ~ group, data = dataCombined)
     cox_summary <- summary(cox_model)
     hazard_ratio <- exp(cox_summary$coefficients[, "coef"])
-    updateNumericInput(session, "DeltaPrime", value = round(hazard_ratio, 3))
+    updateNumericInput(session, "DeltaPrime_nodelay", value = round(hazard_ratio, 3))
 
     dataCombined
   })
@@ -221,11 +276,12 @@ server = function(input, output, session) {
 
   # Functions for the MLE tab ---------------------------------
 
-  observeEvent(input$calcMLE, {
+  logLikExpFunc <- reactive({
 
     dataCombined <- uploadedData()
 
-    # Optimized custom log-likelihood function with improved performance
+    data <- dataCombined
+
     loglikExp <- function(params) {
 
       lambda <- params[1]
@@ -271,70 +327,39 @@ server = function(input, output, session) {
       return(-logL)
     }
 
-    loglikWeibull <- function(params) {
+    initial_params <- c(0.1, 0.1, 2)
 
-      lambda_c <- params[1]
-      gamma <- params[2]
-      lambda_e <- params[3]
-      delayT <- params[4]
+    # Optimization using optim()
+    result <- GenSA(
+      par = initial_params,
+      fn = loglikExp,
+      lower = c(1e-6, 1e-6, 0),  # Lower bounds for parameters
+      upper = c(1, 1, 10)  # Upper bounds
+    )
 
-      # Precompute values for different groups
-      control_mask <- data$group == "Control"
-      treatment_mask <- !control_mask
+    lambda_control_mle <- result$par[1]
+    lambda_treatment_mle <- result$par[2]
+    tau_mle <- result$par[3]
 
-      # Control group
-      control_status <- data$status[control_mask]
-      control_time <- data$survivalTime[control_mask]
+    return(list(lambda_control_mle = lambda_control_mle,
+                lambda_treatment_mle = lambda_treatment_mle,
+                tau_mle = tau_mle))
 
-      control_loglik <- ifelse(
-        control_status,
-        log(gamma) + gamma*log(lambda_c) + gamma*log(control_time) - (lambda_c*control_time)^gamma - log(control_time),   # Event
-        -(lambda_c*control_time)^gamma                # Censoring
-      )
 
-      # Treatment group
-      treatment_status <- data$status[treatment_mask]
-      treatment_time <- data$survivalTime[treatment_mask]
+  })
 
-      # Delayed hazard calculation
-      treatment_loglik <- ifelse(
-        treatment_status,
-        ifelse(
-          treatment_time < delayT,
-          log(gamma) + gamma*log(lambda_c) + gamma*log(treatment_time) - (lambda_c*treatment_time)^gamma - log(treatment_time),                        # Event before delay
-          log(gamma) + gamma*log(lambda_e) + (gamma-1)*log(treatment_time) - lambda_e^gamma*(treatment_time^gamma - delayT^gamma) - (lambda_c*delayT)^gamma  # Event after delay
-        ),
-        ifelse(
-          treatment_time < delayT,
-          -(lambda_c*treatment_time)^gamma,                                     # Censoring before delay
-          -(lambda_c*delayT)^gamma - lambda_e^gamma*(treatment_time^gamma - delayT^gamma)   # Censoring after delay
-        )
-      )
+  observeEvent(input$calcMLE, {
 
-      # Combine log-likelihoods
-      logL <- sum(control_loglik) + sum(treatment_loglik)
-
-      return(-logL)
-    }
+    dataCombined <- uploadedData()
 
     if (input$ControlDist=="Exponential"){
-      data <- dataCombined
-      # Initial guesses for the parameters
-      # lambda_control, lambda_treatment, tau
-      initial_params <- c(0.1, 0.1, 2)
 
-      # Optimization using optim()
-      result <- GenSA(
-        par = initial_params,
-        fn = loglikExp,
-        lower = c(1e-6, 1e-6, 0),  # Lower bounds for parameters
-        upper = c(1, 1, 10)  # Upper bounds
-      )
+      ExpMLEOutput <- logLikExpFunc()
 
-      # Extract results
-      lambda_control_mle <- result$par[1]
-      lambda_treatment_mle <- result$par[2]
-      tau_mle <- result$par[3]
+      lambda_control_mle <- ExpMLEOutput$lambda_control_mle
+      lambda_treatment_mle <- ExpMLEOutput$lambda_treatment_mle
+      tau_mle <- ExpMLEOutput$tau_mle
+
 
       output$mleOutput <- renderText({
         paste0(
@@ -347,7 +372,7 @@ server = function(input, output, session) {
 
       output$plotMLEs <- renderPlot({
 
-        kmFit <- survfit(Surv(survivalTime, status)~group, data = data)
+        kmFit <- survfit(Surv(survivalTime, status)~group, data = dataCombined)
         plot(kmFit, col = c("blue", "red"), xlab = "Time", ylab = "Survival Probability")
         legend("topright", legend = c("Control", "Treatment"), col = c("blue", "red"), lty = 1)
 
@@ -417,23 +442,40 @@ server = function(input, output, session) {
 
   output$predictionOutput <- renderText({
 
-    dataCombined <- uploadedData()
+    if (input$modelInput=="Assuming No Delay"){
+      dataCombined <- uploadedData()
 
-    n_control <- sum(dataCombined$group=="Control")
-    n_treatment <- sum(dataCombined$group=="Treatment")
+      n_control <- sum(dataCombined$group=="Control")
+      n_treatment <- sum(dataCombined$group=="Treatment")
 
-    cox_model <- coxph(Surv(survivalTime, status) ~ group, data = dataCombined)
-    cox_summary <- summary(cox_model)
-    hazard_ratio <- exp(cox_summary$coefficients[, "coef"])
+      cox_model <- coxph(Surv(survivalTime, status) ~ group, data = dataCombined)
+      cox_summary <- summary(cox_model)
+      hazard_ratio <- exp(cox_summary$coefficients[, "coef"])
 
-    paste0(
-      "Total number of events: ", input$totalEvents, "\n",
-      "Current number of events: ", sum(dataCombined$status), "\n",
-      "Ratio of control to treatment: 1:", n_treatment/n_control, "\n",
-      "Current trend: ", round(hazard_ratio, 3), "\n",
-      "Critical Z-Value: ", input$critValue, "\n",
-      "Projected HR: ", input$DeltaPrime, "\n"
-    )
+      output <- paste0(
+        "Total number of events: ", input$totalEvents_nodelay, "\n",
+        "Current number of events: ", sum(dataCombined$status), "\n",
+        "Ratio of control to treatment: 1:", n_treatment/n_control, "\n",
+        "Current trend: ", round(hazard_ratio, 3), "\n",
+        "Critical Z-Value: ", input$critValue_nodelay, "\n",
+        "Projected HR: ", input$DeltaPrime_nodelay, "\n"
+      )
+    }
+
+    if (input$modelInput=="Exponential with Delay"){
+
+      dataCombined <- uploadedData()
+
+      output <- paste0(
+        "Total number of events: ", input$totalEvents_ExpDelay, "\n",
+        "Current number of events: ", sum(dataCombined$status), "\n",
+        "Lambda_MLE", n_treatment/n_control, "\n",
+        "Post-delay HR: ", round(hazard_ratio, 3), "\n",
+        "Delay Length MLE: ", input$critValue, "\n",
+      )
+    }
+
+    output
 
   })
 
@@ -458,8 +500,8 @@ server = function(input, output, session) {
 
       Delta1 <- 1
 
-      result <- (1 / r) * sqrt(input$totalEvents / (input$totalEvents - d)) * ( (d / sqrt(input$totalEvents)) * log(Delta1 / delta_d) +
-                                                  ((input$totalEvents - d) / sqrt(input$totalEvents)) * log(Delta1 / input$DeltaPrime) - r * input$critValue )
+      result <- (1 / r) * sqrt(input$totalEvents_nodelay / (input$totalEvents_nodelay - d)) * ( (d / sqrt(input$totalEvents_nodelay)) * log(Delta1 / delta_d) +
+                                                  ((input$totalEvents_nodelay - d) / sqrt(input$totalEvents_nodelay)) * log(Delta1 / input$DeltaPrime_nodelay) - r * input$critValue_nodelay )
 
       pnorm(result)
 
