@@ -19,52 +19,6 @@ library(GenSA)
 library(survminer)
 
 
-loglikWeibull <- function(params) {
-
-  lambda_c <- params[1]
-  gamma <- params[2]
-  lambda_e <- params[3]
-  delayT <- params[4]
-
-  # Precompute values for different groups
-  control_mask <- data$group == "Control"
-  treatment_mask <- !control_mask
-
-  # Control group
-  control_status <- data$status[control_mask]
-  control_time <- data$survivalTime[control_mask]
-
-  control_loglik <- ifelse(
-    control_status,
-    log(gamma) + gamma*log(lambda_c) + gamma*log(control_time) - (lambda_c*control_time)^gamma - log(control_time),   # Event
-    -(lambda_c*control_time)^gamma                # Censoring
-  )
-
-  # Treatment group
-  treatment_status <- data$status[treatment_mask]
-  treatment_time <- data$survivalTime[treatment_mask]
-
-  # Delayed hazard calculation
-  treatment_loglik <- ifelse(
-    treatment_status,
-    ifelse(
-      treatment_time < delayT,
-      log(gamma) + gamma*log(lambda_c) + gamma*log(treatment_time) - (lambda_c*treatment_time)^gamma - log(treatment_time),                        # Event before delay
-      log(gamma) + gamma*log(lambda_e) + (gamma-1)*log(treatment_time) - lambda_e^gamma*(treatment_time^gamma - delayT^gamma) - (lambda_c*delayT)^gamma  # Event after delay
-    ),
-    ifelse(
-      treatment_time < delayT,
-      -(lambda_c*treatment_time)^gamma,                                     # Censoring before delay
-      -(lambda_c*delayT)^gamma - lambda_e^gamma*(treatment_time^gamma - delayT^gamma)   # Censoring after delay
-    )
-  )
-
-  # Combine log-likelihoods
-  logL <- sum(control_loglik) + sum(treatment_loglik)
-
-  return(-logL)
-}
-
 ui <- fluidPage(
   withMathJax(),
 
@@ -348,6 +302,84 @@ server = function(input, output, session) {
 
   })
 
+  logLikWeibFunc <- reactive({
+
+    dataCombined <- uploadedData()
+
+    data <- dataCombined
+
+    loglikWeibull <- function(params) {
+
+      lambda_c <- params[1]
+      gamma <- params[2]
+      lambda_e <- params[3]
+      delayT <- params[4]
+
+      # Precompute values for different groups
+      control_mask <- data$group == "Control"
+      treatment_mask <- !control_mask
+
+      # Control group
+      control_status <- data$status[control_mask]
+      control_time <- data$survivalTime[control_mask]
+
+      control_loglik <- ifelse(
+        control_status,
+        log(gamma) + gamma*log(lambda_c) + gamma*log(control_time) - (lambda_c*control_time)^gamma - log(control_time),   # Event
+        -(lambda_c*control_time)^gamma                # Censoring
+      )
+
+      # Treatment group
+      treatment_status <- data$status[treatment_mask]
+      treatment_time <- data$survivalTime[treatment_mask]
+
+      # Delayed hazard calculation
+      treatment_loglik <- ifelse(
+        treatment_status,
+        ifelse(
+          treatment_time < delayT,
+          log(gamma) + gamma*log(lambda_c) + gamma*log(treatment_time) - (lambda_c*treatment_time)^gamma - log(treatment_time),                        # Event before delay
+          log(gamma) + gamma*log(lambda_e) + (gamma-1)*log(treatment_time) - lambda_e^gamma*(treatment_time^gamma - delayT^gamma) - (lambda_c*delayT)^gamma  # Event after delay
+        ),
+        ifelse(
+          treatment_time < delayT,
+          -(lambda_c*treatment_time)^gamma,                                     # Censoring before delay
+          -(lambda_c*delayT)^gamma - lambda_e^gamma*(treatment_time^gamma - delayT^gamma)   # Censoring after delay
+        )
+      )
+
+      # Combine log-likelihoods
+      logL <- sum(control_loglik) + sum(treatment_loglik)
+
+      return(-logL)
+    }
+
+
+    initial_params <- c(0.1, 0.1, 0.1, 2)
+
+    # Optimization using optim()
+    result <- GenSA(
+      par = initial_params,
+      fn = loglikWeibull,
+      lower = c(1e-6, 1e-6, 1e-6, 0),  # Lower bounds for parameters
+      upper = c(10, 10, 10, 10)  # Upper bounds
+    )
+
+    # Extract results
+    lambda_control_mle <- result$par[1]
+    gamma_mle <- result$par[2]
+    lambda_treatment_mle <- result$par[3]
+    tau_mle <- result$par[4]
+
+    return(list(lambda_control_mle = lambda_control_mle,
+                gamma_mle = gamma_mle,
+                lambda_treatment_mle = lambda_treatment_mle,
+                tau_mle = tau_mle))
+
+
+  })
+
+
   observeEvent(input$calcMLE, {
 
     dataCombined <- uploadedData()
@@ -387,24 +419,14 @@ server = function(input, output, session) {
       })
 
     } else{
-      data <- dataCombined
-      # Initial guesses for the parameters
-      # lambda_control, lambda_treatment, tau
-      initial_params <- c(0.1, 0.1, 0.1, 2)
 
-      # Optimization using optim()
-      result <- GenSA(
-        par = initial_params,
-        fn = loglikWeibull,
-        lower = c(1e-6, 1e-6, 1e-6, 0),  # Lower bounds for parameters
-        upper = c(10, 10, 10, 10)  # Upper bounds
-      )
+      WeibMLEOutput <- logLikWeibFunc()
 
-      # Extract results
-      lambda_control_mle <- result$par[1]
-      gamma_mle <- result$par[2]
-      lambda_treatment_mle <- result$par[3]
-      tau_mle <- result$par[4]
+      lambda_control_mle <- WeibMLEOutput$lambda_control_mle
+      gamma_mle <- WeibMLEOutput$gamma_mle
+      lambda_treatment_mle <- WeibMLEOutput$lambda_treatment_mle
+      tau_mle <- WeibMLEOutput$tau_mle
+
 
       output$mleOutput <- renderText({
         paste0(
