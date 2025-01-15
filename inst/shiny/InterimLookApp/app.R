@@ -376,9 +376,7 @@ server = function(input, output, session) {
                 lambda_treatment_mle = lambda_treatment_mle,
                 tau_mle = tau_mle))
 
-
   })
-
 
   observeEvent(input$calcMLE, {
 
@@ -488,12 +486,18 @@ server = function(input, output, session) {
 
       dataCombined <- uploadedData()
 
+      ExpMLEOutput <- logLikExpFunc()
+
+      lambda_control_mle <- ExpMLEOutput$lambda_control_mle
+      lambda_treatment_mle <- ExpMLEOutput$lambda_treatment_mle
+      tau_mle <- ExpMLEOutput$tau_mle
+
       output <- paste0(
         "Total number of events: ", input$totalEvents_ExpDelay, "\n",
         "Current number of events: ", sum(dataCombined$status), "\n",
-        "Lambda_MLE", n_treatment/n_control, "\n",
-        "Post-delay HR: ", round(hazard_ratio, 3), "\n",
-        "Delay Length MLE: ", input$critValue, "\n",
+        "Lambda_MLE: ", round(lambda_control_mle,3), "\n",
+        "Post-delay HR: ", round(lambda_treatment_mle,3), "\n",
+        "Delay Length MLE: ", round(tau_mle,3), "\n"
       )
     }
 
