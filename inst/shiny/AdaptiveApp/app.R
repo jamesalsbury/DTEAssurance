@@ -8,7 +8,7 @@ library(rhandsontable)
 library(rpact)
 library(SHELF)
 library(plotly)
-
+library(survminer)
 
 rowCallback <- c(
   "function(row, data){",
@@ -248,22 +248,20 @@ ui <- fluidPage(
                      ),
                      conditionalPanel(
                        condition = "input.censChoice == 'Events'",
-                       numericInput("censEventInterim", "Events", value = 300)
+                       numericInput("censEventsInterim", "Events", value = 300)
                      ),
                      actionButton("generateButton", label  = "Generate"),
-
-
                  ),
                  conditionalPanel(
                    condition = "input.dataSetChoice == 'Upload'",
                    fileInput("file", "Choose an RDS File",
                              multiple = FALSE,
                              accept = c(".rds"))
-
                  ),
                  ),
                  mainPanel = mainPanel(
-                  plotOutput("interimPlotKM")
+                  plotOutput("interimPlotKM"),
+                  verbatimTextOutput("summaryOutput")
 
                  )
                )
@@ -2226,36 +2224,74 @@ server <- function(input, output, session) {
 
   observeEvent(input$generateButton, {
 
+    n_control <- round((input$ratioControl*input$numPatients)/(input$ratioControl+input$ratioTreatment))
+    n_treatment <- round((input$ratioTreatment*input$numPatients)/(input$ratioControl+input$ratioTreatment))
+
+    conc.probs <- matrix(0, 2, 2)
+    conc.probs[1, 2] <- 0.5
+    treatmentSamplesDF <- SHELF::copulaSample(reactValues$treatmentSamplesDF$fit1, reactValues$treatmentSamplesDF$fit2,
+                                              cp = conc.probs, n = 1e4, d = reactValues$treatmentSamplesDF$d)
+
+    u <- runif(1)
+    if (u > reactValues$treatmentSamplesDF$P_S) {
+      HRStar <- 1
+      bigT <- 0
+    } else {
+      HRStar <- sample(treatmentSamplesDF[, 2], 1)
+      w <- runif(1)
+      bigT <- ifelse(w > reactValues$treatmentSamplesDF$P_DTE, 0, sample(treatmentSamplesDF[, 1], 1))
+    }
+
+    sampledData <- SimDTEDataSet(n_control, n_treatment, reactValues$lambdac, bigT, HRStar, input$recTime)
+
+    #Now need to censor this
+    if (input$censChoice=="Time"){
+      sampledData <- CensFunc(sampledData, censTime = input$censTimeInterim)
+    }
+
+    if (input$censChoice=="Events"){
+      sampledData <- CensFunc(sampledData, censEvents = input$censEventsInterim)
+    }
+
     output$interimPlotKM <- renderPlot({
 
-      # numericInput("numPatients", 'Number of Patients (in total)', value=680, min=0),
-      # fluidRow(
-      #   column(6, numericInput("ratioControl", "Ratio Control", value = 1)),
-      #   column(6, numericInput("ratioTreatment", "Ratio Treatment", value = 1))
-      # ),
+      kmfit <- survfit(Surv(survival_time, status)~group, data = sampledData$dataCombined)
 
-      n_control <- round((input$ratioControl*input$numPatients)/(input$ratioControl+input$ratioTreatment))
-      n_treatment <- round((input$ratioTreatment*input$numPatients)/(input$ratioControl+input$ratioTreatment))
+      ggsurvplot(
+        kmfit,
+        data = sampledData$dataCombined,
+        risk.table = TRUE,         # Add number at risk table
+        risk.table.col = "strata", # Color by strata (group)
+        ggtheme = theme_minimal(), # Apply minimal theme
+        xlab = "Time",      # X-axis label
+        ylab = "Survival Probability", # Y-axis label
+        risk.table.y.text.col = TRUE,  # Use colored text for groups
+        risk.table.y.text = F      # Turn off group names on the y-axis of the risk table
+      )
 
-      conc.probs <- matrix(0, 2, 2)
-      conc.probs[1, 2] <- 0.5
-      treatmentSamplesDF <- SHELF::copulaSample(reactValues$treatmentSamplesDF$fit1, reactValues$treatmentSamplesDF$fit2,
-                                                cp = conc.probs, n = 1e4, d = reactValues$treatmentSamplesDF$d)
+    })
 
-      u <- runif(1)
-      if (u > reactValues$treatmentSamplesDF$P_S) {
-        HRStar <- 1
-        bigT <- 0
-      } else {
-        HRStar <- sample(treatmentSamplesDF[, 2], 1)
-        w <- runif(1)
-        bigT <- ifelse(w > reactValues$treatmentSamplesDF$P_DTE, 0, sample(treatmentSamplesDF[, 1], 1))
-      }
+    output$summaryOutput <- renderText({
 
-      sampledData <- SimDTEDataSet(n_control, n_treatment, reactValues$lambdac, bigT, HRStar, input$recTime)
-      print(sampledData)
 
-      plot(runif(10), 1:10)
+      # Fit Cox PH model
+      cox_model <- coxph(Surv(survival_time, status) ~ group, data = sampledData$dataCombined)
+
+      # Extract key results
+      cox_summary <- summary(cox_model)
+      hazard_ratio <- exp(cox_summary$coefficients[, "coef"])
+      conf_int <-cox_summary$conf.int[, c("lower .95", "upper .95")]
+      p_value <- cox_summary$coefficients[, "Pr(>|z|)"]
+
+      # Create a formatted output
+      paste0(
+        "Cox Proportional Hazards Model Summary:\n",
+        "--------------------------------------\n",
+        "Variable: group\n",
+        "Hazard Ratio: ", round(hazard_ratio, 2), "\n",
+        "95% Confidence Interval: (", round(conf_int[1], 2), ", ", round(conf_int[2], 2), ")\n",
+        "p-value: ", signif(p_value, 3), "\n"
+      )
     })
 
 
