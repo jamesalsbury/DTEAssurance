@@ -15,6 +15,7 @@ library(shinyjs)
 library(utils)
 library(nleqslv)
 library(dplyr)
+library(shinyBS)
 
 ui <- fluidPage(
     withMathJax(),
@@ -35,36 +36,52 @@ ui <- fluidPage(
                      # Conditional UI for Exponential distribution
                      conditionalPanel(
                        condition = "input.ControlDist == 'Exponential'",
-                       selectInput("ExpChoice", "Choice", choices = c("Single Value", "Distribution", "rBEST"), selected = "Single Value"),
+                       selectInput("ExpChoice", "Choice", choices = c("Single Value", "Distribution"), selected = "Single Value"),
                        conditionalPanel(
                          condition = "input.ExpChoice == 'Single Value'",
-                         numericInput("ExpRate", label =  HTML(paste0("Rate (\u03bb",tags$sub("c"), ")")), value = 0.08, min=0)
+                         selectInput("ExpRateorTime", "Input type", choices = c("Rate", "Landmark Survival Probability")),
+                         conditionalPanel(
+                           condition = "input.ExpRateorTime == 'Rate'",
+                           numericInput("ExpRate", label =  HTML(paste0("Rate (\u03bb",tags$sub("c"), ")")), value = 0.08, min=0),
+                           bsTooltip(id = "ExpRate", title = "Rate parameter")
+                         ),
+                         conditionalPanel(
+                           condition = "input.ExpRateorTime == 'Landmark Survival Probability'",
+                           fluidRow(
+                             column(6,
+                                    numericInput("ExpTime", label =  HTML(paste0("t",tags$sub("1"))), value = 12),
+                                    bsTooltip(id = "ExpTime", title = "Time 1")
+
+                             ),
+                             column(6,
+                                    numericInput("ExpSurv", label =  HTML(paste0("S(t",tags$sub("1"), ")")), 0.5),
+                                    bsTooltip(id = "ExpSurv", title = "Survival probability at time 1")
+
+
+                             )
+                           )
+                         )
                        ),
                        conditionalPanel(
                          condition = "input.ExpChoice == 'Distribution'",
-                         numericInput("ExpSurvTime", label = "Survival Time", value = 12),
+                         numericInput("ExpSurvTime", label = HTML(paste0("t",tags$sub("1"))), value = 12),
+                         bsTooltip(id = "ExpSurvTime", title = "Time 1"),
                          fluidRow(
-                           column(6,
-                                  uiOutput("ExpDistText")
-                           ),
                            column(4,
-                                  numericInput("ExpBetaA", label = NULL, value = 20)
+                                  uiOutput("ExpDistText"),
+                                  bsTooltip(id = "ExpDistText", title = "The distribution of survival probability at time 1"),
                            ),
-                           column(1,
-                                  tags$div(", ")
-                           ),
-                           column(4,
-                                  numericInput("ExpBetaB", label = NULL, value = 32)
-                           ),
-                           column(1,
-                                  tags$div(")")
+                           column(8,
+                                  div(style = "display: flex; align-items: center;",
+                                      numericInput("ExpBetaA", label = NULL, value = 20, width = "45%"),
+                                      bsTooltip(id = "ExpBetaA", title = "The mean of a Beta(a, b) distribution is a/(a+b)"),
+                                      tags$span(", "),
+                                      numericInput("ExpBetaB", label = NULL, value = 32, width = "45%"),
+                                      bsTooltip(id = "ExpBetaB", title = "The variance of a Beta(a, b) distribution is (a*b)/[(a+b)^2*(a+b+1)]"),
+                                      tags$span(")")
+                                  )
                            )
                          )
-
-
-                       ),
-                       conditionalPanel(
-                         condition = "input.ExpChoice == 'rBEST'",
 
                        ),
                      ),
@@ -74,15 +91,45 @@ ui <- fluidPage(
                        selectInput("WeibullChoice", "Choice", choices = c("Single Value", "Distribution"), selected = "Single Value"),
                        conditionalPanel(
                          condition = "input.WeibullChoice == 'Single Value'",
-                         fluidRow(
-                           column(6,
-                                  numericInput("WeibullScale", label =  HTML(paste0("Scale (\u03bb",tags$sub("c"), ")")), value = 0.08, min=0)
+                         selectInput("WeibRateorTime", "Input type", choices = c("Parameters", "Landmark Survival Probabilities")),
+                         conditionalPanel(
+                           condition = "input.WeibRateorTime == 'Parameters'",
+                           fluidRow(
+                             column(6,
+                                    numericInput("WeibullScale", label =  HTML(paste0("Scale (\u03bb",tags$sub("c"), ")")), value = 0.08, min=0),
+                                    bsTooltip(id = "WeibullScale", title = "Scale parameter"),
 
-                           ),
-                           column(6,
-                                  numericInput("WeibullShape", label =  HTML(paste0("Shape (\u03b3",tags$sub("c"), ")")), value = 1, min=0)
+                             ),
+                             column(6,
+                                    numericInput("WeibullShape", label =  HTML(paste0("Shape (\u03b3",tags$sub("c"), ")")), value = 1, min=0),
+                                    bsTooltip(id = "WeibullShape", title = "Shape parameter"),
 
+                             )
                            )
+                         ),
+                         conditionalPanel(
+                           condition = "input.WeibRateorTime == 'Landmark Survival Probabilities'",
+                           fluidRow(
+                             column(6,
+                                    numericInput("WeibullTime1", label =  HTML(paste0("t",tags$sub("1"))), value = 12),
+                                    bsTooltip(id = "WeibullTime1", title = "Time 1")
+                             ),
+                             column(6,
+                                    numericInput("WeibullSurv1", label =  HTML(paste0("S(t",tags$sub("1"), ")")), value = 0.38),
+                                    bsTooltip(id = "WeibullSurv1", title = "Survival Probability at Time 1")
+                             )
+                           ),
+                           fluidRow(
+                             column(6,
+                                    numericInput("WeibullTime2", label =  HTML(paste0("t",tags$sub("2"))), value = 18),
+                                    bsTooltip(id = "WeibullTime2", title = "Time 2")
+
+                             ),
+                             column(6,
+                                    numericInput("WeibullSurv2", label =  HTML(paste0("S(t",tags$sub("2"), ")")), value = 0.24),
+                                    bsTooltip(id = "WeibullSurv2", title = "Survival Probability at Time 2")
+                             )
+                           ),
                          )
                        ),
 
@@ -90,52 +137,52 @@ ui <- fluidPage(
                          condition = "input.WeibullChoice == 'Distribution'",
                          fluidRow(
                            column(6,
-                                  numericInput("WeibullDistT1", label =  HTML(paste0("t",tags$sub("1"))), value = 12)
+                                  numericInput("WeibullDistT1", label =  HTML(paste0("t",tags$sub("1"))), value = 12),
+                                  bsTooltip(id = "WeibullDistT1", title = "Time 1"),
+
 
                            ),
                            column(6,
-                                  numericInput("WeibullDistT2", label =  HTML(paste0("t",tags$sub("2"))), value = 18)
+                                  numericInput("WeibullDistT2", label =  HTML(paste0("t",tags$sub("2"))), value = 18),
+                                  bsTooltip(id = "WeibullDistT2", title = "Time 2"),
 
                            )
                          ),
                          fluidRow(
-                           column(6,
-                                  uiOutput("WeibullDistS1Text")
-                           ),
                            column(4,
-                                  numericInput("WeibullDistS1BetaA", label = NULL, value = 20)
+                                  uiOutput("WeibullDistS1Text"),
+                                  bsTooltip(id = "WeibullDistS1Text", title = "The distribution of survival probability at time 1"),
                            ),
-                           column(1,
-                                  tags$div(", ")
-                           ),
-                           column(4,
-                                  numericInput("WeibullDistS1BetaB", label = NULL, value = 32)
-                           ),
-                           column(1,
-                                  tags$div(")")
+                           column(8,
+                                  div(style = "display: flex; align-items: center;",
+                                      numericInput("WeibullDistS1BetaA", label = NULL, value = 20, width = "45%"),
+                                      bsTooltip(id = "WeibullDistS1BetaA", title = "The mean of a Beta(a, b) distribution is a/(a+b)"),
+                                      tags$span(", "),
+                                      numericInput("WeibullDistS1BetaB", label = NULL, value = 32, width = "45%"),
+                                      bsTooltip(id = "WeibullDistS1BetaB", title = "The variance of a Beta(a, b) distribution is (a*b)/[(a+b)^2*(a+b+1)]"),
+                                      tags$span(")")
+                                  )
                            )
                          ),
                          fluidRow(
-                           column(6,
-                                  uiOutput("WeibullDistDelta1Text")
-                           ),
                            column(4,
-                                  numericInput("WeibullDistDelta1BetaA", label = NULL, value = 20)
+                                  uiOutput("WeibullDistDelta1Text"),
+                                  bsTooltip(id = "WeibullDistDelta1Text", title = "The distribution of the difference in survival probabilities between time 2 and time 1"),
+
                            ),
-                           column(1,
-                                  tags$div(", ")
-                           ),
-                           column(4,
-                                  numericInput("WeibullDistDelta1BetaB", label = NULL, value = 120)
-                           ),
-                           column(1,
-                                  tags$div(")")
+                           column(8,
+                                  div(style = "display: flex; align-items: center;",
+                                      numericInput("WeibullDistDelta1BetaA", label = NULL, value = 20, width = "45%"),
+                                      bsTooltip(id = "WeibullDistDelta1BetaA", title = "The mean of a Beta(a, b) distribution is a/(a+b)"),
+                                      tags$span(", "),
+                                      numericInput("WeibullDistDelta1BetaB", label = NULL, value = 140, width = "45%"),
+                                      bsTooltip(id = "WeibullDistDelta1BetaB", title = "The variance of a Beta(a, b) distribution is (a*b)/[(a+b)^2*(a+b+1)]"),
+                                      tags$span(")")
+                                  )
                            )
                          )
                        ),
-
                      )
-
                    ),
                    mainPanel = mainPanel(
                      plotOutput("plotControl")
@@ -309,15 +356,12 @@ ui <- fluidPage(
                          )
                        )
                      )
-
-
                    ),
                    mainPanel(
                      plotOutput("cdfRec")
                    )
                  )
         ),
-
 
 
         # Assurance UI ---------------------------------
@@ -406,7 +450,6 @@ ui <- fluidPage(
         )
 
 
-
       ), style='width: 1200px; height: 600px',
       #Well panel UI ---------------------------------
       wellPanel(
@@ -433,7 +476,6 @@ ui <- fluidPage(
           column(3, actionButton("exit", "Quit")
           )
         )
-
       )
     )
   )
@@ -443,8 +485,9 @@ ui <- fluidPage(
     # Functions for the control tab ---------------------------------
 
     output$ExpDistText <- renderUI({
-      paste0("S(", input$ExpSurvTime, ") ~ Beta(")
+      HTML(paste0("S(", input$ExpSurvTime, ") ~ Beta("))
     })
+
 
     output$WeibullDistS1Text <- renderUI({
       paste0("S(", input$WeibullDistT1, ") ~ Beta(")
@@ -454,30 +497,30 @@ ui <- fluidPage(
       paste0("S(", input$WeibullDistT2, ") - S(", input$WeibullDistT1,") ~ Beta(")
     })
 
-
-    # Reactive for common calculations based on distribution type and inputs
     controlSurvivalData <- reactive({
-      # Initialize an empty list to hold output data
       result <- list()
 
-      # Calculate control survival data based on distribution type and input options
       if (input$ControlDist == "Exponential") {
         if (input$ExpChoice == "Single Value") {
-          finalSurvTime <- -log(0.01) / input$ExpRate
-          controlTime <- seq(0, finalSurvTime, length.out = 100)
-          controlSurv <- exp(-input$ExpRate * controlTime)
+          if (input$ExpRateorTime == "Rate"){
+            ExpRate <- input$ExpRate
+          } else {
+            ExpRate <- -log(input$ExpSurv)/input$ExpTime
+          }
 
-          result$controlDF <- data.frame(controlTime = controlTime, controlSurv = controlSurv)
-          result$type <- "single"
+           finalSurvTime <- -log(0.01) / ExpRate
+           controlTime <- seq(0, finalSurvTime, length.out = 100)
+           controlSurv <- exp(-ExpRate * controlTime)
+
+           result$controlDF <- data.frame(controlTime = controlTime, controlSurv = controlSurv)
+           result$type <- "single"
+
 
         } else if (input$ExpChoice == "Distribution") {
-          nSamples <- 100
-          sampledLambda <- -log(rbeta(nSamples, input$ExpBetaA, input$ExpBetaB)) / input$ExpSurvTime
-          finalSurvTime <- -log(0.05) / min(sampledLambda)
-          controlTime <- seq(0, finalSurvTime, length.out = 100)
+          sampledLambda <- -log(rbeta(100, input$ExpBetaA, input$ExpBetaB)) / input$ExpSurvTime
+          controlTime <- seq(0, -log(0.05) / min(sampledLambda), length.out = 100)
 
-          # Vectorized calculation for survival curves
-          survivalMatrix <- exp(-outer(sampledLambda, controlTime, "*"))
+          survivalMatrix <- exp(-outer(sampledLambda, controlTime, "*")) # Vectorized calculation
           medVec <- apply(survivalMatrix, 2, median)
           UBVec <- apply(survivalMatrix, 2, quantile, 0.975)
           LBVec <- apply(survivalMatrix, 2, quantile, 0.025)
@@ -488,43 +531,71 @@ ui <- fluidPage(
 
       } else if (input$ControlDist == "Weibull") {
         if (input$WeibullChoice == "Single Value") {
-          finalSurvTime <- (1 / input$WeibullScale) * (-log(0.01))^(1 / input$WeibullShape)
-          controlTime <- seq(0, finalSurvTime, length.out = 100)
-          controlSurv <- exp(-(input$WeibullScale * controlTime)^input$WeibullShape)
+          if (input$WeibRateorTime == "Parameters") {
+            finalSurvTime <- (1 / input$WeibullScale) * (-log(0.01))^(1 / input$WeibullShape)
+            controlTime <- seq(0, finalSurvTime, length.out = 100)
+            controlSurv <- exp(-(input$WeibullScale * controlTime)^input$WeibullShape)
 
-          result$controlDF <- data.frame(controlTime = controlTime, controlSurv = controlSurv)
-          result$type <- "single"
+            result$controlDF <- data.frame(controlTime = controlTime, controlSurv = controlSurv)
+            result$type <- "single"
+          } else {
 
-        } else if (input$WeibullChoice == "Distribution") {
-          n <- 500
-          controlTime <- seq(0, 100, length.out = 100)
-          survival_curves <- matrix(NA, nrow = n, ncol = length(controlTime))
-
-          for (i in 1:n) {
-            sampledS1to <- rbeta(1, input$WeibullDistS1BetaA, input$WeibullDistS1BetaB)
-            sampledDelta1 <- rbeta(1, input$WeibullDistDelta1BetaA, input$WeibullDistDelta1BetaB)
-            sampledS1toPrime <- sampledS1to - sampledDelta1
-
-            # Solve for lambda and gamma using sampled values
-            solution <- nleqslv(c(10, 1), function(params) {
+            # Solve for lambda and gamma
+            WeibFunc <- function(params) {
               lambda <- params[1]
               k <- params[2]
-              c(exp(-(input$WeibullDistT1 / lambda)^k) - sampledS1to,
-                exp(-(input$WeibullDistT2 / lambda)^k) - sampledS1toPrime)
-            })
+              c(exp(-(input$WeibullTime1*lambda)^k) - input$WeibullSurv1,
+                exp(-(input$WeibullTime2*lambda)^k) - input$WeibullSurv2)
+            }
 
-            lambda <- 1 / solution$x[1]
+            solution <- nleqslv(c(1, 1), fn = WeibFunc)
+
+            lambda <- solution$x[1]
             gamma <- solution$x[2]
-            survival_curves[i, ] <- exp(-(lambda * controlTime)^gamma)
+
+            finalSurvTime <- (1 / lambda) * (-log(0.01))^(1 / gamma)
+            controlTime <- seq(0, finalSurvTime, length.out = 100)
+            controlSurv <- exp(-(lambda * controlTime)^gamma)
+
+            result$controlDF <- data.frame(controlTime = controlTime, controlSurv = controlSurv)
+            result$type <- "single"
+
+
           }
 
-          medVec <- apply(survival_curves, 2, median)
-          UBVec <- apply(survival_curves, 2, quantile, 0.975)
-          LBVec <- apply(survival_curves, 2, quantile, 0.025)
+
+        } else if (input$WeibullChoice == "Distribution") {
+          controlTime <- seq(0, 100, length.out = 100)
+          n <- 500
+
+          # Vectorized sampling
+          sampledS1to <- rbeta(n, input$WeibullDistS1BetaA, input$WeibullDistS1BetaB)
+          sampledDelta1 <- rbeta(n, input$WeibullDistDelta1BetaA, input$WeibullDistDelta1BetaB)
+          sampledS1toPrime <- sampledS1to - sampledDelta1
+
+          # Solve for lambda and gamma in a vectorized manner
+          solutions <- lapply(1:n, function(i) {
+            nleqslv(c(10, 1), function(params) {
+              lambda <- params[1]
+              k <- params[2]
+              c(exp(-(input$WeibullDistT1 / lambda)^k) - sampledS1to[i],
+                exp(-(input$WeibullDistT2 / lambda)^k) - sampledS1toPrime[i])
+            })$x
+          })
+
+          lambdas <- sapply(solutions, `[`, 1)
+          gammas <- sapply(solutions, `[`, 2)
+
+          # Vectorized survival curve calculation
+          survivalMatrix <- exp(-outer(1 / lambdas, controlTime, function(lambda, t) (lambda * t)^gammas))
+          medVec <- apply(survivalMatrix, 2, median)
+          UBVec <- apply(survivalMatrix, 2, quantile, 0.975)
+          LBVec <- apply(survivalMatrix, 2, quantile, 0.025)
 
           result$controlDF <- data.frame(controlTime = controlTime, medVec = medVec, UBVec = UBVec, LBVec = LBVec)
           result$type <- "distribution"
         }
+
       }
 
       return(result)
@@ -608,7 +679,6 @@ ui <- fluidPage(
 
     output$TPlot <- renderPlot({
 
-
       suppressWarnings(plotfit(TFit(), d = input$TDist,
                                ql = 0.05, qu = 0.95,
                                xl = TLimits()[1], xu = TLimits()[2],
@@ -619,7 +689,6 @@ ui <- fluidPage(
     # Functions for the post-delay HR tab ---------------------------------
 
     output$HRPlot <- renderPlot({
-
 
       suppressWarnings(plotfit(HRFit(), d = input$HRDist,
                                ql = 0.05, qu = 0.95,
@@ -639,47 +708,52 @@ ui <- fluidPage(
       # Calculate treatment survival data based on distribution type and input options
       if (input$ControlDist == "Exponential") {
         if (input$ExpChoice == "Single Value") {
-          sampledTrtHazard <- rep(NA, nSamples)
-          sampledbigT <- rep(NA, nSamples)
-          for (i in 1:nSamples){
-            if (runif(1) > input$P_S){
-              #Curves do not separate
-              sampledbigT[i] <- 0
-              sampledTrtHazard[i] <- input$ExpRate
-            } else {
-              if (runif(1) > input$P_DTE){
-                #Curves separate with no delay
-                HRSample <- sampleFit(HRFit(), n = 1)
-                sampledTrtHazard[i] <- input$ExpRate*HRSample[,input$HRDist]
+          if (input$ExpRateorTime == "Rate") {
+            ExpRate <- input$ExpRate
+          } else {
+            ExpRate <- -log(input$ExpSurv)/input$ExpTime
+          }
+            sampledTrtHazard <- rep(NA, nSamples)
+            sampledbigT <- rep(NA, nSamples)
+            for (i in 1:nSamples){
+              if (runif(1) > input$P_S){
+                #Curves do not separate
                 sampledbigT[i] <- 0
-              } else{
-                #Curves separate with a delay
-                HRSample <- sampleFit(HRFit(), n = 1)
-                bigTSample <- sampleFit(TFit(), n = 1)
-                sampledbigT[i] <- bigTSample[,input$TDist]
-                sampledTrtHazard[i] <- input$ExpRate*HRSample[,input$HRDist]
+                sampledTrtHazard[i] <- ExpRate
+              } else {
+                if (runif(1) > input$P_DTE){
+                  #Curves separate with no delay
+                  HRSample <- sampleFit(HRFit(), n = 1)
+                  sampledTrtHazard[i] <- ExpRate*HRSample[,input$HRDist]
+                  sampledbigT[i] <- 0
+                } else{
+                  #Curves separate with a delay
+                  HRSample <- sampleFit(HRFit(), n = 1)
+                  bigTSample <- sampleFit(TFit(), n = 1)
+                  sampledbigT[i] <- bigTSample[,input$TDist]
+                  sampledTrtHazard[i] <- ExpRate*HRSample[,input$HRDist]
+                }
               }
             }
-          }
 
-          controlTime <- seq(0, 100, length.out = 100)
-          survival_curves <- matrix(NA, nrow = nSamples, ncol = length(controlTime))
-          for (i in 1:nSamples){
-            survival_curves[i,] <- ifelse(controlTime<sampledbigT[i],
-                                          exp(-input$ExpRate*controlTime), exp(-input$ExpRate*sampledbigT[i]-sampledTrtHazard[i]*(controlTime-sampledbigT[i])))
-          }
+            controlTime <- seq(0, 100, length.out = 100)
+            survival_curves <- matrix(NA, nrow = nSamples, ncol = length(controlTime))
+            for (i in 1:nSamples){
+              survival_curves[i,] <- ifelse(controlTime<sampledbigT[i],
+                                            exp(-ExpRate*controlTime), exp(-ExpRate*sampledbigT[i]-sampledTrtHazard[i]*(controlTime-sampledbigT[i])))
+            }
 
-          medVec <- apply(survival_curves, 2, median)
-          UBVec <- apply(survival_curves, 2, quantile, 0.975)
-          LBVec <- apply(survival_curves, 2, quantile, 0.025)
+            medVec <- apply(survival_curves, 2, median)
+            UBVec <- apply(survival_curves, 2, quantile, 0.975)
+            LBVec <- apply(survival_curves, 2, quantile, 0.025)
 
-          lowerT <- quantile(sampledbigT, 0.025)
-          upperT <- quantile(sampledbigT, 0.975)
+            lowerT <- quantile(sampledbigT, 0.025)
+            upperT <- quantile(sampledbigT, 0.975)
 
-          result$treatmentDF <- data.frame(controlTime = controlTime, medVec = medVec,
-                                           UBVec = UBVec, LBVec = LBVec)
-          result$lowerT <- lowerT
-          result$upperT <- upperT
+            result$treatmentDF <- data.frame(controlTime = controlTime, medVec = medVec,
+                                             UBVec = UBVec, LBVec = LBVec)
+            result$lowerT <- lowerT
+            result$upperT <- upperT
 
         } else if (input$ExpChoice == "Distribution") {
 
@@ -852,34 +926,6 @@ ui <- fluidPage(
       return(result)
     })
 
-
-
-    # output$priorWorthFeedback <- renderUI({
-    #
-    #   addfeedback <- radiobuttons()
-    #
-    #   str1 <- ""
-    #
-    #   if (!is.null(addfeedback)){
-    #     for (i in 1:length(addfeedback)){
-    #       if (addfeedback[i]=="CI for Treatment Curve (0.1 and 0.9)"){
-    #         simlineslower <- data.frame(x = treatmentCILines()$TreatmentTime, y = treatmentCILines()$lowerbound)
-    #         simlinesupper <- data.frame(x = treatmentCILines()$TreatmentTime, y = treatmentCILines()$upperbound)
-    #
-    #
-    #         CIwidth <- simlinesupper[(which.min(abs(simlinesupper$x-input$timeInputFeedback))),]$y - simlineslower[(which.min(abs(simlineslower$x-input$timeInputFeedback))),]$y
-    #         midpoint <- (simlinesupper[(which.min(abs(simlinesupper$x-input$timeInputFeedback))),]$y + simlineslower[(which.min(abs(simlineslower$x-input$timeInputFeedback))),]$y)/2
-    #         n <- (16*midpoint*(1-midpoint))/(CIwidth^2)
-    #         str1 <- paste0("The confidence interval width at t = ", input$timeInputFeedback, " is equivalent to  ", round(n, 0),
-    #                        " patients from a Binomial distribution")
-    #       }
-    #     }
-    #   }
-    #
-    #   HTML(paste(str1, sep = '<br/>'))
-    #
-    # })
-
     output$medianSurvivalFeedback <- renderUI({
 
       str1 <- ""
@@ -888,8 +934,17 @@ ui <- fluidPage(
 
         controlData <- controlSurvivalData()$controlDF
         treatmentData <- treatmentSurvivalData()$treatmentDF
+        plotType <- controlSurvivalData()$type
 
-        median_time_control <- approx(controlData$controlSurv, controlData$controlTime, xout = 0.5)$y
+        if (plotType == "single") {
+          median_time_control <- approx(controlData$controlSurv, controlData$controlTime, xout = 0.5)$y
+        }
+
+        if (plotType == "distribution") {
+          median_time_control <- approx(controlData$medVec, controlData$controlTime, xout = 0.5)$y
+        }
+
+
         median_time_treatment <- approx(treatmentData$medVec, treatmentData$controlTime, xout = 0.5)$y
         str1 <- paste0("The median survival in the control group is ", round(median_time_control,1),
                        " and the median survival time in the treatment group is ", round(median_time_treatment, 1))
@@ -996,59 +1051,6 @@ ui <- fluidPage(
   })
 
 
-
-    # output$quantilePlot <- renderPlot({
-    #
-    #   addfeedback <- radiobuttons()
-    #
-    #
-    #   if (!is.null(addfeedback)){
-    #     for (i in 1:length(addfeedback)){
-    #       if (addfeedback[i]=="CI for Treatment Curve (0.1 and 0.9)"){
-    #
-    #         quantileMatrix <- treatmentCILines()$SimMatrix
-    #
-    #         quantileTime <- treatmentCILines()$TreatmentTime
-    #
-    #         quantileVec <- rep(NA, length = nrow(quantileMatrix))
-    #
-    #         for (j in 1:nrow(quantileMatrix)){
-    #           quantileVec[j] <- quantileTime[which.min(abs(quantileMatrix[j,]-input$feedbackQuantile))]
-    #         }
-    #
-    #         quantiledf <- data.frame(quantiletime = quantileVec)
-    #
-    #         theme_set(theme_grey(base_size = 12))
-    #         p1 <- ggplot(data=quantiledf, aes(x=quantiletime)) + geom_histogram(aes(y = after_stat(density)), binwidth = 5) + xlim(0, exp((1.527/input$gammacmean)-log(input$lambdacmean))*1.1) +
-    #           xlab("Time")
-    #
-    #         print(p1)
-    #
-    #       }
-    #     }
-    #   }
-    #
-    #
-    # })
-
-    # output$quantileFeedback <- renderUI({
-    #
-    #   addfeedback <- radiobuttons()
-    #
-    #   str1 <- ""
-    #
-    #   if (!is.null(addfeedback)){
-    #     for (i in 1:length(addfeedback)){
-    #       if (addfeedback[i]=="CI for Treatment Curve (0.1 and 0.9)"){
-    #         str1 <- paste0("This plot shows the distribution of samples for treatment group for the ", input$feedbackQuantile, " quantile")
-    #       }
-    #     }
-    #   }
-    #
-    #   HTML(paste(str1, sep = '<br/>'))
-    #
-    # })
-
     # Functions for the recruitment tab ---------------------------------
 
     output$cdfRec <- renderPlot({
@@ -1118,16 +1120,13 @@ ui <- fluidPage(
       }
     })
 
-
     # Functions for the assurance tab ---------------------------------
 
     calculateAssurance <- eventReactive(input$calcAssurance, {
 
       nSamples <- input$nSamples
 
-
         assFunc <- function(nControl, nTreatment){
-
 
           assVec <- rep(NA, nSamples)
           eventVec <- rep(NA, nSamples)
@@ -1136,32 +1135,37 @@ ui <- fluidPage(
 
             if (input$ControlDist == "Exponential") {
               if (input$ExpChoice == "Single Value") {
+                if (input$ExpRateorTime == "Rate"){
+                  ExpRate <- input$ExpRate
+                } else {
+                  ExpRate <- -log(input$ExpSurv)/input$ExpTime
+                }
 
-                controlTimes <- rexp(nControl, rate = input$ExpRate)
+                controlTimes <- rexp(nControl, rate = ExpRate)
 
                 if (runif(1) > input$P_S){
                   #Curves do not separate
                   sampledbigT <- 0
-                  sampledTrtHazard <- input$ExpRate
+                  sampledTrtHazard <- ExpRate
                 } else {
                   if (runif(1) > input$P_DTE){
                     #Curves separate with no delay
                     HRSample <- sampleFit(HRFit(), n = 1)
-                    sampledTrtHazard <- input$ExpRate*HRSample[,input$HRDist]
+                    sampledTrtHazard <- ExpRate*HRSample[,input$HRDist]
                     sampledbigT <- 0
                   } else{
                     #Curves separate with a delay
                     HRSample <- sampleFit(HRFit(), n = 1)
                     bigTSample <- sampleFit(TFit(), n = 1)
                     sampledbigT <- bigTSample[,input$TDist]
-                    sampledTrtHazard <- input$ExpRate*HRSample[,input$HRDist]
+                    sampledTrtHazard <- ExpRate*HRSample[,input$HRDist]
                   }
                 }
 
-                CP <- exp(-input$ExpRate*sampledbigT)
+                CP <- exp(-ExpRate*sampledbigT)
                 u <- runif(nTreatment)
 
-                treatmentTimes <- ifelse(u > CP, -log(u)/input$ExpRate, (1/sampledTrtHazard)*(sampledTrtHazard*sampledbigT-log(u)-input$ExpRate*sampledbigT))
+                treatmentTimes <- ifelse(u > CP, -log(u)/ExpRate, (1/sampledTrtHazard)*(sampledTrtHazard*sampledbigT-log(u)-ExpRate*sampledbigT))
 
                 dataCombined <- data.frame(time = c(controlTimes, treatmentTimes), group = c(rep("Control", nControl), rep("Treatment", nTreatment)))
 
@@ -1297,10 +1301,10 @@ ui <- fluidPage(
 
                 controlTimes <- rexp(nControl, rate = sampledLambda)
 
-                CP <- exp(-input$ExpRate*sampledbigT)
+                CP <- exp(-sampledLambda*sampledbigT)
                 u <- runif(nTreatment)
 
-                treatmentTimes <- ifelse(u > CP, -log(u)/input$ExpRate, (1/sampledTrtHazard)*(sampledTrtHazard*sampledbigT-log(u)-input$ExpRate*sampledbigT))
+                treatmentTimes <- ifelse(u > CP, -log(u)/sampledLambda, (1/sampledTrtHazard)*(sampledTrtHazard*sampledbigT-log(u)-sampledLambda*sampledbigT))
 
                 dataCombined <- data.frame(time = c(controlTimes, treatmentTimes), group = c(rep("Control", nControl), rep("Treatment", nTreatment)))
 
@@ -2427,7 +2431,6 @@ ui <- fluidPage(
     # })
 
 
-
     # Functions for the well panel ---------------------------------
 
     df1 <- reactive({
@@ -2494,8 +2497,5 @@ ui <- fluidPage(
   }
 
   shiny::shinyApp(ui, server)
-
-
-
 
 
