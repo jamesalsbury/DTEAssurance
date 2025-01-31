@@ -13,7 +13,7 @@ knitr::opts_chunk$set(
 )
 ```
 
-```{r}
+```{r, include = F}
 library(survival)
 library(rjags)
 library(SHELF)

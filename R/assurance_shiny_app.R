@@ -10,7 +10,7 @@
 #'
 
 assurance_shiny_app <- function() {
-  app_dir <- system.file("shiny/AssuranceApp/app", package = "DTEAssurance")
+  app_dir <- system.file("shiny/AssuranceApp/app.R", package = "DTEAssurance")
   if (app_dir == "") {
     stop("Could not find app directory. Try re-installing `DTEAssurance`.", call. = FALSE)
   }
