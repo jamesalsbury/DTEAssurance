@@ -49,7 +49,7 @@ sim_dte <- function(n_c, n_t, lambda_c, delay_time, post_delay_HR, dist = "expon
 }
 
 
-#' Function to censor a data set
+#' Censor a survival data set
 #'
 #' @param data An uncensored dataframe
 #' @param cens_events Number of events at which you wish to perform the censoring
@@ -79,44 +79,46 @@ cens_data <- function(data, cens_events = NULL, cens_time = NULL){
   return(list(data = data, cens_events = cens_events, cens_time = cens_time))
 }
 
+delay_time_SHELF <- SHELF::fitdist(c(3, 4, 5), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 10)
+post_delay_HR_SHELF <- SHELF::fitdist(c(0.55, 0.6, 0.7), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 1.5)
+delay_time_dist <- "hist"
+post_delay_HR_dist <- "hist"
+P_S <- 0.8
+P_DTE <- 0.7
 
-#' Function to simulate a data set, in the context of delayed treatment effects
-#'
-#' @param n_C Sample size in control group
-#' @param n_E Sample size in experimental treatment group
-#' @param lambda_C Weibull control parameter
-#' @param HRStar The post-delay hazard ratio
-#' @param HRStarDist The chosen parametric distribution for the post-delay hazard ratio
-#' @param gamma_C Weibull control parameter
-#' @param gamma_E Weibull experimental treatment parameter
-#' @param delayT Length of delay
-#' @param delayTDist The chosen parametric distribution for the length of delay
-#' @param P_S Probability of the Kaplan-Meier curves separating at some time
-#' @param P_DTE Probability of the treatment being subject to a delay (given the K-M curves will separate)
-#' @param censEvents Number of events to be censored at
-#' @param censTime Time of censoring
-#' @param rec_method Recruitment method
-#' @param rec_period Recruitment period (for the power method)
-#' @param rec_power Recruitment power (for the power method)
-#' @param rec_rate Recruitment rate (for the piecewise constant method)
-#' @param rec_duration Recruitment duration (for the piecewise constant method)
-#' @param analysis_method Method of analysis (log-rank test or weighted log-rank test)
-#' @param rho Rho parameter for the Fleming-Harrington weighted log-rank test
-#' @param gamma Gamma parameter for the Fleming-Harrington weighted log-rank test
-#' @param nSims Number of simulations
-#'
-#' @return A value
-#' @export
 
-calc_dte_assurance <- function(n_c, n_t, lambda_c, HRStar, HRStarDist = "hist", gamma_C, gamma_E, delayT, delayTDist = "hist",
-                               P_S = 1, P_DTE = 0, censEvents = NULL, censTime = NULL, rec_method, rec_period=NULL, rec_power=NULL, rec_rate=NULL, rec_duration=NULL,
+calc_dte_assurance <- function(n_c, n_t, lambda_c, control_dist = "Exponential",
+                               delay_time_SHELF, delay_time_dist = "hist",
+                               post_delay_HR_SHELF, post_delay_HR_dist = "hist",
+                               P_S = 1, P_DTE = 0,
+                               censEvents = NULL, censTime = NULL,
+                               rec_method, rec_period=NULL, rec_power=NULL, rec_rate=NULL, rec_duration=NULL,
                                analysis_method, rho = 0, gamma = 0, nSims=1e4){
 
-  control_n <- length(lambda_C)
+
+  if (runif(1) > P_S){
+    #Curves do not separate
+    delay_time <- 0
+    post_delay_HR <- 1
+  } else {
+    if (runif(1) > P_DTE){
+      #Curves separate with no delay
+      delay_time <- 0
+      post_delay_HR_sample <- SHELF::sampleFit(post_delay_HR_SHELF, n = 1)
+      post_delay_HR <- post_delay_HR_sample[,post_delay_HR_dist]
+    } else{
+      #Curves separate with a delay
+      delay_time_sample <- SHELF::sampleFit(delay_time_SHELF(), n = 1)
+      post_delay_HR_sample <- SHELF::sampleFit(post_delay_HR_SHELF(), n = 1)
+      delay_time <- delay_time_sample[,delay_time_dist]
+      post_delay_HR <- post_delay_HR_sample[,post_delay_HR_dist]
+    }
+  }
 
 
-  assVec <- rep(NA, nSims)
-  censVec <- rep(NA, nSims)
+  data <- sim_dte(n_c, n_t, lambda_c, delay_time, post_delay_HR, dist = "exponential", gamma_c = NULL)
+
+
 
   for (i in 1:nSims){
 
@@ -131,11 +133,6 @@ calc_dte_assurance <- function(n_c, n_t, lambda_c, HRStar, HRStarDist = "hist", 
 
     #Make the simplifications
     sampled_gammae <- sampled_gammac
-
-
-    dataCombined <- SimDTEDataSet(n_C, n_E, sampled_lambdac, sampled_HRStar, sampled_gammac, sampled_gammae, sampled_delayT, P_S, P_DTE,
-                                  rec_method, rec_period, rec_power, rec_rate, rec_duration)
-
 
     censoredDF <- CensFunc(dataCombined, censEvents, censTime)
 
@@ -156,7 +153,7 @@ calc_dte_assurance <- function(n_c, n_t, lambda_c, HRStar, HRStarDist = "hist", 
 }
 
 
-#' Test a data set for statistical significance
+#' Calculate statistical significance on a survival data set
 #'
 #' @import nph
 #'
@@ -174,8 +171,6 @@ survival_test <- function(data, analysis_method = "LRT", alternative = "one.side
 
   coxmodel <- coxph(Surv(survival_time, status)~group, data = data)
   deltad <- as.numeric(exp(coef(coxmodel)))
-
-  #Performs a test on the data
 
   Signif <- 0
 
@@ -199,3 +194,98 @@ survival_test <- function(data, analysis_method = "LRT", alternative = "one.side
   return(Signif)
 
 }
+
+#' Add a recruitment time to a survival data
+#'
+#' @param data A survival dataframe
+#' @param rec_method Recruitment method, must be one of "power" or "PWC" (piecewise constant)
+#' @param rec_period Parameter used to model recruitment according to power model
+#' @param rec_power Parameter used to model recruitment according to power model
+#' @param rec_rate Parameter used to model recruitment according to piecewise constant model
+#' @param rec_duration Parameter used to model recruitment according to piecewise constant model
+#'
+#' @return a DTE data set
+#' @export
+#'
+
+add_recruitment_time <- function(data, rec_method,
+                                 rec_period=NULL, rec_power=NULL, rec_rate=NULL, rec_duration=NULL){
+
+  n_patients <- nrow(data)
+
+  if (rec_method=="power"){
+
+    data$rec_time <- rec_period * stats::runif(n_patients)^(1/rec_power)
+
+  }
+
+  if (rec_method == "PWC") {
+    # Parse recruitment rate and duration inputs
+    rec_rate <- as.numeric(unlist(strsplit(rec_rate, ",")))
+    rec_duration <- as.numeric(unlist(strsplit(rec_duration, ",")))
+
+    # Ensure valid inputs
+    if (any(rec_rate < 0)) stop("rec_rate should be non-negative")
+    if (length(rec_rate) != length(rec_duration)) stop("Lengths of rec_rate and rec_duration should match")
+
+    n_periods <- length(rec_duration)
+
+    if (length(rec_rate) == 1) { # Simple case with only one rate
+      rec <- cumsum(stats::rexp(n = n_patients, rate = rec_rate))
+    } else { # Piecewise recruitment
+      # Create a data frame for the piecewise periods
+      df <- data.frame(
+        rate = rec_rate,
+        duration = rec_duration,
+        period = 1:n_periods,
+        finish = cumsum(rec_duration),
+        lambda = rec_duration * rec_rate,
+        origin = c(0, cumsum(rec_duration)[-n_periods])
+      )
+
+      # Generate the number of recruits in each period using Poisson distribution
+      df$N <- sapply(df$lambda, function(x) stats::rpois(n = 1, lambda = x))
+
+      # Check if any recruits were generated
+      if (sum(df$N) == 0) {
+        if (df$rate[n_periods] == 0) stop("Please specify positive rec_rate for the last period; otherwise, enrollment cannot finish.")
+        rec <- cumsum(stats::rexp(n = n_patients, rate = df$rate[n_periods])) + df$finish[n_periods]
+      } else {
+        # Generate recruitment times for each period
+        rec <- unlist(apply(df, 1, function(x) {
+          sort(stats::runif(n = x[["N"]], min = x[["origin"]], max = x[["finish"]]))
+        }))
+
+        # Check if we have enough recruits
+        if (length(rec) >= n_patients) {
+          rec <- rec[1:n_patients]
+        } else {
+          # Ensure enrollment completion if needed
+          if (df$rate[n_periods] == 0) stop("Please specify positive rec_rate for the last period; otherwise, enrollment cannot finish.")
+
+          # Generate additional recruitment times if needed
+          rec <- c(rec, cumsum(stats::rexp(n_patients - length(rec), rate = df$rate[n_periods])) + df$finish[n_periods])
+        }
+      }
+    }
+
+    # Assign recruitment times to the data frame
+    data$rec_time <- rec
+  }
+
+
+  data$pseudo_time <- data$time + data$rec_time
+
+  return(data)
+
+}
+
+
+
+
+
+
+
+
+
+
