@@ -118,6 +118,24 @@ calc_dte_assurance <- function(n_c, n_t, lambda_c, control_dist = "Exponential",
 
   data <- sim_dte(n_c, n_t, lambda_c, delay_time, post_delay_HR, dist = "exponential", gamma_c = NULL)
 
+  if (rec_method=="power"){
+    data <- add_recruitment_time(data, rec_method,
+                                     rec_period=NULL, rec_power=NULL)
+  }
+
+  if (rec_method == "PWC"){
+    data <- add_recruitment_time(data, rec_method,
+                                      rec_rate=NULL, rec_duration=NULL)
+  }
+
+
+  data <- cens_data(data, cens_events, cens_time)$data
+
+
+
+
+
+
 
 
   for (i in 1:nSims){
