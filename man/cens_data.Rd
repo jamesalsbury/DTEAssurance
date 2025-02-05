@@ -2,7 +2,7 @@
 % Please edit documentation in R/main.R
 \name{cens_data}
 \alias{cens_data}
-\title{Function to censor a data set}
+\title{Censor a survival data set}
 \usage{
 cens_data(data, cens_events = NULL, cens_time = NULL)
 }
@@ -17,5 +17,5 @@ cens_data(data, cens_events = NULL, cens_time = NULL)
 A list: censored dataframe, cens_events and cens_time
 }
 \description{
-Function to censor a data set
+Censor a survival data set
 }

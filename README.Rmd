@@ -25,9 +25,10 @@ library(SHELF)
 <!-- badges: start -->
 <!-- badges: end -->
 
-DTE is an R package which elicits two distributions and then calculates assurance using these elicited prior distributions. The package implements the methods as described in 
+DTEAssurance is an R package  for implementing the assurance method for a delayed treatment effect. Distributions are elicited for the length of delay and the post-delay hazard ratio. The package implements the methodology from  
 
-* [this paper](https://onlinelibrary.wiley.com/doi/10.1002/sim.10136)
+
+* [Salsbury JA, Oakley JE, Julious SA, Hampson LV. Assurance methods for designing a clinical trial with a delayed treatment effect. Statistics in Medicine. 2024; 43(19): 3595-3612. doi: 10.1002/sim.10136](https://onlinelibrary.wiley.com/doi/10.1002/sim.10136)
 
 
 ## Installation
@@ -38,6 +39,9 @@ You can install the development version of DTEAssurance from [GitHub](https://gi
 devtools::install_github("jamesalsbury/DTEAssurance")
 ```
 
+```{r}
+library(DTEAssurance)
+```
 
 ## Example (from the paper)
 
@@ -127,105 +131,6 @@ HRStarBeliefs <- SHELF::fitdist(c(0.55, 0.6, 0.7), probs = c(0.25, 0.5, 0.75), l
 ```
 
 
-### Calculating Assurance
-
-```{r}
-
-DTEAssurance::calculateAssurance(n_C = 100, n_E = 100, lambda_C = lambda_Csample, HRStar = HRStarBeliefs, HRStarDist = "gamma", gamma_C = gamma_Csample, gamma_E = gamma_Csample, delayT = TBeliefs, delayTDist = "gamma",
-                               P_S = P_S, P_DTE = P_DTE, censEvents = 200*0.8, rec_method = "power", rec_period=12, rec_power=1, 
-                               analysis_method = "WLRT", rho = 0, gamma = 1, nSims=1e1)
-```
-
-
-
-### Plotting Assurance curve
-
-```{r}
-nVec <- seq(30, 500, by = 50)
-
-resultsAssurance <- sapply(nVec, function(n_C){
-  n_E <- n_C
-  censEvents <- (n_C + n_E) * 0.8
-  DTEAssurance::calculateAssurance(n_C = n_C, n_E = n_E, lambda_C = lambda_Csample, HRStar = HRStarBeliefs, HRStarDist = "gamma",
-                     gamma_C = gamma_Csample, gamma_E = gamma_Csample, delayT = TBeliefs, delayTDist = "gamma",
-                     P_S = P_S, P_DTE = P_DTE, censEvents = censEvents, rec_method = "power", rec_period=12, rec_power=1,
-                     analysis_method = "WLRT", rho = 0, gamma = 1, nSims=1e3)
-})
-
-
-assuranceSmooth <- loess(unlist(resultsAssurance[1,])~nVec)
-
-plot(nVec*2, predict(assuranceSmooth), type = "l", col = "red", ylim =c(0,1), ylab = "Power/Assurance", xlab = "Total sample size")
-
-```
-
-### Plotting Power
-
-```{r}
-
-weibFit <- survreg(Surv(Survival.time, Status)~1, data = combinedControlArms, dist = "weibull")
-MLE_gammaC <- as.numeric(exp(-weibFit$icoef[2]))
-MLE_lambdaC <- as.numeric(1/(exp(weibFit$icoef[1])))
-
-P_S <- 1
-P_DTE <- 1
-
-TBeliefs <- SHELF::fitdist(c(3.99, 4, 4.01), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 10)
-HRStarBeliefs <- SHELF::fitdist(c(0.599, 0.6, 0.601), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 1.5)
-
-
-resultsPower <- sapply(nVec, function(n_C){
-  n_E <- n_C
-  censEvents <- (n_C + n_E) * 0.8
-  DTEAssurance::calculateAssurance(n_C = n_C, n_E = n_E, lambda_C = MLE_lambdaC, HRStar = HRStarBeliefs, HRStarDist = "gamma",
-                     gamma_C = MLE_gammaC, gamma_E = MLE_gammaC, delayT = TBeliefs, delayTDist = "gamma",
-                     P_S = P_S, P_DTE = P_DTE, censEvents = censEvents, rec_method = "power", rec_period=12, rec_power=1,
-                     analysis_method = "WLRT", rho = 0, gamma = 1, nSims=1e3)
-})
-
-
-PowerSmooth <- loess(unlist(resultsPower[1,])~nVec)
-```
-
-### Plotting Power (no delay)
-
-```{r}
-
-weibFit <- survreg(Surv(Survival.time, Status)~1, data = combinedControlArms, dist = "weibull")
-MLE_gammaC <- as.numeric(exp(-weibFit$icoef[2]))
-MLE_lambdaC <- as.numeric(1/(exp(weibFit$icoef[1])))
-
-P_S <- 1
-P_DTE <- 0
-
-TBeliefs <- SHELF::fitdist(c(3.99, 4, 4.01), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 10)
-HRStarBeliefs <- SHELF::fitdist(c(0.599, 0.6, 0.601), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 1.5)
-
-
-resultsPowerND <- sapply(nVec, function(n_C){
-  n_E <- n_C
-  censEvents <- (n_C + n_E) * 0.8
-  DTEAssurance::calculateAssurance(n_C = n_C, n_E = n_E, lambda_C = MLE_lambdaC, HRStar = HRStarBeliefs, HRStarDist = "gamma",
-                     gamma_C = MLE_gammaC, gamma_E = MLE_gammaC, delayT = TBeliefs, delayTDist = "gamma",
-                     P_S = P_S, P_DTE = P_DTE, censEvents = censEvents, rec_method = "power", rec_period=12, rec_power=1,
-                      analysis_method = "WLRT", rho = 0, gamma = 1, nSims=1e3)
-})
-
-
-PowerNDSmooth <- loess(unlist(resultsPowerND[1,])~nVec)
-```
-
-
-```{r}
-plot(nVec*2, predict(assuranceSmooth), type = "l", col = "red", ylim =c(0,1), ylab = "Power/Assurance", xlab = "Total sample size")
-
-lines(nVec*2, predict(PowerSmooth), lty  = 2)
-
-lines(nVec*2, predict(PowerNDSmooth), lty  = 3, col = "blue")
-
-legend("bottomright", legend = c("Assurance", "Power", "Power assuming no delay"), col = c("red", "black", "blue"), lty = 1:3)
-
-```
 
 
 

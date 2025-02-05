@@ -2,7 +2,7 @@
 % Please edit documentation in R/main.R
 \name{survival_test}
 \alias{survival_test}
-\title{Test a data set for statistical significance}
+\title{Calculate statistical significance on a survival data set}
 \usage{
 survival_test(
   data,
@@ -30,5 +30,5 @@ survival_test(
 An indicator of significance
 }
 \description{
-Test a data set for statistical significance
+Calculate statistical significance on a survival data set
 }

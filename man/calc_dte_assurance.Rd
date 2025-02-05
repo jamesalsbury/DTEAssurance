@@ -2,81 +2,84 @@
 % Please edit documentation in R/main.R
 \name{calc_dte_assurance}
 \alias{calc_dte_assurance}
-\title{Function to simulate a data set, in the context of delayed treatment effects}
+\title{Calculate Assurance for a trial with a Delayed Treatment Effect}
 \usage{
 calc_dte_assurance(
   n_c,
   n_t,
   lambda_c,
-  HRStar,
-  HRStarDist = "hist",
-  gamma_C,
-  gamma_E,
-  delayT,
-  delayTDist = "hist",
+  control_dist = "Exponential",
+  delay_time_SHELF,
+  delay_time_dist = "hist",
+  post_delay_HR_SHELF,
+  post_delay_HR_dist = "hist",
   P_S = 1,
   P_DTE = 0,
-  censEvents = NULL,
-  censTime = NULL,
+  cens_events = NULL,
+  cens_time = NULL,
   rec_method,
   rec_period = NULL,
   rec_power = NULL,
   rec_rate = NULL,
   rec_duration = NULL,
-  analysis_method,
+  analysis_method = "LRT",
+  alpha = 0.05,
+  alternative = "one.sided",
   rho = 0,
   gamma = 0,
-  nSims = 10000
+  nSims = 1000
 )
 }
 \arguments{
-\item{HRStar}{The post-delay hazard ratio}
+\item{n_c}{number of patients in the control group}
 
-\item{HRStarDist}{The chosen parametric distribution for the post-delay hazard ratio}
+\item{n_t}{number of patients in the control group}
 
-\item{gamma_C}{Weibull control parameter}
+\item{lambda_c}{control hazard}
 
-\item{gamma_E}{Weibull experimental treatment parameter}
+\item{control_dist}{distribution of control distribution, must be one of "exponential" (default) or "weibull"}
 
-\item{delayT}{Length of delay}
+\item{delay_time_SHELF}{A SHELF object, beliefs about the delay time}
 
-\item{delayTDist}{The chosen parametric distribution for the length of delay}
+\item{delay_time_dist}{Distribution of the delay time, "hist" is default. See SHELF help for more details}
 
-\item{P_S}{Probability of the Kaplan-Meier curves separating at some time}
+\item{post_delay_HR_SHELF}{A SHELF object, beliefs about the post-delay hazard ratio}
 
-\item{P_DTE}{Probability of the treatment being subject to a delay (given the K-M curves will separate)}
+\item{post_delay_HR_dist}{Distribution of the post-delay hazard ratio, "hist" is default. See SHELF help for more details}
 
-\item{censEvents}{Number of events to be censored at}
+\item{P_S}{Probability of the survival curves separating}
 
-\item{censTime}{Time of censoring}
+\item{P_DTE}{Probability of the survival curves being subject to a DTE, given they separate}
 
-\item{rec_method}{Recruitment method}
+\item{cens_events}{Number of events at which you wish to perform the censoring (must be less than n_c + n_t)}
 
-\item{rec_period}{Recruitment period (for the power method)}
+\item{cens_time}{Time at which you wish to perform the censoring}
 
-\item{rec_power}{Recruitment power (for the power method)}
+\item{rec_method}{Recruitment method, must be one of "power" or "PWC" (piecewise constant)}
 
-\item{rec_rate}{Recruitment rate (for the piecewise constant method)}
+\item{rec_period}{Parameter used to model recruitment according to power model}
 
-\item{rec_duration}{Recruitment duration (for the piecewise constant method)}
+\item{rec_power}{Parameter used to model recruitment according to power model}
 
-\item{analysis_method}{Method of analysis (log-rank test or weighted log-rank test)}
+\item{rec_rate}{Parameter used to model recruitment according to piecewise constant model}
+
+\item{rec_duration}{Parameter used to model recruitment according to piecewise constant model}
+
+\item{analysis_method}{Method of analysis, "LRT" (default) for standard log-rank test, or "WLRT" for weighted log-rank test}
+
+\item{alpha}{Type I error}
+
+\item{alternative}{String specifying the alternative hypothesis, must be one of "one.sided" or "two-sided" (default)}
 
 \item{rho}{Rho parameter for the Fleming-Harrington weighted log-rank test}
 
 \item{gamma}{Gamma parameter for the Fleming-Harrington weighted log-rank test}
 
-\item{nSims}{Number of simulations}
-
-\item{n_C}{Sample size in control group}
-
-\item{n_E}{Sample size in experimental treatment group}
-
-\item{lambda_C}{Weibull control parameter}
+\item{nSims}{Number of simulations, default is 1000}
 }
 \value{
-A value
+A list
 }
 \description{
-Function to simulate a data set, in the context of delayed treatment effects
+Calculate Assurance for a trial with a Delayed Treatment Effect
 }
