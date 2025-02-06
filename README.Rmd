@@ -1,5 +1,8 @@
 ---
-output: github_document
+title: "README"
+output:   
+  github_document:
+    pandoc_args: --webtex
 ---
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
@@ -28,109 +31,133 @@ library(SHELF)
 DTEAssurance is an R package  for implementing the assurance method for a delayed treatment effect. Distributions are elicited for the length of delay and the post-delay hazard ratio. The package implements the methodology from  
 
 
-* [Salsbury JA, Oakley JE, Julious SA, Hampson LV. Assurance methods for designing a clinical trial with a delayed treatment effect. Statistics in Medicine. 2024; 43(19): 3595-3612. doi: 10.1002/sim.10136](https://onlinelibrary.wiley.com/doi/10.1002/sim.10136)
+* Salsbury JA, Oakley JE, Julious SA, Hampson LV. [Assurance methods for designing a clinical trial with a delayed treatment effect](https://onlinelibrary.wiley.com/doi/10.1002/sim.10136). Statistics in Medicine. 2024; 43(19): 3595-3612. doi: 10.1002/sim.10136]
 
 
 ## Installation
 
-You can install the development version of DTEAssurance from [GitHub](https://github.com/) with:
+The `DTEAssurance' package is currently on GitHub only. It can be installed and loaded using the following commands:
 
-```{r}
+```{r, warning = F, message=F}
 devtools::install_github("jamesalsbury/DTEAssurance")
+library(DTEAssurance)
 ```
 
-```{r}
-library(DTEAssurance)
+## Shiny App
+
+A `shiny' app is included in the package for implementing the methods. To launch the app, run the command:
+
+```{r, eval = F}
+DTEAssurance::assurance_shiny_app()
 ```
 
 ## Example (from the paper)
 
 ### Control
 
-```{r}
-ZODIAC <- read.csv("data/ZODIAC.csv")
-REVEL <- read.csv("data/REVEL.csv")
-INTEREST <- read.csv("data/INTEREST.csv")
-```
+We assume the observations in the control group will be exponentially distributed, with a median survival time ($t_m$) of 8 months. The hazard rate is
+
+$$ \lambda = \frac{\text{log}(2)}{t_m},$$
+so in this case $\lambda \approx 0.087$
 
 
-```{r}
+### Eliciting beliefs about the treatment group
 
-ZodiacFit <- survfit(Surv(Survival.time, Status)~1, data = ZODIAC)
-plot(ZodiacFit, col = "blue", conf.int = F, xlab = "Time (months)", ylab = "Overall Survival")
-
-RevelFit <- survfit(Surv(Survival.time, Status)~1, data = REVEL)
-lines(RevelFit, col = "red", conf.int = F)
-
-InterestFit <- survfit(Surv(Survival.time, Status)~1, data = INTEREST)
-lines(InterestFit, col = "yellow", conf.int = F)
-
-combinedControlArms <- rbind(INTEREST, REVEL, ZODIAC)
-
-combinedFit <- survfit(Surv(Survival.time, Status)~1, data = combinedControlArms)
-lines(combinedFit, col = "black", conf.int = F)
-
-legend("topright", legend = c("ZODIAC", "REVEL", "INTEREST", "Combined"), lty = 1, col = c("blue", "red", "yellow", "black"))
-
-```
-
-
-```{r}
-#Performing MCMC on this data set
-
-modelstring="
-
-data {
-  for (j in 1:n){
-    zeros[j] <- 0
-  }
-}
-
-model {
-  C <- 10000
-  for (i in 1:n){
-    zeros[i] ~ dpois(zeros.mean[i])
-    zeros.mean[i] <-  -l[i] + C
-    l[i] <- ifelse(datEvent[i]==1, log(gamma_C)+gamma_C*log(lambda_C*datTimes[i])-(lambda_C*datTimes[i])^gamma_C-log(datTimes[i]), -(lambda_C*datTimes[i])^gamma_C)
-  }
-  
-    lambda_C ~ dnorm(1,1/10000)T(0,)
-    gamma_C ~ dnorm(1,1/10000)T(0,)
-    
-    }
-"
-
-model = jags.model(textConnection(modelstring), data = list(datTimes = combinedControlArms$Survival.time, datEvent = combinedControlArms$Status, n= nrow(combinedControlArms)), quiet = T) 
-
-update(model, n.iter=1000)
-output=coda.samples(model=model, variable.names=c("lambda_C", "gamma_C"), n.iter = 10000)
-
-plot(output)
-
-lambda_Csample <- as.numeric(unlist(output[,2]))
-gamma_Csample <- as.numeric(unlist(output[,1]))
-```
-
-### Eliciting T
-
-First, we use SHELF to elicit beliefs about T, the length of the delay
+First, we need to elicit beliefs about the probability that the survival curves will diverge, $P_{S}$. We assume the expert judges this probability to be 0.9. 
 
 ```{r}
 P_S <- 0.9
-P_DTE <- 0.7
-TBeliefs <- SHELF::fitdist(c(3, 4, 5), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 10)
 ```
 
-
-### Eliciting post-delay HR
-
-and the treatment effect, in the form of the post-delay hazard ratio
+Second, we require the probability that the survival curves will be subject to a delayed treatment effect, given they diverge, $P_\text{DTE}$. We assume the expert judges this probability to be 0.7. 
 
 ```{r}
-HRStarBeliefs <- SHELF::fitdist(c(0.55, 0.6, 0.7), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 1.5)
+P_DTE <- 0.7
 ```
 
+We now require the expert to consider their uncertainty about the following two quantities: the length of the delay, and the magnitude of the treatment effect, once the treatment begins to take effect.
+
+### Eliciting length of delay
+
+For the length of delay, suppose the expert provides a median of 4 months, and two quartiles (25% and 75%) of 3 and 5 months, respectively. A Gamma(7.29,1.76) distribution is fit to these judgements
+
+```{r}
+delay_time_beliefs <- SHELF::fitdist(c(3, 4, 5), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 10)
+SHELF::plotfit(delay_time_beliefs, d = "gamma")
+```
+
+### Eliciting post-delay hazard ratio
+
+For the post-delay hazard ratio, suppose the expert provides a median of 0.6 and two quartiles (25% and 75%) of 0.55 and 0.7, respectively. A Gamma(29.6, 47.8) distribution is fit to these judgements
+
+```{r}
+post_delay_HR_beliefs <- SHELF::fitdist(c(0.55, 0.6, 0.7), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 1.5)
+SHELF::plotfit(post_delay_HR_beliefs, d = "gamma")
+```
+
+## Calculating Assurance
+
+```{r}
+
+DTEAssurance::calc_dte_assurance(n_c = 300,
+                                  n_t = 300,
+                                  lambda_c = log(2)/8,
+                                  control_dist = "Exponential",
+                                  delay_time_SHELF = delay_time_beliefs,
+                                  delay_time_dist = "gamma",
+                                  post_delay_HR_SHELF = post_delay_HR_beliefs,
+                                  post_delay_HR_dist = "gamma",
+                                  P_S = 0.9,
+                                  P_DTE = 0.7,
+                                  cens_events = 150,
+                                  rec_method = "power",
+                                  rec_period = 12,
+                                  rec_power = 1,
+                                  analysis_method = "LRT",
+                                  alpha = 0.05,
+                                  alternative = "one.sided",
+                                  rho = 0,
+                                  gamma = 0,
+                                  nSims = 1000)
+```
+
+```{r}
+
+nVec <- seq(30, 500, by = 50)
+
+resultsAssurance <- sapply(nVec, function(n){
+  n_c <- n_t <- n
+  cens_events <- (n_c + n_t) * 0.8
+DTEAssurance::calc_dte_assurance(n_c = n_c,
+                                  n_t = n_t,
+                                  lambda_c = log(2)/8,
+                                  control_dist = "Exponential",
+                                  delay_time_SHELF = delay_time_beliefs,
+                                  delay_time_dist = "gamma",
+                                  post_delay_HR_SHELF = post_delay_HR_beliefs,
+                                  post_delay_HR_dist = "gamma",
+                                  P_S = 0.9,
+                                  P_DTE = 0.7,
+                                  cens_events = cens_events,
+                                  rec_method = "power",
+                                  rec_period = 12,
+                                  rec_power = 1,
+                                  analysis_method = "LRT",
+                                  alpha = 0.05,
+                                  alternative = "one.sided",
+                                  rho = 0,
+                                  gamma = 0,
+                                  nSims = 100)
+})
 
 
+assuranceSmooth <- loess(unlist(resultsAssurance[1,])~nVec)
+assuranceSmooth <- loess(unlist(resultsAssurance[1,])~nVec)
+
+unlist(resultsAssurance[2,])
+
+plot(nVec*2, predict(assuranceSmooth), type = "l", col = "red", ylim =c(0,1), ylab = "Power/Assurance", xlab = "Total sample size")
+
+```
 
 
