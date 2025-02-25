@@ -11,30 +11,31 @@
 #' @return a DTE data set
 #' @export
 #'
-sim_dte <- function(n_c, n_t, lambda_c, delay_time, post_delay_HR, dist = "exponential", gamma_c = NULL){
+sim_dte <- function(n_c, n_t, lambda_c, delay_time, post_delay_HR, dist = "Exponential", gamma_c = NULL){
 
   #Simulate control data
   u <- runif(n_c)
 
-  if (dist == "exponential"){
+  if (dist == "Exponential"){
     control_times <- -log(u)/lambda_c
   }
 
-  if (dist == "weibull"){
+  if (dist == "Weibull"){
     control_times <- (1/lambda_c)*(-log(u))^(1/gamma_c)
   }
 
   #Simulate treatment data
   u <- runif(n_t)
-  if (dist == "exponential"){
+  if (dist == "Exponential"){
     CP <- exp(-lambda_c*delay_time)
     treatment_times <- ifelse(u>CP,
                               -log(u)/lambda_c,
                               (1/(post_delay_HR*lambda_c))*(post_delay_HR*lambda_c*delay_time-log(u)-lambda_c*delay_time))
   }
 
-  if (dist == "weibull"){
+  if (dist == "Weibull"){
     CP <- exp(-(lambda_c*delay_time)^gamma_c)
+    lambda_e <- lambda_c*post_delay_HR^(1/gamma_c)
     treatment_times <- ifelse(u > CP,
                               (1/lambda_c)*(-log(u))^(1/gamma_c),
                               (1/lambda_e)*(-log(u)+(lambda_e*delay_time)^gamma_c-(lambda_c*delay_time)^gamma_c)^(1/gamma_c))
@@ -81,10 +82,11 @@ cens_data <- function(data, cens_events = NULL, cens_time = NULL){
 
 #' Calculate Assurance for a trial with a Delayed Treatment Effect
 #'
-#' @param n_c number of patients in the control group
-#' @param n_t number of patients in the control group
-#' @param lambda_c control hazard
-#' @param control_dist distribution of control distribution, must be one of "exponential" (default) or "weibull"
+#' @param n_c Number of patients in the control group
+#' @param n_t Number of patients in the treatment group
+#' @param lambda_c Control group parameter
+#' @param gamma_c Control group parameter
+#' @param control_dist Distribution of control group, must be one of "Exponential" (default) or "weibull"
 #' @param delay_time_SHELF A SHELF object, beliefs about the delay time
 #' @param delay_time_dist Distribution of the delay time, "hist" is default. See SHELF help for more details
 #' @param post_delay_HR_SHELF A SHELF object, beliefs about the post-delay hazard ratio
@@ -109,7 +111,7 @@ cens_data <- function(data, cens_events = NULL, cens_time = NULL){
 #' @export
 #'
 
-calc_dte_assurance <- function(n_c, n_t, lambda_c, control_dist = "Exponential",
+calc_dte_assurance <- function(n_c, n_t, lambda_c, gamma_c = NULL, control_dist = "Exponential",
                                delay_time_SHELF, delay_time_dist = "hist",
                                post_delay_HR_SHELF, post_delay_HR_dist = "hist",
                                P_S = 1, P_DTE = 0,
@@ -143,7 +145,7 @@ calc_dte_assurance <- function(n_c, n_t, lambda_c, control_dist = "Exponential",
     }
 
 
-    data <- sim_dte(n_c, n_t, lambda_c, delay_time, post_delay_HR, dist = "exponential", gamma_c = NULL)
+    data <- sim_dte(n_c, n_t, lambda_c, delay_time, post_delay_HR, dist = control_dist, gamma_c = gamma_c)
 
     if (rec_method=="power"){
       data <- add_recruitment_time(data, rec_method,

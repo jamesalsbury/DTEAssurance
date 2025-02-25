@@ -8,6 +8,7 @@ calc_dte_assurance(
   n_c,
   n_t,
   lambda_c,
+  gamma_c = NULL,
   control_dist = "Exponential",
   delay_time_SHELF,
   delay_time_dist = "hist",
@@ -31,13 +32,15 @@ calc_dte_assurance(
 )
 }
 \arguments{
-\item{n_c}{number of patients in the control group}
+\item{n_c}{Number of patients in the control group}
 
-\item{n_t}{number of patients in the control group}
+\item{n_t}{Number of patients in the control group}
 
-\item{lambda_c}{control hazard}
+\item{lambda_c}{Control group parameter}
 
-\item{control_dist}{distribution of control distribution, must be one of "exponential" (default) or "weibull"}
+\item{gamma_c}{Control group parameter}
+
+\item{control_dist}{Distribution of control group, must be one of "Exponential" (default) or "weibull"}
 
 \item{delay_time_SHELF}{A SHELF object, beliefs about the delay time}
 
@@ -78,7 +81,7 @@ calc_dte_assurance(
 \item{nSims}{Number of simulations, default is 1000}
 }
 \value{
-A list
+A list: Assurance value, 95\% CI for assurance, Duration
 }
 \description{
 Calculate Assurance for a trial with a Delayed Treatment Effect
