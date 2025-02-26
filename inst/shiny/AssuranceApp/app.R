@@ -368,8 +368,15 @@ ui <- fluidPage(
         tabPanel("Calculating assurance",
                  sidebarLayout(
                    sidebarPanel = sidebarPanel(
-                     numericInput("chosenLength", "Maximum trial duration (including recruitment time)", value=60),
-
+                     selectInput("censType", "Type of censoring", choices = c("Time", "Events"), selected = "Time"),
+                     conditionalPanel(
+                       condition = "input.censType == 'Time'",
+                       numericInput("censTime", "Censoring time", value = 60)
+                     ),
+                     conditionalPanel(
+                       condition = "input.censType == 'Events'",
+                       numericInput("censEvents", "Number of events", value = 100)
+                     ),
                      selectInput("analysisType", label = "Analysis method", choices = c("Logrank test" = "LRT", "Fleming-Harrington test" = "FHT"), selected = "LRT"),
                      conditionalPanel(
                        condition = "input.analysisType == 'FHT'",
@@ -398,6 +405,7 @@ ui <- fluidPage(
 
                    ),
                    mainPanel = mainPanel(
+                     verbatimTextOutput("display_func"),
                      plotOutput("assurancePlot"),
                      plotOutput("assuranceFeedbackPlot"),
                      htmlOutput("assuranceText"),
@@ -1121,6 +1129,59 @@ ui <- fluidPage(
     })
 
     # Functions for the assurance tab ---------------------------------
+
+    output$display_func <- renderText({
+      n_c <- (input$numofpatients*input$ControlRatio)/(sum(input$ControlRatio+input$TreatmentRatio))
+      n_t <- (input$numofpatients*input$TreatmentRatio)/(sum(input$ControlRatio+input$TreatmentRatio))
+      FIX = "hello"
+      paste0("calc_dte_assurance(n_c = ",
+             round(n_c),
+             ", \n n_t = ",
+             round(n_t),
+             ", \n control_dist = ",
+             input$ControlDist,
+             ", \n lambda_c = ",
+             input$ExpRate,
+             ", \n delay_time_SHELF = ",
+              FIX,
+             ", \n delay_time_dist = ",
+             input$TDist,
+             ", \n post_delay_HR_SHELF = ",
+             FIX,
+             ", \n P_S = ",
+             input$P_S,
+             ", \n P_DTE = ",
+             input$P_DTE,
+             ", \n P_DTE = ",
+             ")"
+             )
+    })
+
+
+    # calc_dte_assurance(
+    #   lambda_c,
+    #   gamma_c = NULL,
+    #   delay_time_SHELF,
+    #   delay_time_dist = "hist",
+    #   post_delay_HR_SHELF,
+    #   post_delay_HR_dist = "hist",
+    #   P_S = 1,
+    #   P_DTE = 0,
+    #   cens_events = NULL,
+    #   cens_time = NULL,
+    #   rec_method,
+    #   rec_period = NULL,
+    #   rec_power = NULL,
+    #   rec_rate = NULL,
+    #   rec_duration = NULL,
+    #   analysis_method = "LRT",
+    #   alpha = 0.05,
+    #   alternative = "one.sided",
+    #   rho = 0,
+    #   gamma = 0,
+    #   nSims = 1000
+    # )
+
 
     calculateAssurance <- eventReactive(input$calcAssurance, {
 

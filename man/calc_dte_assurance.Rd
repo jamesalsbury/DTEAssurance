@@ -34,7 +34,7 @@ calc_dte_assurance(
 \arguments{
 \item{n_c}{Number of patients in the control group}
 
-\item{n_t}{Number of patients in the control group}
+\item{n_t}{Number of patients in the treatment group}
 
 \item{lambda_c}{Control group parameter}
 

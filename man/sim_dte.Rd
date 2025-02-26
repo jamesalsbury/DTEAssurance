@@ -10,7 +10,7 @@ sim_dte(
   lambda_c,
   delay_time,
   post_delay_HR,
-  dist = "exponential",
+  dist = "Exponential",
   gamma_c = NULL
 )
 }
