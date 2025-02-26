@@ -4,10 +4,12 @@
 \alias{cens_data}
 \title{Censor a survival data set}
 \usage{
-cens_data(data, cens_events = NULL, cens_time = NULL)
+cens_data(data, cens_method = "Time", cens_events = NULL, cens_time = NULL)
 }
 \arguments{
 \item{data}{An uncensored dataframe}
+
+\item{cens_method}{Method of censoring, must be either "Time" (default) or "Events"}
 
 \item{cens_events}{Number of events at which you wish to perform the censoring}
 

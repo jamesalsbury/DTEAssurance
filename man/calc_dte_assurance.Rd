@@ -16,6 +16,7 @@ calc_dte_assurance(
   post_delay_HR_dist = "hist",
   P_S = 1,
   P_DTE = 0,
+  cens_method = "Time",
   cens_events = NULL,
   cens_time = NULL,
   rec_method,
@@ -53,6 +54,8 @@ calc_dte_assurance(
 \item{P_S}{Probability of the survival curves separating}
 
 \item{P_DTE}{Probability of the survival curves being subject to a DTE, given they separate}
+
+\item{cens_method}{Method of censoring, must be either "Time" (default) or "Events"}
 
 \item{cens_events}{Number of events at which you wish to perform the censoring (must be less than n_c + n_t)}
 

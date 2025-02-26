@@ -53,18 +53,15 @@ sim_dte <- function(n_c, n_t, lambda_c, delay_time, post_delay_HR, dist = "Expon
 #' Censor a survival data set
 #'
 #' @param data An uncensored dataframe
+#' @param cens_method Method of censoring, must be either "Time" (default) or "Events"
 #' @param cens_events Number of events at which you wish to perform the censoring
 #' @param cens_time Time at which you wish to perform the censoring
 #' @return A list: censored dataframe, cens_events and cens_time
 #' @export
 
-cens_data <- function(data, cens_events = NULL, cens_time = NULL){
+cens_data <- function(data, cens_method = "Time", cens_events = NULL, cens_time = NULL){
 
-  if (is.null(cens_events) && is.null(cens_time)) {
-    stop("Either cens_events or cens_time must be specified")
-  }
-
-  if (!is.null(cens_events)){
+  if (cens_method=="Events"){
     data <- data[order(data$pseudo_time),]
     cens_time <- data$pseudo_time[cens_events]
   }
@@ -93,6 +90,7 @@ cens_data <- function(data, cens_events = NULL, cens_time = NULL){
 #' @param post_delay_HR_dist Distribution of the post-delay hazard ratio, "hist" is default. See SHELF help for more details
 #' @param P_S Probability of the survival curves separating
 #' @param P_DTE Probability of the survival curves being subject to a DTE, given they separate
+#' @param cens_method Method of censoring, must be either "Time" (default) or "Events"
 #' @param cens_events Number of events at which you wish to perform the censoring (must be less than n_c + n_t)
 #' @param cens_time Time at which you wish to perform the censoring
 #' @param rec_method Recruitment method, must be one of "power" or "PWC" (piecewise constant)
@@ -115,7 +113,7 @@ calc_dte_assurance <- function(n_c, n_t, lambda_c, gamma_c = NULL, control_dist 
                                delay_time_SHELF, delay_time_dist = "hist",
                                post_delay_HR_SHELF, post_delay_HR_dist = "hist",
                                P_S = 1, P_DTE = 0,
-                               cens_events = NULL, cens_time = NULL,
+                               cens_method = "Time", cens_events = NULL, cens_time = NULL,
                                rec_method, rec_period=NULL, rec_power=NULL, rec_rate=NULL, rec_duration=NULL,
                                analysis_method = "LRT", alpha = 0.05, alternative = "one.sided", rho = 0, gamma = 0, nSims=1e3){
 
@@ -158,7 +156,7 @@ calc_dte_assurance <- function(n_c, n_t, lambda_c, gamma_c = NULL, control_dist 
     }
 
 
-    data_after_cens <- cens_data(data, cens_events, cens_time)
+    data_after_cens <- cens_data(data, cens_method, cens_events, cens_time)
     data <- data_after_cens$data
 
     cens_vec[i] <- data_after_cens$cens_time
