@@ -36,17 +36,17 @@ ui <- fluidPage(
                      # Conditional UI for Exponential distribution
                      conditionalPanel(
                        condition = "input.ControlDist == 'Exponential'",
-                       selectInput("ExpChoice", "Choice", choices = c("Single Value", "Distribution"), selected = "Single Value"),
+                       selectInput("ExpChoice", "Choice", choices = c("Fixed", "Distribution"), selected = "Fixed"),
                        conditionalPanel(
-                         condition = "input.ExpChoice == 'Single Value'",
-                         selectInput("ExpRateorTime", "Input type", choices = c("Rate", "Landmark Survival Probability")),
+                         condition = "input.ExpChoice == 'Fixed'",
+                         selectInput("ExpRateorTime", "Input type", choices = c("Parameter", "Landmark")),
                          conditionalPanel(
-                           condition = "input.ExpRateorTime == 'Rate'",
+                           condition = "input.ExpRateorTime == 'Parameter'",
                            numericInput("ExpRate", label =  HTML(paste0("Rate (\u03bb",tags$sub("c"), ")")), value = 0.08, min=0),
                            bsTooltip(id = "ExpRate", title = "Rate parameter")
                          ),
                          conditionalPanel(
-                           condition = "input.ExpRateorTime == 'Landmark Survival Probability'",
+                           condition = "input.ExpRateorTime == 'Landmark'",
                            fluidRow(
                              column(6,
                                     numericInput("ExpTime", label =  HTML(paste0("t",tags$sub("1"))), value = 12),
@@ -88,10 +88,10 @@ ui <- fluidPage(
                      # Conditional UI for Weibull distribution
                      conditionalPanel(
                        condition = "input.ControlDist == 'Weibull'",
-                       selectInput("WeibullChoice", "Choice", choices = c("Single Value", "Distribution"), selected = "Single Value"),
+                       selectInput("WeibullChoice", "Choice", choices = c("Fixed", "Distribution"), selected = "Fixed"),
                        conditionalPanel(
-                         condition = "input.WeibullChoice == 'Single Value'",
-                         selectInput("WeibRateorTime", "Input type", choices = c("Parameters", "Landmark Survival Probabilities")),
+                         condition = "input.WeibullChoice == 'Fixed'",
+                         selectInput("WeibRateorTime", "Input type", choices = c("Parameters", "Landmark")),
                          conditionalPanel(
                            condition = "input.WeibRateorTime == 'Parameters'",
                            fluidRow(
@@ -108,7 +108,7 @@ ui <- fluidPage(
                            )
                          ),
                          conditionalPanel(
-                           condition = "input.WeibRateorTime == 'Landmark Survival Probabilities'",
+                           condition = "input.WeibRateorTime == 'Landmark'",
                            fluidRow(
                              column(6,
                                     numericInput("WeibullTime1", label =  HTML(paste0("t",tags$sub("1"))), value = 12),
@@ -509,8 +509,8 @@ ui <- fluidPage(
       result <- list()
 
       if (input$ControlDist == "Exponential") {
-        if (input$ExpChoice == "Single Value") {
-          if (input$ExpRateorTime == "Rate"){
+        if (input$ExpChoice == "Fixed") {
+          if (input$ExpRateorTime == "Parameter"){
             ExpRate <- input$ExpRate
           } else {
             ExpRate <- -log(input$ExpSurv)/input$ExpTime
@@ -538,7 +538,7 @@ ui <- fluidPage(
         }
 
       } else if (input$ControlDist == "Weibull") {
-        if (input$WeibullChoice == "Single Value") {
+        if (input$WeibullChoice == "Fixed") {
           if (input$WeibRateorTime == "Parameters") {
             finalSurvTime <- (1 / input$WeibullScale) * (-log(0.01))^(1 / input$WeibullShape)
             controlTime <- seq(0, finalSurvTime, length.out = 100)
@@ -715,8 +715,8 @@ ui <- fluidPage(
       nSamples <- 500
       # Calculate treatment survival data based on distribution type and input options
       if (input$ControlDist == "Exponential") {
-        if (input$ExpChoice == "Single Value") {
-          if (input$ExpRateorTime == "Rate") {
+        if (input$ExpChoice == "Fixed") {
+          if (input$ExpRateorTime == "Parameter") {
             ExpRate <- input$ExpRate
           } else {
             ExpRate <- -log(input$ExpSurv)/input$ExpTime
@@ -813,7 +813,7 @@ ui <- fluidPage(
         }
 
       } else if (input$ControlDist == "Weibull") {
-        if (input$WeibullChoice == "Single Value") {
+        if (input$WeibullChoice == "Fixed") {
 
           sampledTrtHazard <- rep(NA, nSamples)
           sampledbigT <- rep(NA, nSamples)
@@ -1142,18 +1142,86 @@ ui <- fluidPage(
                           "\"")
 
       if (input$ControlDist=="Exponential"){
-        base_call <-  paste0(base_call, ", \n lambda_c = ",
-                             input$ExpRate)
+        base_call <- paste0(base_call,
+                            ", \n control_parameters = \"",
+                            input$ExpChoice,
+                            "\"")
+        if (input$ExpChoice=="Fixed"){
+          base_call <- paste0(base_call,
+                              ", \n fixed_parameters_type = \"",
+                              input$ExpRateorTime,
+                              "\"")
+          if (input$ExpRateorTime == "Parameter"){
+            base_call <-  paste0(base_call, ", \n lambda_c = ",
+                                 input$ExpRate)
+          } else if (input$ExpRateorTime == "Landmark"){
+            base_call <-  paste0(base_call, ", \n t1 = ",
+                                 input$ExpTime,
+                                 ", \n surv_t1 = ",
+                                 input$ExpSurv)
+          }
+        }
+
+        if (input$ExpChoice=="Distribution"){
+          base_call <-  paste0(base_call, ", \n t1 = ",
+                               input$ExpSurvTime,
+                               ", \n t1_Beta_a = ",
+                               input$ExpBetaA,
+                               ", \n t1_Beta_b = ",
+                               input$ExpBetaB)
+        }
       }
 
       if (input$ControlDist == "Weibull"){
-        base_call <-  paste0(base_call,
-                             ", \n lambda_c = ",
-                             input$WeibullScale,
-                             ", \n gamma_c = ",
-                             input$WeibullShape)
+        base_call <- paste0(base_call,
+                            ", \n control_parameters = \"",
+                            input$WeibullChoice,
+                            "\"")
+
+        if (input$WeibullChoice == "Fixed"){
+          base_call <- paste0(base_call,
+                              ", \n fixed_parameters_type = \"",
+                              input$WeibRateorTime,
+                              "\"")
+
+          if (input$WeibRateorTime == "Parameter"){
+            base_call <-  paste0(base_call, ", \n lambda_c = ",
+                                 input$WeibullScale,
+                                 ", \n gamma_c = ",
+                                 input$WeibullShape)
+          } else if (input$WeibRateorTime == "Landmark"){
+            base_call <-  paste0(base_call, ", \n t1 = ",
+                                 input$WeibullTime1,
+                                 ", \n t2 = ",
+                                 input$WeibullSurv1,
+                                 ", \n surv_t1 = ",
+                                 input$WeibullTime2,
+                                 ", \n surv_t2 = ",
+                                 input$WeibullSurv2)
+          }
+
+        } else if (input$WeibullChoice == "Distribution"){
+          base_call <-  paste0(base_call, ", \n t1 = ",
+                               input$WeibullDistT1,
+                               ", \n t2 = ",
+                               input$WeibullDistT2,
+                               ", \n t1_Beta_a = ",
+                               input$WeibullDistS1BetaA,
+                               ", \n t1_Beta_b = ",
+                               input$WeibullDistS1BetaB,
+                               ", \n diff_Beta_a = ",
+                               input$WeibullDistDelta1BetaA,
+                               ", \n diff_Beta_b = ",
+                               input$WeibullDistDelta1BetaB)
+        }
       }
 
+
+      # base_call <-  paste0(base_call,
+      #                      ", \n lambda_c = ",
+      #                      input$WeibullScale,
+      #                      ", \n gamma_c = ",
+      #                      input$WeibullShape)
 
       base_call <- paste0(base_call,
                           ", \n delay_time_SHELF = SHELF::fitdist(c(",
@@ -1877,6 +1945,8 @@ ui <- fluidPage(
     # })
 
     output$assurancePlot <- renderPlot({
+
+      print(calculateAssurance())
 
       assuranceDF <- data.frame(N = calculateAssurance()$nTotal, Ass = predict(calculateAssurance()$asssmooth),
                                 LB = predict(calculateAssurance()$LBSmooth),

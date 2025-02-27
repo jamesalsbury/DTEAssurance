@@ -7,9 +7,19 @@
 calc_dte_assurance(
   n_c,
   n_t,
-  lambda_c,
-  gamma_c = NULL,
   control_dist = "Exponential",
+  control_parameters = "Fixed",
+  fixed_parameters_type = "Parameter",
+  lambda_c = NULL,
+  gamma_c = NULL,
+  t1 = NULL,
+  t2 = NULL,
+  surv_t1 = NULL,
+  surv_t2 = NULL,
+  t1_Beta_a = NULL,
+  t1_Beta_b = NULL,
+  diff_Beta_a = NULL,
+  diff_Beta_b = NULL,
   delay_time_SHELF,
   delay_time_dist = "hist",
   post_delay_HR_SHELF,
@@ -37,11 +47,31 @@ calc_dte_assurance(
 
 \item{n_t}{Number of patients in the treatment group}
 
+\item{control_dist}{Distribution of control group, must be one of "Exponential" (default) or "weibull"}
+
+\item{control_parameters}{The parameters for the control group are either "Fixed" (default) or "Distribution"}
+
+\item{fixed_parameters_type}{The fixed parameters are either a "Parameters" (default) or "Landmark"}
+
 \item{lambda_c}{Control group parameter}
 
 \item{gamma_c}{Control group parameter}
 
-\item{control_dist}{Distribution of control group, must be one of "Exponential" (default) or "weibull"}
+\item{t1}{Time 1}
+
+\item{t2}{Time 2}
+
+\item{surv_t1}{Survival probability at time 1}
+
+\item{surv_t2}{Survival probability at time 2}
+
+\item{t1_Beta_a}{Hyperparameter a for the Beta distribution for the survival probability at time 1}
+
+\item{t1_Beta_b}{Hyperparameter a for the Beta distribution for the survival probability at time 1}
+
+\item{diff_Beta_a}{Hyperparameter a for the Beta distribution for the difference in survival probabilities (t2-t1)}
+
+\item{diff_Beta_b}{Hyperparameter b for the Beta distribution for the difference in survival probabilities (t2-t1)}
 
 \item{delay_time_SHELF}{A SHELF object, beliefs about the delay time}
 

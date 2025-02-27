@@ -81,9 +81,19 @@ cens_data <- function(data, cens_method = "Time", cens_events = NULL, cens_time 
 #'
 #' @param n_c Number of patients in the control group
 #' @param n_t Number of patients in the treatment group
+#' @param control_dist Distribution of control group, must be one of "Exponential" (default) or "weibull"
+#' @param control_parameters The parameters for the control group are either "Fixed" (default) or "Distribution"
+#' @param fixed_parameters_type The fixed parameters are either a "Parameters" (default) or "Landmark"
 #' @param lambda_c Control group parameter
 #' @param gamma_c Control group parameter
-#' @param control_dist Distribution of control group, must be one of "Exponential" (default) or "weibull"
+#' @param t1 Time 1
+#' @param t2 Time 2
+#' @param surv_t1 Survival probability at time 1
+#' @param surv_t2 Survival probability at time 2
+#' @param t1_Beta_a Hyperparameter a for the Beta distribution for the survival probability at time 1
+#' @param t1_Beta_b Hyperparameter a for the Beta distribution for the survival probability at time 1
+#' @param diff_Beta_a Hyperparameter a for the Beta distribution for the difference in survival probabilities (t2-t1)
+#' @param diff_Beta_b Hyperparameter b for the Beta distribution for the difference in survival probabilities (t2-t1)
 #' @param delay_time_SHELF A SHELF object, beliefs about the delay time
 #' @param delay_time_dist Distribution of the delay time, "hist" is default. See SHELF help for more details
 #' @param post_delay_HR_SHELF A SHELF object, beliefs about the post-delay hazard ratio
@@ -109,7 +119,14 @@ cens_data <- function(data, cens_method = "Time", cens_events = NULL, cens_time 
 #' @export
 #'
 
-calc_dte_assurance <- function(n_c, n_t, lambda_c, gamma_c = NULL, control_dist = "Exponential",
+calc_dte_assurance <- function(n_c, n_t,
+                               control_dist = "Exponential", control_parameters = "Fixed",
+                               fixed_parameters_type = "Parameter",
+                               lambda_c = NULL, gamma_c = NULL,
+                               t1 = NULL, t2 = NULL,
+                               surv_t1 = NULL, surv_t2 = NULL,
+                               t1_Beta_a = NULL, t1_Beta_b = NULL,
+                               diff_Beta_a = NULL, diff_Beta_b = NULL,
                                delay_time_SHELF, delay_time_dist = "hist",
                                post_delay_HR_SHELF, post_delay_HR_dist = "hist",
                                P_S = 1, P_DTE = 0,
@@ -118,58 +135,112 @@ calc_dte_assurance <- function(n_c, n_t, lambda_c, gamma_c = NULL, control_dist 
                                analysis_method = "LRT", alpha = 0.05, alternative = "one.sided", rho = 0, gamma = 0, nSims=1e3){
 
 
-  assurance_vec <- rep(NA, nSims)
-  cens_vec <- rep(NA, nSims)
+  numDiffPatients <- length(n_c)
+  calc_dte_assurance_list <- list()
+  for (j in 1:numDiffPatients){
 
-  for (i in 1:nSims){
+    assurance_vec <- rep(NA, nSims)
+    cens_vec <- rep(NA, nSims)
 
-    if (runif(1) > P_S){
-      #Curves do not separate
-      delay_time <- 0
-      post_delay_HR <- 1
-    } else {
-      if (runif(1) > P_DTE){
-        #Curves separate with no delay
-        delay_time <- 0
-        post_delay_HR_sample <- SHELF::sampleFit(post_delay_HR_SHELF, n = 1)
-        post_delay_HR <- post_delay_HR_sample[,post_delay_HR_dist]
-      } else{
-        #Curves separate with a delay
-        delay_time_sample <- SHELF::sampleFit(delay_time_SHELF, n = 1)
-        post_delay_HR_sample <- SHELF::sampleFit(post_delay_HR_SHELF, n = 1)
-        delay_time <- delay_time_sample[,delay_time_dist]
-        post_delay_HR <- post_delay_HR_sample[,post_delay_HR_dist]
+    for (i in 1:nSims){
+
+      if (control_dist=="Exponential"){
+        if (control_parameters=="Fixed"){
+          if (fixed_parameters_type=="Parameter"){
+            lambda_c <- lambda_c
+          } else if (fixed_parameters_type=="Landmark") {
+            lambda_c <-  -log(surv_t1)/t1
+          }
+        } else if (control_parameters=="Distribution"){
+          lambda_c <- -log(rbeta(1, t1_Beta_a, t1_Beta_b)) / t1
+        }
+      } else if (control_dist=="Weibull"){
+        if (control_parameters=="Fixed"){
+          if (fixed_parameters_type=="Parameter"){
+            lambda_c <- lambda_c
+            gamma_c <- gamma_c
+          } else if (fixed_parameters_type=="Landmark"){
+            WeibFunc <- function(params) {
+              lambda <- params[1]
+              k <- params[2]
+              c(exp(-(t1*lambda)^k) - surv_t1,
+                exp(-(t2*lambda)^k) - surv_t1)
+            }
+
+            solution <- nleqslv(c(1, 1), fn = WeibFunc)
+
+            lambda_c <- solution$x[1]
+            gamma_c <- solution$x[2]
+          }
+        } else if (control_parameters=="Distribution"){
+          sampledS1to <- rbeta(1, t1_Beta_a, t1_Beta_b)
+          sampledDelta1 <- rbeta(1, diff_Beta_a, diff_Beta_b)
+          sampledS1toPrime <- sampledS1to - sampledDelta1
+
+          # Solve for lambda and gamma using sampled values
+          solution <- nleqslv(c(10, 1), function(params) {
+            lambda <- params[1]
+            k <- params[2]
+            c(exp(-(t1 / lambda)^k) - sampledS1to,
+              exp(-(t2 / lambda)^k) - sampledS1toPrime)
+          })
+
+          lambda_c <- 1 / solution$x[1]
+          gamma_c <- solution$x[2]
+        }
       }
+
+      if (runif(1) > P_S){
+        #Curves do not separate
+        delay_time <- 0
+        post_delay_HR <- 1
+      } else {
+        if (runif(1) > P_DTE){
+          #Curves separate with no delay
+          delay_time <- 0
+          post_delay_HR_sample <- SHELF::sampleFit(post_delay_HR_SHELF, n = 1)
+          post_delay_HR <- post_delay_HR_sample[,post_delay_HR_dist]
+        } else{
+          #Curves separate with a delay
+          delay_time_sample <- SHELF::sampleFit(delay_time_SHELF, n = 1)
+          post_delay_HR_sample <- SHELF::sampleFit(post_delay_HR_SHELF, n = 1)
+          delay_time <- delay_time_sample[,delay_time_dist]
+          post_delay_HR <- post_delay_HR_sample[,post_delay_HR_dist]
+        }
+      }
+
+      data <- sim_dte(n_c[j], n_t[j], lambda_c, delay_time, post_delay_HR, dist = control_dist, gamma_c = gamma_c)
+
+      if (rec_method=="power"){
+        data <- add_recruitment_time(data, rec_method,
+                                     rec_period, rec_power)
+      }
+
+      if (rec_method == "PWC"){
+        data <- add_recruitment_time(data, rec_method,
+                                     rec_rate, rec_duration)
+      }
+
+
+      data_after_cens <- cens_data(data, cens_method, cens_events, cens_time)
+      data <- data_after_cens$data
+
+      cens_vec[i] <- data_after_cens$cens_time
+
+      assurance_vec[i] <- survival_test(data, analysis_method, alternative, alpha = 0.05, rho, gamma)
+
+
     }
 
+    assurance <- mean(assurance_vec)
 
-    data <- sim_dte(n_c, n_t, lambda_c, delay_time, post_delay_HR, dist = control_dist, gamma_c = gamma_c)
-
-    if (rec_method=="power"){
-      data <- add_recruitment_time(data, rec_method,
-                                   rec_period, rec_power)
-    }
-
-    if (rec_method == "PWC"){
-      data <- add_recruitment_time(data, rec_method,
-                                   rec_rate, rec_duration)
-    }
-
-
-    data_after_cens <- cens_data(data, cens_method, cens_events, cens_time)
-    data <- data_after_cens$data
-
-    cens_vec[i] <- data_after_cens$cens_time
-
-    assurance_vec[i] <- survival_test(data, analysis_method, alternative, alpha = 0.05, rho, gamma)
-
+    calc_dte_assurance_list[[j]] <- list(assurance = assurance, CI_assurance = c(assurance - 1.96*sqrt(assurance*(1-assurance)/nSims),
+                                                        assurance + 1.96*sqrt(assurance*(1-assurance)/nSims)), duration = mean(cens_vec))
 
   }
 
-  assurance <- mean(assurance_vec)
+return(calc_dte_assurance_list = calc_dte_assurance_list)
 
-  return(list(assurance = assurance, CI_Assurance = c(assurance - 1.96*sqrt(assurance*(1-assurance)/nSims),
-              UBAssurance = assurance + 1.96*sqrt(assurance*(1-assurance)/nSims)), duration = mean(cens_vec)))
 
 }
 
