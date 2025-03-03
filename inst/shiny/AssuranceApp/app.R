@@ -16,6 +16,7 @@ library(shinyjs)
 # library(nleqslv)
 # library(dplyr)
 library(shinyBS)
+library(DTEAssurance)
 
 ui <- fluidPage(
     withMathJax(),
@@ -463,27 +464,18 @@ ui <- fluidPage(
       #Well panel UI ---------------------------------
       wellPanel(
         fluidRow(
-          column(3, selectInput("outFormat", label = "Report format",
+          column(5, selectInput("outFormat", label = "Report format",
                                 choices = list('html' = "html_document",
                                                'pdf' = "pdf_document",
                                                'Word' = "word_document"))
           ),
-          column(3, offset = 1,
-                 numericInput("fs", label = "Font size", value = 12)
-          ),
-          column(3, offset = 1,
-                 numericInput("ss", label = "Sample size (when downloading sample)", value = 500)
-          )
+
         ),
         fluidRow(
           column(3, downloadButton("report", "Download report")
           ),
           column(3, downloadButton("downloadObjects", "Download objects")
           ),
-          column(3, downloadButton("downloadData", "Download sample")
-          ),
-          column(3, actionButton("exit", "Quit")
-          )
         )
       )
     )
@@ -690,8 +682,8 @@ ui <- fluidPage(
 
       suppressWarnings(plotfit(TFit(), d = input$TDist,
                                ql = 0.05, qu = 0.95,
-                               xl = TLimits()[1], xu = TLimits()[2],
-                               fs = input$fs))
+                               xl = TLimits()[1], xu = TLimits()[2]
+                               ))
 
     })
 
@@ -701,8 +693,8 @@ ui <- fluidPage(
 
       suppressWarnings(plotfit(HRFit(), d = input$HRDist,
                                ql = 0.05, qu = 0.95,
-                               xl = HRLimits()[1], xu = HRLimits()[2],
-                               fs = input$fs))
+                               xl = HRLimits()[1], xu = HRLimits()[2]
+                               ))
 
     })
 
@@ -1351,42 +1343,23 @@ ui <- fluidPage(
 
     # Functions for the well panel ---------------------------------
 
-    df1 <- reactive({
-      conc.probs <- matrix(0, 2, 2)
-      conc.probs[1, 2] <- 0.5
-      data.frame(copulaSample(myfit1(), myfit2(), cp = conc.probs,
-                              n = input$ss,
-                              d = c(input$dist1, input$dist2)))
-    })
-
-    observeEvent(input$exit, {
-      stopApp(list(parameter1 = myfit1(), parameter2 = myfit2(),
-                   cp = 0.5))
-    })
-
-    output$downloadData <- downloadHandler(
-      filename = "DTEsample.csv",
-      content = function(file) {
-        utils::write.csv(df1(), file, row.names = FALSE)
-      }
-    )
-
     output$report <- downloadHandler(
       filename = function(){switch(input$outFormat,
-                                   html_document = "distributions-report.html",
-                                   pdf_document = "distributions-report.pdf",
-                                   word_document = "distributions-report.docx")},
+                                   html_document = "DTE_Assurance_Report.html",
+                                   pdf_document = "DTE_Assurance_Report.pdf",
+                                   word_document = "DTE_Assurance_Report.docx")},
       content = function(file) {
         # Copy the report file to a temporary directory before processing it, in
         # case we don't have write permissions to the current working dir (which
         # can happen when deployed).
-        tempReport <- file.path(tempdir(), "DTEShinySummary.Rmd")
-        file.copy(system.file("DTEAppFiles", "DTEShinySummary.Rmd",
-                              package="DTEAssurance"),
+        tempReport <- file.path(tempdir(), "report.Rmd")
+        file.copy(system.file("shiny", "AssuranceApp", "report.Rmd",
+                              package = "DTEAssurance"),
                   tempReport, overwrite = TRUE)
 
+
         # Set up parameters to pass to Rmd document
-        params <- list(fit1 = myfit1(), fit2 = myfit2(),
+        params <- list(fit1 = TFit(), fit2 = HRFit(),
                        d = c(input$dist1, input$dist2),
                        P_S = input$P_S, P_DTE = input$P_DTE)
 
@@ -1406,8 +1379,30 @@ ui <- fluidPage(
       },
       content = function(file) {
         object_list <- list(fit1 = myfit1(), fit2 = myfit2(),
+                            control_dist = input$
                             d = c(input$dist1, input$dist2),
                             P_S = input$P_S, P_DTE = input$P_DTE)
+        calc_dte_assurance(n_c = c(10, 46, 82, 118, 154, 190, 226, 261, 297, 333),
+                           n_t = c(10, 83, 156, 229, 302, 375, 448, 521, 594, 667),
+                           control_dist = "Exponential",
+                           control_parameters = "Fixed",
+                           fixed_parameters_type = "Parameter",
+                           lambda_c = 0.08,
+                           delay_time_SHELF = SHELF::fitdist(c(5.5, 6, 6.5), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 12),
+                           delay_time_dist = "hist",
+                           post_delay_HR_SHELF = SHELF::fitdist(c(0.5, 0.6, 0.7), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 1),
+                           post_delay_HR_dist = "hist",
+                           P_S = 1,
+                           P_DTE = 0,
+                           cens_method = "Time",
+                           cens_time = 60,
+                           rec_method = "power",
+                           rec_period = 12,
+                           rec_power = 1,
+                           analysis_method = "LRT",
+                           alternative = "one.sided",
+                           alpha = 0.05,
+                           nSims = 250)
         saveRDS(object_list, file)
       }
     )

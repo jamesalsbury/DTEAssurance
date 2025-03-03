@@ -1,0 +1,40 @@
+---
+title: "Fitted distributions - Delayed Treatment Effects"
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+date: "`r format(Sys.time(), '%d %B %Y, %H:%M')`"
+fontsize: 11pt
+params:
+  fit1: NA
+  fit2: NA
+  d: NA
+  P_S: NA
+  P_DTE: NA
+---
+
+# Length of delay
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(echo=FALSE, warning=FALSE, message=FALSE,
+                      fig.pos = 'h',
+                      fig.align = 'center',
+                      fig.height = 3,
+                      fig.width = 4)
+library(SHELF)
+```
+
+### Elicited cumulative probabilities
+
+```{r}
+expert <- 1
+sf <- 3
+mydf <- data.frame( params$fit1$vals[expert, ], params$fit1$probs[expert, ])
+colnames(mydf) <- c( "$x$", "$P(X\\le x)$")
+knitr::kable(mydf)
+```
+
+
+
+

@@ -45,27 +45,296 @@ ui <- fluidPage(
       tabPanel("Design",
                sidebarLayout(
                  sidebarPanel = sidebarPanel(
-                   numericInput("numPatients", 'Number of Patients (in total)', value=680, min=0),
+                   h3("Control"),
+                   selectInput("ControlDist", "Distribution", choices = c("Exponential", "Weibull"), selected = "Exponential"),
+                   # Conditional UI for Exponential distribution
+                   conditionalPanel(
+                     condition = "input.ControlDist == 'Exponential'",
+                     selectInput("ExpChoice", "Choice", choices = c("Fixed", "Distribution"), selected = "Fixed"),
+                     conditionalPanel(
+                       condition = "input.ExpChoice == 'Fixed'",
+                       selectInput("ExpRateorTime", "Input type", choices = c("Parameter", "Landmark")),
+                       conditionalPanel(
+                         condition = "input.ExpRateorTime == 'Parameter'",
+                         numericInput("ExpRate", label =  HTML(paste0("Rate (\u03bb",tags$sub("c"), ")")), value = 0.08, min=0),
+                         bsTooltip(id = "ExpRate", title = "Rate parameter")
+                       ),
+                       conditionalPanel(
+                         condition = "input.ExpRateorTime == 'Landmark'",
+                         fluidRow(
+                           column(6,
+                                  numericInput("ExpTime", label =  HTML(paste0("t",tags$sub("1"))), value = 12),
+                                  bsTooltip(id = "ExpTime", title = "Time 1")
+
+                           ),
+                           column(6,
+                                  numericInput("ExpSurv", label =  HTML(paste0("S(t",tags$sub("1"), ")")), 0.5),
+                                  bsTooltip(id = "ExpSurv", title = "Survival probability at time 1")
+
+
+                           )
+                         )
+                       )
+                     ),
+                     conditionalPanel(
+                       condition = "input.ExpChoice == 'Distribution'",
+                       numericInput("ExpSurvTime", label = HTML(paste0("t",tags$sub("1"))), value = 12),
+                       bsTooltip(id = "ExpSurvTime", title = "Time 1"),
+                       fluidRow(
+                         column(4,
+                                uiOutput("ExpDistText"),
+                                bsTooltip(id = "ExpDistText", title = "The distribution of survival probability at time 1"),
+                         ),
+                         column(8,
+                                div(style = "display: flex; align-items: center;",
+                                    numericInput("ExpBetaA", label = NULL, value = 20, width = "45%"),
+                                    bsTooltip(id = "ExpBetaA", title = "The mean of a Beta(a, b) distribution is a/(a+b)"),
+                                    tags$span(", "),
+                                    numericInput("ExpBetaB", label = NULL, value = 32, width = "45%"),
+                                    bsTooltip(id = "ExpBetaB", title = "The variance of a Beta(a, b) distribution is (a*b)/[(a+b)^2*(a+b+1)]"),
+                                    tags$span(")")
+                                )
+                         )
+                       )
+
+                     ),
+                   ),
+                   # Conditional UI for Weibull distribution
+                   conditionalPanel(
+                     condition = "input.ControlDist == 'Weibull'",
+                     selectInput("WeibullChoice", "Choice", choices = c("Fixed", "Distribution"), selected = "Fixed"),
+                     conditionalPanel(
+                       condition = "input.WeibullChoice == 'Fixed'",
+                       selectInput("WeibRateorTime", "Input type", choices = c("Parameters", "Landmark")),
+                       conditionalPanel(
+                         condition = "input.WeibRateorTime == 'Parameters'",
+                         fluidRow(
+                           column(6,
+                                  numericInput("WeibullScale", label =  HTML(paste0("Scale (\u03bb",tags$sub("c"), ")")), value = 0.08, min=0),
+                                  bsTooltip(id = "WeibullScale", title = "Scale parameter"),
+
+                           ),
+                           column(6,
+                                  numericInput("WeibullShape", label =  HTML(paste0("Shape (\u03b3",tags$sub("c"), ")")), value = 1, min=0),
+                                  bsTooltip(id = "WeibullShape", title = "Shape parameter"),
+
+                           )
+                         )
+                       ),
+                       conditionalPanel(
+                         condition = "input.WeibRateorTime == 'Landmark'",
+                         fluidRow(
+                           column(6,
+                                  numericInput("WeibullTime1", label =  HTML(paste0("t",tags$sub("1"))), value = 12),
+                                  bsTooltip(id = "WeibullTime1", title = "Time 1")
+                           ),
+                           column(6,
+                                  numericInput("WeibullSurv1", label =  HTML(paste0("S(t",tags$sub("1"), ")")), value = 0.38),
+                                  bsTooltip(id = "WeibullSurv1", title = "Survival Probability at Time 1")
+                           )
+                         ),
+                         fluidRow(
+                           column(6,
+                                  numericInput("WeibullTime2", label =  HTML(paste0("t",tags$sub("2"))), value = 18),
+                                  bsTooltip(id = "WeibullTime2", title = "Time 2")
+
+                           ),
+                           column(6,
+                                  numericInput("WeibullSurv2", label =  HTML(paste0("S(t",tags$sub("2"), ")")), value = 0.24),
+                                  bsTooltip(id = "WeibullSurv2", title = "Survival Probability at Time 2")
+                           )
+                         ),
+                       )
+                     ),
+
+                     conditionalPanel(
+                       condition = "input.WeibullChoice == 'Distribution'",
+                       fluidRow(
+                         column(6,
+                                numericInput("WeibullDistT1", label =  HTML(paste0("t",tags$sub("1"))), value = 12),
+                                bsTooltip(id = "WeibullDistT1", title = "Time 1"),
+
+
+                         ),
+                         column(6,
+                                numericInput("WeibullDistT2", label =  HTML(paste0("t",tags$sub("2"))), value = 18),
+                                bsTooltip(id = "WeibullDistT2", title = "Time 2"),
+
+                         )
+                       ),
+                       fluidRow(
+                         column(4,
+                                uiOutput("WeibullDistS1Text"),
+                                bsTooltip(id = "WeibullDistS1Text", title = "The distribution of survival probability at time 1"),
+                         ),
+                         column(8,
+                                div(style = "display: flex; align-items: center;",
+                                    numericInput("WeibullDistS1BetaA", label = NULL, value = 20, width = "45%"),
+                                    bsTooltip(id = "WeibullDistS1BetaA", title = "The mean of a Beta(a, b) distribution is a/(a+b)"),
+                                    tags$span(", "),
+                                    numericInput("WeibullDistS1BetaB", label = NULL, value = 32, width = "45%"),
+                                    bsTooltip(id = "WeibullDistS1BetaB", title = "The variance of a Beta(a, b) distribution is (a*b)/[(a+b)^2*(a+b+1)]"),
+                                    tags$span(")")
+                                )
+                         )
+                       ),
+                       fluidRow(
+                         column(4,
+                                uiOutput("WeibullDistDelta1Text"),
+                                bsTooltip(id = "WeibullDistDelta1Text", title = "The distribution of the difference in survival probabilities between time 2 and time 1"),
+
+                         ),
+                         column(8,
+                                div(style = "display: flex; align-items: center;",
+                                    numericInput("WeibullDistDelta1BetaA", label = NULL, value = 20, width = "45%"),
+                                    bsTooltip(id = "WeibullDistDelta1BetaA", title = "The mean of a Beta(a, b) distribution is a/(a+b)"),
+                                    tags$span(", "),
+                                    numericInput("WeibullDistDelta1BetaB", label = NULL, value = 140, width = "45%"),
+                                    bsTooltip(id = "WeibullDistDelta1BetaB", title = "The variance of a Beta(a, b) distribution is (a*b)/[(a+b)^2*(a+b+1)]"),
+                                    tags$span(")")
+                                )
+                         )
+                       )
+                     ),
+                   ),
+                   h3("Conditional Probabilities"),
                    fluidRow(
-                     column(6, numericInput("ratioControl", "Ratio Control", value = 1)),
-                     column(6, numericInput("ratioTreatment", "Ratio Treatment", value = 1))
-                   ),
-                   numericInput("numEvents", 'Number of Events', value=512, min=0),
-                   selectInput("controlParameter", "Input type", choices = list("Control Hazard" = "controlHazard",
-                                                                                "Landmark Survival Time" = "landmark")),
-                   conditionalPanel(
-                     condition = "input.controlParameter == 'controlHazard'",
-                     numericInput("controlHazard", "Lambda (1)", value = round(log(2)/12, 4)),
-                   ),
-                   conditionalPanel(
-                     condition = "input.controlParameter == 'landmark'",
-                     fluidRow(
-                       column(6, numericInput("survProb", "Survival Probability", value = 0.5)),
-                       column(6, numericInput("survTime", "Time", value = 12))
+                     column(6,
+                            numericInput("P_S", "Pr(survival curves separate)", value = 1, min = 0, max = 1)
+
+                     ),
+                     column(6,
+                            numericInput("P_DTE", "Pr(treatment subject to a delay|survival curves separate)", value = 0, min = 0, max = 1)
+
                      )
                    ),
-                   numericInput("recTime", 'Recruitment time (uniform)', value = 34),
-                   fileInput("samplesFile", "Upload samples")
+                   h3("Length of Delay - Elicit"),
+                   fluidRow(
+                     column(4,
+                            textInput("TLimits", label = h5("Length of delay limits"),
+                                      value = "0, 12")
+                     ),
+                     column(4,
+                            textInput("TValues", label = h5("Length of delay values"),
+                                      value = "5.5, 6, 6.5")
+                     ),
+                     column(4,
+                            textInput("TProbs", label = h5("Cumulative probabilities"),
+                                      value = "0.25, 0.5, 0.75")
+                     )
+                   ),
+                   fluidRow(
+                     column(4,
+                            selectInput("TDist", label = h5("Distribution"),
+                                        choices =  list(Histogram = "hist",
+                                                        Normal = "normal",
+                                                        'Student-t' = "t",
+                                                        Gamma = "gamma",
+                                                        'Log normal' = "lognormal",
+                                                        'Log Student-t' = "logt",
+                                                        Beta = "beta",
+                                                        'Mirror gamma' = "mirrorgamma",
+                                                        'Mirror log normal' = "mirrorlognormal",
+                                                        'Mirror log Student-t' = "mirrorlogt",
+                                                        'Best fitting' = "best"),
+                                        #choiceValues = 1:8,
+                                        selected = 1
+                            )),
+                     column(4,conditionalPanel(
+                       condition = "input.TDist == 't' || input.TDist == 'logt' || input.TDist == 'mirrorlogt'",
+                       numericInput("tdf1", label = h5("Student-t degrees of freedom"),
+                                    value = 3)
+                     )
+                     )
+
+
+                   ),
+                   h3("Post-delay hazard ratio - Elicit"),
+                   fluidRow(
+                     column(4,
+                            textInput("HRLimits", label = h5("Post-delay hazard ratio limits"),
+                                      value = "0, 1")
+                     ),
+                     column(4,
+                            textInput("HRValues", label = h5("Post-delay hazard ratio values"),
+                                      value = "0.5, 0.6, 0.7")
+                     ),
+                     column(4,
+                            textInput("HRProbs", label = h5("Cumulative probabilities"),
+                                      value = "0.25, 0.5, 0.75")
+                     )
+                   ),
+                   fluidRow(
+                     column(4,
+                            selectInput("HRDist", label = h5("Distribution"),
+                                        choices =  list(Histogram = "hist",
+                                                        Normal = "normal",
+                                                        'Student-t' = "t",
+                                                        Gamma = "gamma",
+                                                        'Log normal' = "lognormal",
+                                                        'Log Student-t' = "logt",
+                                                        Beta = "beta",
+                                                        'Mirror gamma' = "mirrorgamma",
+                                                        'Mirror log normal' = "mirrorlognormal",
+                                                        'Mirror log Student-t' = "mirrorlogt",
+                                                        'Best fitting' = "best"),
+                                        #choiceValues = 1:8,
+                                        selected = 1
+                            )),
+                     column(4,
+                            conditionalPanel(
+                              condition = "input.HRDist == 't' || input.HRDist == 'logt' || input.HRDist == 'mirrorlogt'",
+                              numericInput("tdf2", label = h5("degrees of freedom"),
+                                           value = 3)
+
+                            )
+                     )
+
+                   ),
+                   h3("Recruitment"),
+                   numericInput("numofpatients", "Maximum number of patients in the trial", value=1000),
+                   fluidRow(
+                     column(6,
+                            numericInput("ControlRatio", "Ratio control", value=1, min=1)
+                     ),
+                     column(6,
+                            numericInput("TreatmentRatio", "Ratio treatment", value=2, min=1)
+                     )
+                   ),
+                   selectInput("rec_method", "Recruitment method", choices = c("Power"="power", "Piecewise constant"="PWC"), selected = "power"),
+
+                   conditionalPanel(
+                     condition = "input.rec_method == 'power'",
+                     fluidRow(
+                       column(6,
+                              numericInput("rec_power", "Power", value=1, min=1)
+                       ),
+                       column(6,
+                              numericInput("rec_period", "Period", value=12, min=1)
+                       )
+                     )
+                   ),
+
+                   conditionalPanel(
+                     condition = "input.rec_method == 'PWC'",
+                     fluidRow(
+                       column(6,
+                              textInput("rec_rate", "Rate", value="30, 50")
+                       ),
+                       column(6,
+                              textInput("rec_duration", "Duration", value="10, 5")
+                       )
+                     )
+                   ),
+                   selectInput("censType", "Type of censoring", choices = c("Time", "Events"), selected = "Time"),
+                   conditionalPanel(
+                     condition = "input.censType == 'Time'",
+                     numericInput("censTime", "Censoring time", value = 60)
+                   ),
+                   conditionalPanel(
+                     condition = "input.censType == 'Events'",
+                     numericInput("censEvents", "Number of events", value = 100)
+                   ),
                  ),
                  mainPanel = mainPanel(
                    uiOutput("P_S"),
@@ -84,7 +353,7 @@ ui <- fluidPage(
       tabPanel("No Look",
                sidebarLayout(
                  sidebarPanel = sidebarPanel(
-                   actionButton("calcNoLook", label  = "Calculate", disabled = T)
+                   actionButton("calcNoLook", label  = "Calculate")
                  ),
                  mainPanel = mainPanel(
                    hidden(numericInput("noLookAssuranceValue", "Number of events", value = 10)),
@@ -233,41 +502,6 @@ ui <- fluidPage(
                )
       ),
 
-
-      # Interim Look UI ---------------------------------
-      tabPanel("Interim Look",
-               sidebarLayout(
-                 sidebarPanel = sidebarPanel(
-                   selectInput("dataSetChoice", "Data Set?", choices = c("Generate", "Upload"), selected = "Generate"),
-                   conditionalPanel(
-                     condition = "input.dataSetChoice == 'Generate'",
-                     selectInput("censChoice", "How to censor?", choices = c("Time", "Events"), selected = "Time"),
-                     conditionalPanel(
-                       condition = "input.censChoice == 'Time'",
-                       numericInput("censTimeInterim", "Time", value = 10)
-                     ),
-                     conditionalPanel(
-                       condition = "input.censChoice == 'Events'",
-                       numericInput("censEventsInterim", "Events", value = 300)
-                     ),
-                     actionButton("generateButton", label  = "Generate"),
-                 ),
-                 conditionalPanel(
-                   condition = "input.dataSetChoice == 'Upload'",
-                   fileInput("file", "Choose an RDS File",
-                             multiple = FALSE,
-                             accept = c(".rds"))
-                 ),
-                 ),
-                 mainPanel = mainPanel(
-                  plotOutput("interimPlotKM"),
-                  verbatimTextOutput("summaryOutput")
-
-                 )
-               )
-
-      ),
-
       # Report UI ---------------------------------
 
       tabPanel("Report",
@@ -366,6 +600,20 @@ server <- function(input, output, session) {
 
   # Design Logic ---------------------------------
 
+  output$ExpDistText <- renderUI({
+    HTML(paste0("S(", input$ExpSurvTime, ") ~ Beta("))
+  })
+
+
+  output$WeibullDistS1Text <- renderUI({
+    paste0("S(", input$WeibullDistT1, ") ~ Beta(")
+  })
+
+  output$WeibullDistDelta1Text <- renderUI({
+    paste0("S(", input$WeibullDistT2, ") - S(", input$WeibullDistT1,") ~ Beta(")
+  })
+
+
   reactValues <- reactiveValues(treatmentSamplesDF = NULL,
                                 errorSeqOneLook = FALSE,
                                 errorSeqTwoLooks = FALSE,
@@ -375,18 +623,6 @@ server <- function(input, output, session) {
                                 TwoLooksSeq2 = NULL,
                                 lambdac = NULL)
 
-  observe({
-
-    if (input$controlParameter=="controlHazard"){
-      reactValues$lambdac <- input$controlHazard
-    }
-
-    if (input$controlParameter=="landmark"){
-      reactValues$lambdac <- -log(input$survProb)/input$survTime
-
-    }
-
-  })
 
   observeEvent(input$samplesFile, {
     inFile  <- input$samplesFile
@@ -435,13 +671,6 @@ server <- function(input, output, session) {
 
   # No Look Logic ---------------------------------
 
-  observe({
-    if (is.null(reactValues$treatmentSamplesDF)) {
-      updateActionButton(session, "calcNoLook", disabled = TRUE)
-    } else {
-      updateActionButton(session, "calcNoLook", disabled = FALSE)
-    }
-  })
 
   noLookFuncPlot <- reactive({
 
