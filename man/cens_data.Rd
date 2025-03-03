@@ -16,7 +16,7 @@ cens_data(data, cens_method = "Time", cens_events = NULL, cens_time = NULL)
 \item{cens_time}{Time at which you wish to perform the censoring}
 }
 \value{
-A list: censored dataframe, cens_events and cens_time
+A list: censored dataframe, cens_events, cens_time and sample size
 }
 \description{
 Censor a survival data set

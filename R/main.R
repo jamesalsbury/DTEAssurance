@@ -56,7 +56,7 @@ sim_dte <- function(n_c, n_t, lambda_c, delay_time, post_delay_HR, dist = "Expon
 #' @param cens_method Method of censoring, must be either "Time" (default) or "Events"
 #' @param cens_events Number of events at which you wish to perform the censoring
 #' @param cens_time Time at which you wish to perform the censoring
-#' @return A list: censored dataframe, cens_events and cens_time
+#' @return A list: censored dataframe, cens_events, cens_time and sample size
 #' @export
 
 cens_data <- function(data, cens_method = "Time", cens_events = NULL, cens_time = NULL){
@@ -74,7 +74,10 @@ cens_data <- function(data, cens_method = "Time", cens_events = NULL, cens_time 
                                cens_time - data$rec_time,
                                data$time)
 
-  return(list(data = data, cens_events = cens_events, cens_time = cens_time))
+  return(list(data = data,
+              cens_events = cens_events,
+              cens_time = cens_time,
+              sample_size = nrow(data)))
 }
 
 #' Calculate Assurance for a trial with a Delayed Treatment Effect
@@ -141,6 +144,7 @@ calc_dte_assurance <- function(n_c, n_t,
 
     assurance_vec <- rep(NA, nSims)
     cens_vec <- rep(NA, nSims)
+    ss_vec <- rep(NA, nSims)
 
     for (i in 1:nSims){
 
@@ -226,16 +230,17 @@ calc_dte_assurance <- function(n_c, n_t,
       data <- data_after_cens$data
 
       cens_vec[i] <- data_after_cens$cens_time
+      ss_vec[i] <- data_after_cens$sample_size
 
       assurance_vec[i] <- survival_test(data, analysis_method, alternative, alpha = 0.05, rho, gamma)
-
 
     }
 
     assurance <- mean(assurance_vec)
 
     calc_dte_assurance_list[[j]] <- list(assurance = assurance, CI_assurance = c(assurance - 1.96*sqrt(assurance*(1-assurance)/nSims),
-                                                        assurance + 1.96*sqrt(assurance*(1-assurance)/nSims)), duration = mean(cens_vec))
+                                                        assurance + 1.96*sqrt(assurance*(1-assurance)/nSims)), duration = mean(cens_vec),
+                                                        sample_size = mean(ss_vec))
 
   }
 
