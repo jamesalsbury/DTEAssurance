@@ -13,7 +13,7 @@ library(survival)
 # library(graphics)
 library(shinyjs)
 # library(utils)
-# library(nleqslv)
+library(nleqslv)
 # library(dplyr)
 library(shinyBS)
 library(DTEAssurance)
@@ -1210,12 +1210,6 @@ ui <- fluidPage(
       }
 
 
-      # base_call <-  paste0(base_call,
-      #                      ", \n lambda_c = ",
-      #                      input$WeibullScale,
-      #                      ", \n gamma_c = ",
-      #                      input$WeibullShape)
-
       base_call <- paste0(base_call,
                           ", \n delay_time_SHELF = SHELF::fitdist(c(",
                           input$TValues,
@@ -1378,31 +1372,79 @@ ui <- fluidPage(
         "DTEAssurance.rds"
       },
       content = function(file) {
-        object_list <- list(fit1 = myfit1(), fit2 = myfit2(),
-                            control_dist = input$
-                            d = c(input$dist1, input$dist2),
-                            P_S = input$P_S, P_DTE = input$P_DTE)
-        calc_dte_assurance(n_c = c(10, 46, 82, 118, 154, 190, 226, 261, 297, 333),
-                           n_t = c(10, 83, 156, 229, 302, 375, 448, 521, 594, 667),
-                           control_dist = "Exponential",
-                           control_parameters = "Fixed",
-                           fixed_parameters_type = "Parameter",
-                           lambda_c = 0.08,
-                           delay_time_SHELF = SHELF::fitdist(c(5.5, 6, 6.5), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 12),
-                           delay_time_dist = "hist",
-                           post_delay_HR_SHELF = SHELF::fitdist(c(0.5, 0.6, 0.7), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 1),
-                           post_delay_HR_dist = "hist",
-                           P_S = 1,
-                           P_DTE = 0,
-                           cens_method = "Time",
-                           cens_time = 60,
-                           rec_method = "power",
-                           rec_period = 12,
-                           rec_power = 1,
-                           analysis_method = "LRT",
-                           alternative = "one.sided",
-                           alpha = 0.05,
-                           nSims = 250)
+        object_list <- list(control_dist = input$ControlDist)
+
+        if (input$ControlDist == "Exponential") {
+
+          object_list$control_parameters <- input$ExpChoice
+
+          if (input$ExpChoice == "Fixed") {
+            object_list$fixed_parameters_type <- input$ExpRateorTime
+
+            if (input$ExpRateorTime == "Parameter") {
+              object_list$lambda_c <- input$ExpRate
+            } else if (input$ExpRateorTime == "Landmark") {
+              object_list$t1 <- input$ExpTime
+              object_list$surv_t1 <- input$ExpSurv
+            }
+          }
+
+          if (input$ExpChoice == "Distribution") {
+            object_list$t1 <- input$ExpSurvTime
+            object_list$t1_Beta_a <- input$ExpBetaA
+            object_list$t1_Beta_b <- input$ExpBetaB
+          }
+        }
+
+        if (input$ControlDist == "Weibull"){
+          object_list$control_parameters = input$WeibullChoice
+
+
+
+          if (input$WeibullChoice == "Fixed"){
+            object_list$fixed_parameters_type = input$WeibRateorTime
+
+
+            if (input$WeibRateorTime == "Parameter"){
+              object_list$lambda_c = input$WeibullScale
+              object_list$gamma_c = input$WeibullShape
+            } else if (input$WeibRateorTime == "Landmark"){
+              object_list$t1 = input$WeibullTime1
+              object_list$t2 = input$WeibullTime2
+              object_list$surv_t1 = input$WeibullSurv1
+              object_list$surv_t2 = input$WeibullSurv2
+            }
+
+          } else if (input$WeibullChoice == "Distribution"){
+            object_list$t1 = input$WeibullDistT1
+            object_list$t2 = input$WeibullDistT2
+            object_list$t1_Beta_a = input$WeibullDistS1BetaA
+            object_list$t1_Beta_b = input$WeibullDistS1BetaB
+            object_list$diff_Beta_a = input$WeibullDistDelta1BetaA
+            object_list$diff_Beta_b = input$WeibullDistDelta1BetaB
+
+          }
+        }
+
+        object_list$delay_time_SHELF = TFit()
+        object_list$post_delay_HR_SHELF = HRFit()
+
+        object_list$P_S = input$P_S
+        object_list$P_DTE = input$P_DTE
+
+        object_list$rec_method = input$rec_method
+
+
+        if (input$rec_method == "power"){
+          object_list$rec_period = input$rec_period
+          object_list$rec_power = input$rec_power
+
+        }
+        if (input$rec_method == "PWC"){
+          object_list$rec_rate = input$rec_rate
+          object_list$rec_duration = input$rec_duration
+        }
+
         saveRDS(object_list, file)
       }
     )

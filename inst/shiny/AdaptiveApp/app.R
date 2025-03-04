@@ -45,6 +45,7 @@ ui <- fluidPage(
       tabPanel("Design",
                sidebarLayout(
                  sidebarPanel = sidebarPanel(
+                   fileInput("parametersFile", "Choose RDS File", accept = ".rds"),
                    h3("Control"),
                    selectInput("ControlDist", "Distribution", choices = c("Exponential", "Weibull"), selected = "Exponential"),
                    # Conditional UI for Exponential distribution
@@ -623,49 +624,23 @@ server <- function(input, output, session) {
                                 TwoLooksSeq2 = NULL,
                                 lambdac = NULL)
 
+  rds_data <- reactive({
+    req(input$parametersFile)  # Ensure file is uploaded
 
-  observeEvent(input$samplesFile, {
-    inFile  <- input$samplesFile
-    if (!is.null(inFile)) {
-      # Read the uploaded file into treatmentSamplesDF
-      reactValues$treatmentSamplesDF <-  readRDS(inFile$datapath)
+    # Read the RDS file
+    readRDS(input$parametersFile$datapath)
+  })
 
-      output$TDist <- renderPlot({
-        SHELF::plotfit(reactValues$treatmentSamplesDF$fit1, d = reactValues$treatmentSamplesDF$d[1], xlab = "Length of Delay")
-      })
+  observe({
+    req(rds_data())  # Ensure data is loaded
 
+    inputData <<- rds_data()
 
-      output$HRDist <- renderPlot({
-        SHELF::plotfit(reactValues$treatmentSamplesDF$fit2, d = reactValues$treatmentSamplesDF$d[2], xlab = "Post-delay Hazard Ratio")
-      })
+    updateNumericInput(session, inputId = "P_S", value = inputData$P_S)
+    updateNumericInput(session, inputId = "P_DTE", value = inputData$P_DTE)
 
-      output$P_S <- renderUI({
-        withMathJax(paste0("The probability of the survival curves separating, $$P_S =", reactValues$treatmentSamplesDF$P_S,"$$"))
-      })
+    updateTextInput(session, inputId = "ControlDist", value = inputData$control_dist)
 
-      output$P_DTE <- renderUI({
-        withMathJax(paste0("The probability of the survival curves being subject to a delayed treatment effect, $$P_{\\text{DTE}} =", reactValues$treatmentSamplesDF$P_DTE,"$$"))
-      })
-
-
-      shinyjs::hide("checkNoLook")
-      shinyjs::hide("checkOneLook")
-      shinyjs::hide("checkTwoLooks")
-      shinyjs::hide("checkBayesian")
-
-      updateCheckboxInput(session, "checkDesign", value = F)
-      updateCheckboxInput(session, "checkNoLook", value = F)
-      updateCheckboxInput(session, "checkOneLook", value = F)
-      updateCheckboxInput(session, "checkTwoLooks", value = F)
-      updateCheckboxInput(session, "checkBayesian", value = F)
-
-
-
-      tSample <- SHELF::sampleFit(reactValues$treatmentSamplesDF$fit1, 100000)
-      updateNumericInput(session, "KFMonths", value = round(median(tSample[,reactValues$treatmentSamplesDF$d[1]]), 2))
-
-
-    }
   })
 
 
@@ -939,7 +914,6 @@ server <- function(input, output, session) {
                                          typeBetaSpending = "bsUser",
                                          userBetaSpending = as.numeric(values[,3]))
 
-      # x<<- design
 
       output$oneLookBoundaries <- renderPlotly({
 
