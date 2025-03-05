@@ -246,7 +246,6 @@ calc_dte_assurance <- function(n_c, n_t,
 
 return(calc_dte_assurance_list = calc_dte_assurance_list)
 
-
 }
 
 
@@ -376,4 +375,171 @@ add_recruitment_time <- function(data, rec_method,
 
 }
 
+#' Simulates a Group Sequential Trial for a trial with a Delayed Treatment Effect, with elicited priors
+#'
+#' @param n_c Number of patients in the control group
+#' @param n_t Number of patients in the treatment group
+#' @param control_dist Distribution of control group, must be one of "Exponential" (default) or "weibull"
+#' @param control_parameters The parameters for the control group are either "Fixed" (default) or "Distribution"
+#' @param fixed_parameters_type The fixed parameters are either a "Parameters" (default) or "Landmark"
+#' @param lambda_c Control group parameter
+#' @param gamma_c Control group parameter
+#' @param t1 Time 1
+#' @param t2 Time 2
+#' @param surv_t1 Survival probability at time 1
+#' @param surv_t2 Survival probability at time 2
+#' @param t1_Beta_a Hyperparameter a for the Beta distribution for the survival probability at time 1
+#' @param t1_Beta_b Hyperparameter a for the Beta distribution for the survival probability at time 1
+#' @param diff_Beta_a Hyperparameter a for the Beta distribution for the difference in survival probabilities (t2-t1)
+#' @param diff_Beta_b Hyperparameter b for the Beta distribution for the difference in survival probabilities (t2-t1)
+#' @param delay_time_SHELF A SHELF object, beliefs about the delay time
+#' @param delay_time_dist Distribution of the delay time, "hist" is default. See SHELF help for more details
+#' @param post_delay_HR_SHELF A SHELF object, beliefs about the post-delay hazard ratio
+#' @param post_delay_HR_dist Distribution of the post-delay hazard ratio, "hist" is default. See SHELF help for more details
+#' @param P_S Probability of the survival curves separating
+#' @param P_DTE Probability of the survival curves being subject to a DTE, given they separate
+#' @param cens_events Number of events at which you wish to perform the censoring (must be less than n_c + n_t)
+#' @param rec_method Recruitment method, must be one of "power" or "PWC" (piecewise constant)
+#' @param rec_period Parameter used to model recruitment according to power model
+#' @param rec_power Parameter used to model recruitment according to power model
+#' @param rec_rate Parameter used to model recruitment according to piecewise constant model
+#' @param rec_duration Parameter used to model recruitment according to piecewise constant model
+#' @param alpha_spending Cumulative alpha spending
+#' @param beta_spending Cumulative beta spending
+#' @param IF_vec Vector of information fraction's
+#' @param nSims Number of simulations, default is 1000
 
+calc_dte_assurance_interim <- function(n_c, n_t,
+                               control_dist = "Exponential", control_parameters = "Fixed",
+                               fixed_parameters_type = "Parameter",
+                               lambda_c = NULL, gamma_c = NULL,
+                               t1 = NULL, t2 = NULL,
+                               surv_t1 = NULL, surv_t2 = NULL,
+                               t1_Beta_a = NULL, t1_Beta_b = NULL,
+                               diff_Beta_a = NULL, diff_Beta_b = NULL,
+                               delay_time_SHELF, delay_time_dist = "hist",
+                               post_delay_HR_SHELF, post_delay_HR_dist = "hist",
+                               P_S = 1, P_DTE = 0, cens_events = NULL,
+                               rec_method, rec_period=NULL, rec_power=NULL, rec_rate=NULL, rec_duration=NULL,
+                               alpha_spending = NULL, beta_spending = NULL, IF_vec = NULL,
+                               nSims=1e3){
+
+
+  if (control_dist=="Exponential"){
+    if (control_parameters=="Fixed"){
+      if (fixed_parameters_type=="Parameter"){
+        lambda_c <- lambda_c
+      } else if (fixed_parameters_type=="Landmark") {
+        lambda_c <-  -log(surv_t1)/t1
+      }
+    } else if (control_parameters=="Distribution"){
+      lambda_c <- -log(rbeta(1, t1_Beta_a, t1_Beta_b)) / t1
+    }
+  } else if (control_dist=="Weibull"){
+    if (control_parameters=="Fixed"){
+      if (fixed_parameters_type=="Parameter"){
+        lambda_c <- lambda_c
+        gamma_c <- gamma_c
+      } else if (fixed_parameters_type=="Landmark"){
+        WeibFunc <- function(params) {
+          lambda <- params[1]
+          k <- params[2]
+          c(exp(-(t1*lambda)^k) - surv_t1,
+            exp(-(t2*lambda)^k) - surv_t1)
+        }
+
+        solution <- nleqslv(c(1, 1), fn = WeibFunc)
+
+        lambda_c <- solution$x[1]
+        gamma_c <- solution$x[2]
+      }
+    } else if (control_parameters=="Distribution"){
+      sampledS1to <- rbeta(1, t1_Beta_a, t1_Beta_b)
+      sampledDelta1 <- rbeta(1, diff_Beta_a, diff_Beta_b)
+      sampledS1toPrime <- sampledS1to - sampledDelta1
+
+      # Solve for lambda and gamma using sampled values
+      solution <- nleqslv(c(10, 1), function(params) {
+        lambda <- params[1]
+        k <- params[2]
+        c(exp(-(t1 / lambda)^k) - sampledS1to,
+          exp(-(t2 / lambda)^k) - sampledS1toPrime)
+      })
+
+      lambda_c <- 1 / solution$x[1]
+      gamma_c <- solution$x[2]
+    }
+  }
+
+  if (runif(1) > P_S){
+    #Curves do not separate
+    delay_time <- 0
+    post_delay_HR <- 1
+  } else {
+    if (runif(1) > P_DTE){
+      #Curves separate with no delay
+      delay_time <- 0
+      post_delay_HR_sample <- SHELF::sampleFit(post_delay_HR_SHELF, n = 1)
+      post_delay_HR <- post_delay_HR_sample[,post_delay_HR_dist]
+    } else{
+      #Curves separate with a delay
+      delay_time_sample <- SHELF::sampleFit(delay_time_SHELF, n = 1)
+      post_delay_HR_sample <- SHELF::sampleFit(post_delay_HR_SHELF, n = 1)
+      delay_time <- delay_time_sample[,delay_time_dist]
+      post_delay_HR <- post_delay_HR_sample[,post_delay_HR_dist]
+    }
+  }
+
+  data <- sim_dte(n_c, n_t, lambda_c, delay_time, post_delay_HR, dist = control_dist, gamma_c = gamma_c)
+
+  if (rec_method=="power"){
+    data <- add_recruitment_time(data, rec_method,
+                                 rec_period, rec_power)
+  }
+
+  if (rec_method == "PWC"){
+    data <- add_recruitment_time(data, rec_method,
+                                 rec_rate, rec_duration)
+  }
+
+  cens_events_vec <- IF_vec*cens_events
+
+  design <<- getDesignGroupSequential(typeOfDesign = "asUser",
+                                     informationRates = IF_vec,
+                                     userAlphaSpending = alpha_spending,
+                                     typeBetaSpending = "bsUser",
+                                     userBetaSpending = beta_spending)
+
+  print(design)
+
+  for (i in 1:length(cens_events_vec)){
+    data_after_cens <- cens_data(data, cens_method = "Events", cens_events = cens_events_vec[i])
+    coxmodel <- coxph(Surv(survival_time, status) ~ group, data = data_after_cens$data)
+    ZScore <- -(coef(summary(coxmodel))[, 4])
+   #delta <- as.numeric(exp(coef(coxmodel)))
+  }
+
+
+
+
+group_sequential_decision <- function(z_scores, critical_values, futility_bound) {
+  for (i in seq_along(z_scores)) {
+    if (abs(z_scores[i]) > critical_values[i]) {
+      return(list(status = "Stop for efficacy", analysis = i, z_score = z_scores[i]))
+    } else if (abs(z_scores[i]) < futility_bound) {
+      return(list(status = "Stop for futility", analysis = i, z_score = z_scores[i]))
+    }
+  }
+  return(list(status = "Continue", analysis = length(z_scores)))
+}
+
+
+
+
+
+
+
+
+
+
+}

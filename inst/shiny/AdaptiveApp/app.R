@@ -1,14 +1,15 @@
-library(shiny)
+# library(shiny)
 library(shinyjs)
-library(survival)
-library(doParallel)
-library(ggplot2)
+# library(survival)
+# library(doParallel)
+# library(ggplot2)
 library(DT)
 library(rhandsontable)
 library(rpact)
-library(SHELF)
+# library(SHELF)
 library(plotly)
-library(survminer)
+# library(survminer)
+library(shinyBS)
 
 rowCallback <- c(
   "function(row, data){",
@@ -292,7 +293,7 @@ ui <- fluidPage(
                      )
 
                    ),
-                   h3("Recruitment"),
+                   h3("Trial Setup"),
                    numericInput("numofpatients", "Maximum number of patients in the trial", value=1000),
                    fluidRow(
                      column(6,
@@ -349,11 +350,33 @@ ui <- fluidPage(
                )
       ),
 
-      # No Look UI ---------------------------------
+      # No Interim Analysis UI ---------------------------------
 
-      tabPanel("No Look",
+      tabPanel("No Interim Analysis",
                sidebarLayout(
                  sidebarPanel = sidebarPanel(
+                   selectInput("analysisType", label = "Analysis method", choices = c("Logrank test" = "LRT", "Fleming-Harrington test" = "FHT"), selected = "LRT"),
+                   conditionalPanel(
+                     condition = "input.analysisType == 'FHT'",
+                     fluidRow(
+                       column(6,
+                              numericInput("rho", ' \\( \\rho \\)', value=0, min=0, max = 1)
+                       ),
+                       column(6,
+                              numericInput("gamma", " \\( \\gamma \\)", value=0, min=0, max = 1)
+                       )
+                     )
+                   ),
+                   radioButtons(
+                     inputId = "test_type",
+                     label = "Test:",
+                     choices = c("One-sided" = "one.sided", "Two-sided" = "two.sided"),
+                     selected = "one.sided"
+                   ),
+                   numericInput("alphaLevel", "Alpha", value=0.05),
+                   numericInput("nSamples", "Number of simulations (per sample size)", value=250),
+
+
                    actionButton("calcNoLook", label  = "Calculate")
                  ),
                  mainPanel = mainPanel(
@@ -366,10 +389,10 @@ ui <- fluidPage(
                )
       ),
 
-      # One Look UI ---------------------------------
+      # One Interim Analysis UI ---------------------------------
 
 
-      tabPanel("One Look",
+      tabPanel("One Interim Analysis",
                sidebarLayout(
                  sidebarPanel = sidebarPanel(
                    wellPanel(
@@ -415,9 +438,9 @@ ui <- fluidPage(
                )
       ),
 
-      # Two Looks UI ---------------------------------
+      # Two Interim Analyses UI ---------------------------------
 
-      tabPanel("Two Looks",
+      tabPanel("Two Interim Analyses",
                sidebarLayout(
                  sidebarPanel = sidebarPanel(
                    wellPanel(
@@ -641,10 +664,77 @@ server <- function(input, output, session) {
 
     updateTextInput(session, inputId = "ControlDist", value = inputData$control_dist)
 
+    if (inputData$control_dist=="Exponential"){
+      updateTextInput(session, inputId = "ExpChoice", value = inputData$control_parameters)
+      if (inputData$control_parameters=="Fixed"){
+        updateTextInput(session, inputId = "ExpRateorTime", value = inputData$fixed_parameters_type)
+          if (inputData$fixed_parameters_type=="Parameter"){
+            updateTextInput(session, inputId = "ExpRate", value = inputData$lambda_c)
+          } else if (inputData$fixed_parameters_type == "Landmark"){
+            updateTextInput(session, inputId = "ExpTime", value = inputData$t1)
+            updateTextInput(session, inputId = "ExpSurv", value = inputData$surv_t1)
+          }
+      } else if (inputData$control_parameters=="Distribution"){
+        updateTextInput(session, inputId = "ExpSurvTime", value = inputData$t1)
+        updateTextInput(session, inputId = "ExpBetaA", value = inputData$t1_Beta_a)
+        updateTextInput(session, inputId = "ExpBetaB", value = inputData$t1_Beta_b)
+        }
+      }
+
+
+    if (inputData$control_dist=="Weibull"){
+      updateTextInput(session, inputId = "WeibullChoice", value = inputData$control_parameters)
+      if (inputData$control_parameters=="Fixed"){
+        updateTextInput(session, inputId = "WeibRateorTime", value = inputData$fixed_parameters_type)
+        if (inputData$fixed_parameters_type=="Parameter"){
+          updateTextInput(session, inputId = "WeibullScale", value = inputData$lambda_c)
+          updateTextInput(session, inputId = "WeibullShape", value = inputData$gamma_c)
+        } else if (inputData$fixed_parameters_type == "Landmark"){
+          updateTextInput(session, inputId = "WeibullTime1", value = inputData$t1)
+          updateTextInput(session, inputId = "WeibullSurv1", value = inputData$surv_t1)
+          updateTextInput(session, inputId = "WeibullTime2", value = inputData$t2)
+          updateTextInput(session, inputId = "WeibullSurv2", value = inputData$surv_t2)
+        }
+      } else if (inputData$control_parameters=="Distribution"){
+        updateTextInput(session, inputId = "WeibullDistT1", value = inputData$t1)
+        updateTextInput(session, inputId = "WeibullDistT2", value = inputData$t2)
+        updateTextInput(session, inputId = "WeibullDistS1BetaA", value = inputData$t1_Beta_a)
+        updateTextInput(session, inputId = "WeibullDistS1BetaB", value = inputData$t1_Beta_b)
+        updateTextInput(session, inputId = "WeibullDistDelta1BetaA", value = inputData$diff_Beta_a)
+        updateTextInput(session, inputId = "WeibullDistDelta1BetaB", value = inputData$diff_Beta_b)
+
+      }
+    }
+
+
+    updateTextInput(session, inputId = "TLimits", value = toString(inputData$delay_time_SHELF$limits))
+    updateTextInput(session, inputId = "TValues", value = toString(inputData$delay_time_SHELF$vals))
+    updateTextInput(session, inputId = "TProbs", value = toString(inputData$delay_time_SHELF$probs))
+    updateTextInput(session, inputId = "TDist", value = toString(inputData$t_dist))
+
+    updateTextInput(session, inputId = "HRLimits", value = toString(inputData$post_delay_HR_SHELF$limits))
+    updateTextInput(session, inputId = "HRValues", value = toString(inputData$post_delay_HR_SHELF$vals))
+    updateTextInput(session, inputId = "HRProbs", value = toString(inputData$post_delay_HR_SHELF$probs))
+    updateTextInput(session, inputId = "HRDist", value = toString(inputData$HR_dist))
+
+    updateTextInput(session, inputId = "rec_method", value = inputData$rec_method)
+
+    if (inputData$rec_method=="power"){
+      updateTextInput(session, inputId = "rec_period", value = inputData$rec_period)
+      updateTextInput(session, inputId = "rec_power", value = inputData$rec_power)
+    }
+
+    if (inputData$rec_method=="PWC"){
+      updateTextInput(session, inputId = "rec_rate", value = inputData$rec_rate)
+      updateTextInput(session, inputId = "rec_duration", value = inputData$rec_duration)
+    }
+
+    updateNumericInput(session, inputId = "ControlRatio", value = inputData$ratio_groups[1])
+    updateNumericInput(session, inputId = "TreatmentRatio", value = inputData$ratio_groups[2])
+
   })
 
-
-  # No Look Logic ---------------------------------
+  # No Interim Analysis Logic ---------------------------------
 
 
   noLookFuncPlot <- reactive({
@@ -827,7 +917,7 @@ server <- function(input, output, session) {
 
   })
 
-  # One Look Logic ---------------------------------
+  # One Interim Analysis Logic ---------------------------------
 
   observe({
     if (!is.null(reactValues$treatmentSamplesDF)&reactValues$errorSeqOneLook==F) {
@@ -1297,7 +1387,7 @@ server <- function(input, output, session) {
 
   })
 
-  # Two Looks Logic ---------------------------------
+  # Two Interim Analyses Logic ---------------------------------
 
   observe({
     if (!is.null(reactValues$treatmentSamplesDF)&reactValues$errorSeqTwoLooks==F) {

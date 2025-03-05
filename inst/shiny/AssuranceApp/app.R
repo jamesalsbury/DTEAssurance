@@ -1445,6 +1445,11 @@ ui <- fluidPage(
           object_list$rec_duration = input$rec_duration
         }
 
+        object_list$t_dist = input$TDist
+        object_list$HR_dist = input$HRDist
+
+        object_list$ratio_groups = c(input$ControlRatio, input$TreatmentRatio)
+
         saveRDS(object_list, file)
       }
     )
