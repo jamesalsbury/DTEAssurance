@@ -294,7 +294,7 @@ ui <- fluidPage(
 
                    ),
                    h3("Trial Setup"),
-                   numericInput("numofpatients", "Maximum number of patients in the trial", value=1000),
+                   numericInput("numofpatients", "Number of patients in the trial", value=1000),
                    fluidRow(
                      column(6,
                             numericInput("ControlRatio", "Ratio control", value=1, min=1)
@@ -328,15 +328,11 @@ ui <- fluidPage(
                        )
                      )
                    ),
-                   selectInput("censType", "Type of censoring", choices = c("Time", "Events"), selected = "Time"),
-                   conditionalPanel(
-                     condition = "input.censType == 'Time'",
-                     numericInput("censTime", "Censoring time", value = 60)
-                   ),
-                   conditionalPanel(
-                     condition = "input.censType == 'Events'",
-                     numericInput("censEvents", "Number of events", value = 100)
-                   ),
+
+
+                     numericInput("censEvents", "Number of events", value = 100),
+                   numericInput("nSamples", "Number of simulations", value=250),
+
                  ),
                  mainPanel = mainPanel(
                    uiOutput("P_S"),
@@ -350,44 +346,7 @@ ui <- fluidPage(
                )
       ),
 
-      # No Interim Analysis UI ---------------------------------
 
-      tabPanel("No Interim Analysis",
-               sidebarLayout(
-                 sidebarPanel = sidebarPanel(
-                   selectInput("analysisType", label = "Analysis method", choices = c("Logrank test" = "LRT", "Fleming-Harrington test" = "FHT"), selected = "LRT"),
-                   conditionalPanel(
-                     condition = "input.analysisType == 'FHT'",
-                     fluidRow(
-                       column(6,
-                              numericInput("rho", ' \\( \\rho \\)', value=0, min=0, max = 1)
-                       ),
-                       column(6,
-                              numericInput("gamma", " \\( \\gamma \\)", value=0, min=0, max = 1)
-                       )
-                     )
-                   ),
-                   radioButtons(
-                     inputId = "test_type",
-                     label = "Test:",
-                     choices = c("One-sided" = "one.sided", "Two-sided" = "two.sided"),
-                     selected = "one.sided"
-                   ),
-                   numericInput("alphaLevel", "Alpha", value=0.05),
-                   numericInput("nSamples", "Number of simulations (per sample size)", value=250),
-
-
-                   actionButton("calcNoLook", label  = "Calculate")
-                 ),
-                 mainPanel = mainPanel(
-                   hidden(numericInput("noLookAssuranceValue", "Number of events", value = 10)),
-                   textOutput("noLookAssuranceText"),
-                   plotOutput("noLookAssurancePlot"),
-                   tableOutput("finalAssTableNoLook"),
-
-                 )
-               )
-      ),
 
       # One Interim Analysis UI ---------------------------------
 
@@ -405,9 +364,10 @@ ui <- fluidPage(
                      div(id = "oneLookErrorMessage", class = "error-message", textOutput("oneLookErrorMessage"))),
                    wellPanel(
                      rHandsontableOutput("spendingOneLook")),
-                   actionButton("calcOneLook", label  = "Calculate", disabled = T)
+                   actionButton("calcOneLook", label  = "Calculate")
                  ),
                  mainPanel = mainPanel(
+                   verbatimTextOutput("display_func_one_look"),
                    tabsetPanel(
                      tabPanel("Tables",
                               hidden(selectizeInput("selectedOptionsIATableOneLook", "Selected Metrics",
@@ -428,7 +388,7 @@ ui <- fluidPage(
                               plotlyOutput("oneLookObservedHRBoundaries"),
                               br(), br(),
                               br(), br(),
-                              plotlyOutput("oneLookPlotDuration"),
+                              plotOutput("oneLookPlotDuration"),
                               br(), br(),
                               br(), br(),
                               plotlyOutput("oneLookPlotSS")),
@@ -919,13 +879,166 @@ server <- function(input, output, session) {
 
   # One Interim Analysis Logic ---------------------------------
 
-  observe({
-    if (!is.null(reactValues$treatmentSamplesDF)&reactValues$errorSeqOneLook==F) {
-      updateActionButton(session, "calcOneLook", disabled = FALSE)
-    } else {
-      updateActionButton(session, "calcOneLook", disabled = TRUE)
+
+  function_call_one_look <- reactive({
+    n_c <- (input$numofpatients*input$ControlRatio)/(sum(input$ControlRatio+input$TreatmentRatio))
+   n_t <- (input$numofpatients*input$TreatmentRatio)/(sum(input$ControlRatio+input$TreatmentRatio))
+    base_call <- paste0("calc_dte_assurance_interim(n_c = ",
+                        paste(round(n_c), collapse = ", "),
+                        ", \n n_t = ",
+                        paste(round(n_t), collapse = ", "),
+                        ", \n control_dist = \"",
+                        input$ControlDist,
+                        "\"")
+
+    if (input$ControlDist=="Exponential"){
+      base_call <- paste0(base_call,
+                          ", \n control_parameters = \"",
+                          input$ExpChoice,
+                          "\"")
+      if (input$ExpChoice=="Fixed"){
+        base_call <- paste0(base_call,
+                            ", \n fixed_parameters_type = \"",
+                            input$ExpRateorTime,
+                            "\"")
+        if (input$ExpRateorTime == "Parameter"){
+          base_call <-  paste0(base_call, ", \n lambda_c = ",
+                               input$ExpRate)
+        } else if (input$ExpRateorTime == "Landmark"){
+          base_call <-  paste0(base_call, ", \n t1 = ",
+                               input$ExpTime,
+                               ", \n surv_t1 = ",
+                               input$ExpSurv)
+        }
+      }
+
+      if (input$ExpChoice=="Distribution"){
+        base_call <-  paste0(base_call, ", \n t1 = ",
+                             input$ExpSurvTime,
+                             ", \n t1_Beta_a = ",
+                             input$ExpBetaA,
+                             ", \n t1_Beta_b = ",
+                             input$ExpBetaB)
+      }
     }
+
+    if (input$ControlDist == "Weibull"){
+      base_call <- paste0(base_call,
+                          ", \n control_parameters = \"",
+                          input$WeibullChoice,
+                          "\"")
+
+      if (input$WeibullChoice == "Fixed"){
+        base_call <- paste0(base_call,
+                            ", \n fixed_parameters_type = \"",
+                            input$WeibRateorTime,
+                            "\"")
+
+        if (input$WeibRateorTime == "Parameter"){
+          base_call <-  paste0(base_call, ", \n lambda_c = ",
+                               input$WeibullScale,
+                               ", \n gamma_c = ",
+                               input$WeibullShape)
+        } else if (input$WeibRateorTime == "Landmark"){
+          base_call <-  paste0(base_call, ", \n t1 = ",
+                               input$WeibullTime1,
+                               ", \n t2 = ",
+                               input$WeibullSurv1,
+                               ", \n surv_t1 = ",
+                               input$WeibullTime2,
+                               ", \n surv_t2 = ",
+                               input$WeibullSurv2)
+        }
+
+      } else if (input$WeibullChoice == "Distribution"){
+        base_call <-  paste0(base_call, ", \n t1 = ",
+                             input$WeibullDistT1,
+                             ", \n t2 = ",
+                             input$WeibullDistT2,
+                             ", \n t1_Beta_a = ",
+                             input$WeibullDistS1BetaA,
+                             ", \n t1_Beta_b = ",
+                             input$WeibullDistS1BetaB,
+                             ", \n diff_Beta_a = ",
+                             input$WeibullDistDelta1BetaA,
+                             ", \n diff_Beta_b = ",
+                             input$WeibullDistDelta1BetaB)
+      }
+    }
+
+
+    base_call <- paste0(base_call,
+                        ", \n delay_time_SHELF = SHELF::fitdist(c(",
+                        input$TValues,
+                        "), probs = c(",
+                        input$TProbs,
+                        "), lower = ",
+                        strsplit(input$TLimits, ", ")[[1]][1],
+                        ", upper = ",
+                        strsplit(input$TLimits, ", ")[[1]][2],
+                        "), \n delay_time_dist = \"",
+                        input$TDist,
+                        "\", \n post_delay_HR_SHELF = SHELF::fitdist(c(",
+                        input$HRValues,
+                        "), probs = c(",
+                        input$HRProbs,
+                        "), lower = ",
+                        strsplit(input$HRLimits, ", ")[[1]][1],
+                        ", upper = ",
+                        strsplit(input$HRLimits, ", ")[[1]][2],
+                        "), \n post_delay_HR_dist = \"",
+                        input$HRDist,
+                        "\",  \n P_S = ",
+                        input$P_S,
+                        ", \n P_DTE = ",
+                        input$P_DTE,
+                        ", \n cens_events = ",
+                        input$censEvents,
+                        ", \n rec_method = \"",
+                        input$rec_method,
+                        "\"")
+
+
+    if (input$rec_method == "power"){
+      base_call <- paste0(base_call,
+                          ", \n rec_period = ",
+                          input$rec_period,
+                          ", \n rec_power = ",
+                          input$rec_power)
+    }
+    if (input$rec_method == "PWC"){
+      base_call <- paste0(base_call,
+                          ", \n rec_rate = ",
+                          input$rec_rate,
+                          ", \n rec_duration = ",
+                          input$rec_duration)
+    }
+
+
+
+    base_call <- paste0(base_call,
+                        ", \n nSims = ",
+                        input$nSamples,
+                        ", \n IF_vec = c(1/3, 2/3, 1)"
+                        )
+
+    base_call <- paste0(base_call, ")")
+
+    return(base_call)
+
   })
+
+  output$display_func_one_look <- renderText({
+    function_call_one_look()
+  })
+
+  calculateGSDAssurance <- eventReactive(input$calcOneLook, {
+    #print("yes")
+    call_string <- function_call_one_look()
+    result <- eval(parse(text = call_string))
+    return(result)
+  })
+
 
 
   observe({
@@ -1262,130 +1375,143 @@ server <- function(input, output, session) {
 
   })
 
+  output$oneLookPlotDuration <- renderPlot({
 
-  observeEvent(input$calcOneLook, {
+    #plot(1:10, 1:10)
 
-    shinyjs::show("checkOneLook")
+    assOutput <- calculateGSDAssurance()
 
-    shinyjs::show("selectedOptionsIATableOneLook")
-
-    oneLookoutput <- oneLookFunc()
-
-    output$IATableOneLook <- renderDT({
-
-      IADFOneLook <- subset(oneLookoutput$IADFOneLook, select = c("Information Fraction", input$selectedOptionsIATableOneLook))
-
-      datatable(IADFOneLook, options = list(rowCallback = JS(rowCallback)),
-                rownames = F) %>% formatStyle(
-                  columns = colnames(IADFOneLook)
-                ) %>%
-        formatSignif(
-          columns = colnames(IADFOneLook),
-          digits = 3
-        )
-    })
-
-
-    output$noIATableOneLook <- renderTable({
-      oneLookoutput$FinalAss
-    }, digits = 3)
-
-
-
-    output$oneLookObservedHRBoundaries <- renderPlotly({
-
-      seqChosen <- seq(input$OneLookLB, input$OneLookUB, by = input$OneLookBy)
-
-      whichChosen <- which(seqChosen==as.numeric(input$oneLookBoundaryIA))
-
-
-      boundaryDFEff <- data.frame(IF = oneLookoutput$iterationList[[whichChosen]]$IF,
-                                  observedHR = c(oneLookoutput$iterationList[[whichChosen]]$E1, oneLookoutput$iterationList[[whichChosen]]$E2))
-
-      boundaryDFFut <- data.frame(IF = oneLookoutput$iterationList[[whichChosen]]$IF,
-                                  observedHR = c(oneLookoutput$iterationList[[whichChosen]]$F1, oneLookoutput$iterationList[[whichChosen]]$E2))
-
-      # Calculate dynamic y-axis limits
-      all_observedHR <- c(boundaryDFEff$observedHR, boundaryDFFut$observedHR)
-      ylim <- range(all_observedHR)
-
-      # Extend the limits by 10% on each side
-      buffer <- 0.1 * (ylim[2] - ylim[1])
-      extended_ylim <- c(ylim[1] - buffer, ylim[2] + buffer)
-
-      # Create the plot using plotly
-      p <- plot_ly() %>%
-        add_trace(data = boundaryDFEff, x = ~IF, y = ~observedHR, type = 'scatter', mode = 'lines+markers',
-                  line = list(color = 'red', width = 3),
-                  marker = list(color = 'red', size = 10, symbol = 'circle'),
-                  name = "Critical value") %>%
-        add_trace(data = boundaryDFFut, x = ~IF, y = ~observedHR, type = 'scatter', mode = 'lines+markers',
-                  line = list(color = 'blue', width = 3),
-                  marker = list(color = 'blue', size = 10, symbol = 'circle'),
-                  name = "Futility bound") %>%
-        layout(yaxis = list(range = extended_ylim, title = "Observed HR"),
-               title = "Boundaries",
-               xaxis = list(title = "Information Fraction"))
-
-
-      # Show the plot
-      p
-
-
-    })
-
-
-    output$oneLookPlotDuration <- renderPlotly({
-
-      p <- plot_ly(oneLookoutput$IADFOneLook, x = ~Assurance, y = ~Duration,
-                   text = ~ paste0("Information Fraction = ", `Information Fraction`), mode = "markers",
-                   type = "scatter", marker = list(size = 10, color = "blue"), name = "Chosen Rules") %>%
-        add_trace(x = ~oneLookoutput$FinalAss$Assurance, y = ~oneLookoutput$FinalAss$Duration, type = "scatter", mode = "markers",
-                  marker = list(size = 10, color = "red"),
-                  text = ~ "No Interim Analysis",
-                  name = "No Interim Analysis") %>%
-        layout(
-          xaxis = list(title = list(text = "Assurance", font = list(color = "black", size = 14, family = "Arial", weight = "bold")), range = c(0, 1)),
-          yaxis = list(title = list(text = "Duration", font = list(color = "black", size = 14, family = "Arial", weight = "bold"))),
-          legend = list(orientation = "v", x = 1.05, y = 0.5),  # Position legend to the right
-          title = "Assurance vs Duration for the different stopping rules"
-        )
-
-      p
-
-
-
-    })
-
-    output$oneLookPlotSS <- renderPlotly({
-
-      p <- plot_ly(oneLookoutput$IADFOneLook, x = ~Assurance, y = ~`Sample Size`,
-                   text = ~ paste0("Information Fraction = ", `Information Fraction`), mode = "markers",
-                   type = "scatter", marker = list(size = 10, color = "blue"), name = "Chosen Rules") %>%
-        add_trace(x = ~oneLookoutput$FinalAss$Assurance, y = ~oneLookoutput$FinalAss$`Sample Size`, type = "scatter", mode = "markers",
-                  marker = list(size = 10, color = "red"),
-                  text = ~ "No Interim Analysis",
-                  name = "No Interim Analysis") %>%
-        layout(
-          xaxis = list(title = list(text = "Assurance", font = list(color = "black", size = 14, family = "Arial", weight = "bold")), range = c(0, 1)),
-          yaxis = list(title = list(text = "Sample Size", font = list(color = "black", size = 14, family = "Arial", weight = "bold"))),
-          legend = list(orientation = "v", x = 1.05, y = 0.5),  # Position legend to the right
-          title = "Assurance vs Sample Size for the different stopping rules"
-        )
-
-      p
-
-
-    })
-
-    output$finalAssTable1LookText <- renderUI({
-      p(HTML("<b>No Interim Analysis</b>"))
-    })
-
-    shinyjs::show("finalAssTable1LookText")
-
+    print(assOutput)
 
   })
+
+
+
+
+
+  # observeEvent(input$calcOneLook, {
+  #
+  #   shinyjs::show("checkOneLook")
+  #
+  #   shinyjs::show("selectedOptionsIATableOneLook")
+  #
+  #   oneLookoutput <- oneLookFunc()
+  #
+  #   output$IATableOneLook <- renderDT({
+  #
+  #     IADFOneLook <- subset(oneLookoutput$IADFOneLook, select = c("Information Fraction", input$selectedOptionsIATableOneLook))
+  #
+  #     datatable(IADFOneLook, options = list(rowCallback = JS(rowCallback)),
+  #               rownames = F) %>% formatStyle(
+  #                 columns = colnames(IADFOneLook)
+  #               ) %>%
+  #       formatSignif(
+  #         columns = colnames(IADFOneLook),
+  #         digits = 3
+  #       )
+  #   })
+  #
+  #
+  #   output$noIATableOneLook <- renderTable({
+  #     oneLookoutput$FinalAss
+  #   }, digits = 3)
+  #
+  #
+  #
+  #   output$oneLookObservedHRBoundaries <- renderPlotly({
+  #
+  #     seqChosen <- seq(input$OneLookLB, input$OneLookUB, by = input$OneLookBy)
+  #
+  #     whichChosen <- which(seqChosen==as.numeric(input$oneLookBoundaryIA))
+  #
+  #
+  #     boundaryDFEff <- data.frame(IF = oneLookoutput$iterationList[[whichChosen]]$IF,
+  #                                 observedHR = c(oneLookoutput$iterationList[[whichChosen]]$E1, oneLookoutput$iterationList[[whichChosen]]$E2))
+  #
+  #     boundaryDFFut <- data.frame(IF = oneLookoutput$iterationList[[whichChosen]]$IF,
+  #                                 observedHR = c(oneLookoutput$iterationList[[whichChosen]]$F1, oneLookoutput$iterationList[[whichChosen]]$E2))
+  #
+  #     # Calculate dynamic y-axis limits
+  #     all_observedHR <- c(boundaryDFEff$observedHR, boundaryDFFut$observedHR)
+  #     ylim <- range(all_observedHR)
+  #
+  #     # Extend the limits by 10% on each side
+  #     buffer <- 0.1 * (ylim[2] - ylim[1])
+  #     extended_ylim <- c(ylim[1] - buffer, ylim[2] + buffer)
+  #
+  #     # Create the plot using plotly
+  #     p <- plot_ly() %>%
+  #       add_trace(data = boundaryDFEff, x = ~IF, y = ~observedHR, type = 'scatter', mode = 'lines+markers',
+  #                 line = list(color = 'red', width = 3),
+  #                 marker = list(color = 'red', size = 10, symbol = 'circle'),
+  #                 name = "Critical value") %>%
+  #       add_trace(data = boundaryDFFut, x = ~IF, y = ~observedHR, type = 'scatter', mode = 'lines+markers',
+  #                 line = list(color = 'blue', width = 3),
+  #                 marker = list(color = 'blue', size = 10, symbol = 'circle'),
+  #                 name = "Futility bound") %>%
+  #       layout(yaxis = list(range = extended_ylim, title = "Observed HR"),
+  #              title = "Boundaries",
+  #              xaxis = list(title = "Information Fraction"))
+  #
+  #
+  #     # Show the plot
+  #     p
+  #
+  #
+  #   })
+  #
+  #
+  #   output$oneLookPlotDuration <- renderPlotly({
+  #
+  #     p <- plot_ly(oneLookoutput$IADFOneLook, x = ~Assurance, y = ~Duration,
+  #                  text = ~ paste0("Information Fraction = ", `Information Fraction`), mode = "markers",
+  #                  type = "scatter", marker = list(size = 10, color = "blue"), name = "Chosen Rules") %>%
+  #       add_trace(x = ~oneLookoutput$FinalAss$Assurance, y = ~oneLookoutput$FinalAss$Duration, type = "scatter", mode = "markers",
+  #                 marker = list(size = 10, color = "red"),
+  #                 text = ~ "No Interim Analysis",
+  #                 name = "No Interim Analysis") %>%
+  #       layout(
+  #         xaxis = list(title = list(text = "Assurance", font = list(color = "black", size = 14, family = "Arial", weight = "bold")), range = c(0, 1)),
+  #         yaxis = list(title = list(text = "Duration", font = list(color = "black", size = 14, family = "Arial", weight = "bold"))),
+  #         legend = list(orientation = "v", x = 1.05, y = 0.5),  # Position legend to the right
+  #         title = "Assurance vs Duration for the different stopping rules"
+  #       )
+  #
+  #     p
+  #
+  #
+  #
+  #   })
+  #
+  #   output$oneLookPlotSS <- renderPlotly({
+  #
+  #     p <- plot_ly(oneLookoutput$IADFOneLook, x = ~Assurance, y = ~`Sample Size`,
+  #                  text = ~ paste0("Information Fraction = ", `Information Fraction`), mode = "markers",
+  #                  type = "scatter", marker = list(size = 10, color = "blue"), name = "Chosen Rules") %>%
+  #       add_trace(x = ~oneLookoutput$FinalAss$Assurance, y = ~oneLookoutput$FinalAss$`Sample Size`, type = "scatter", mode = "markers",
+  #                 marker = list(size = 10, color = "red"),
+  #                 text = ~ "No Interim Analysis",
+  #                 name = "No Interim Analysis") %>%
+  #       layout(
+  #         xaxis = list(title = list(text = "Assurance", font = list(color = "black", size = 14, family = "Arial", weight = "bold")), range = c(0, 1)),
+  #         yaxis = list(title = list(text = "Sample Size", font = list(color = "black", size = 14, family = "Arial", weight = "bold"))),
+  #         legend = list(orientation = "v", x = 1.05, y = 0.5),  # Position legend to the right
+  #         title = "Assurance vs Sample Size for the different stopping rules"
+  #       )
+  #
+  #     p
+  #
+  #
+  #   })
+  #
+  #   output$finalAssTable1LookText <- renderUI({
+  #     p(HTML("<b>No Interim Analysis</b>"))
+  #   })
+  #
+  #   shinyjs::show("finalAssTable1LookText")
+  #
+  #
+  # })
 
   # Two Interim Analyses Logic ---------------------------------
 

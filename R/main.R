@@ -375,6 +375,7 @@ add_recruitment_time <- function(data, rec_method,
 
 }
 
+
 #' Simulates a Group Sequential Trial for a trial with a Delayed Treatment Effect, with elicited priors
 #'
 #' @param n_c Number of patients in the control group
@@ -424,122 +425,126 @@ calc_dte_assurance_interim <- function(n_c, n_t,
                                alpha_spending = NULL, beta_spending = NULL, IF_vec = NULL,
                                nSims=1e3){
 
-
-  if (control_dist=="Exponential"){
-    if (control_parameters=="Fixed"){
-      if (fixed_parameters_type=="Parameter"){
-        lambda_c <- lambda_c
-      } else if (fixed_parameters_type=="Landmark") {
-        lambda_c <-  -log(surv_t1)/t1
-      }
-    } else if (control_parameters=="Distribution"){
-      lambda_c <- -log(rbeta(1, t1_Beta_a, t1_Beta_b)) / t1
-    }
-  } else if (control_dist=="Weibull"){
-    if (control_parameters=="Fixed"){
-      if (fixed_parameters_type=="Parameter"){
-        lambda_c <- lambda_c
-        gamma_c <- gamma_c
-      } else if (fixed_parameters_type=="Landmark"){
-        WeibFunc <- function(params) {
-          lambda <- params[1]
-          k <- params[2]
-          c(exp(-(t1*lambda)^k) - surv_t1,
-            exp(-(t2*lambda)^k) - surv_t1)
-        }
-
-        solution <- nleqslv(c(1, 1), fn = WeibFunc)
-
-        lambda_c <- solution$x[1]
-        gamma_c <- solution$x[2]
-      }
-    } else if (control_parameters=="Distribution"){
-      sampledS1to <- rbeta(1, t1_Beta_a, t1_Beta_b)
-      sampledDelta1 <- rbeta(1, diff_Beta_a, diff_Beta_b)
-      sampledS1toPrime <- sampledS1to - sampledDelta1
-
-      # Solve for lambda and gamma using sampled values
-      solution <- nleqslv(c(10, 1), function(params) {
-        lambda <- params[1]
-        k <- params[2]
-        c(exp(-(t1 / lambda)^k) - sampledS1to,
-          exp(-(t2 / lambda)^k) - sampledS1toPrime)
-      })
-
-      lambda_c <- 1 / solution$x[1]
-      gamma_c <- solution$x[2]
-    }
-  }
-
-  if (runif(1) > P_S){
-    #Curves do not separate
-    delay_time <- 0
-    post_delay_HR <- 1
-  } else {
-    if (runif(1) > P_DTE){
-      #Curves separate with no delay
-      delay_time <- 0
-      post_delay_HR_sample <- SHELF::sampleFit(post_delay_HR_SHELF, n = 1)
-      post_delay_HR <- post_delay_HR_sample[,post_delay_HR_dist]
-    } else{
-      #Curves separate with a delay
-      delay_time_sample <- SHELF::sampleFit(delay_time_SHELF, n = 1)
-      post_delay_HR_sample <- SHELF::sampleFit(post_delay_HR_SHELF, n = 1)
-      delay_time <- delay_time_sample[,delay_time_dist]
-      post_delay_HR <- post_delay_HR_sample[,post_delay_HR_dist]
-    }
-  }
-
-  data <- sim_dte(n_c, n_t, lambda_c, delay_time, post_delay_HR, dist = control_dist, gamma_c = gamma_c)
-
-  if (rec_method=="power"){
-    data <- add_recruitment_time(data, rec_method,
-                                 rec_period, rec_power)
-  }
-
-  if (rec_method == "PWC"){
-    data <- add_recruitment_time(data, rec_method,
-                                 rec_rate, rec_duration)
-  }
-
   cens_events_vec <- IF_vec*cens_events
 
-  design <<- getDesignGroupSequential(typeOfDesign = "asUser",
-                                     informationRates = IF_vec,
-                                     userAlphaSpending = alpha_spending,
-                                     typeBetaSpending = "bsUser",
-                                     userBetaSpending = beta_spending)
+  # design <- getDesignGroupSequential(typeOfDesign = "asUser",
+  #                                    informationRates = IF_vec,
+  #                                    userAlphaSpending = alpha_spending,
+  #                                    typeBetaSpending = "bsUser",
+  #                                    userBetaSpending = beta_spending)
 
-  print(design)
+  design <- getDesignGroupSequential(kMax = 3,
+                                     typeOfDesign = "noEarlyEfficacy",
+                                     alpha = 0.025,
+                                     futilityBounds = c(0.011, 0.864))
 
-  for (i in 1:length(cens_events_vec)){
-    data_after_cens <- cens_data(data, cens_method = "Events", cens_events = cens_events_vec[i])
-    coxmodel <- coxph(Surv(survival_time, status) ~ group, data = data_after_cens$data)
-    ZScore <- -(coef(summary(coxmodel))[, 4])
-   #delta <- as.numeric(exp(coef(coxmodel)))
-  }
+  power_vec <- rep(NA, nSims)
+  ss_vec <- rep(NA, nSims)
+  duration_vec <- rep(NA, nSims)
 
+  for (i in 1:nSims){
 
+    if (control_dist=="Exponential"){
+      if (control_parameters=="Fixed"){
+        if (fixed_parameters_type=="Parameter"){
+          lambda_c <- lambda_c
+        } else if (fixed_parameters_type=="Landmark") {
+          lambda_c <-  -log(surv_t1)/t1
+        }
+      } else if (control_parameters=="Distribution"){
+        lambda_c <- -log(rbeta(1, t1_Beta_a, t1_Beta_b)) / t1
+      }
+    } else if (control_dist=="Weibull"){
+      if (control_parameters=="Fixed"){
+        if (fixed_parameters_type=="Parameter"){
+          lambda_c <- lambda_c
+          gamma_c <- gamma_c
+        } else if (fixed_parameters_type=="Landmark"){
+          WeibFunc <- function(params) {
+            lambda <- params[1]
+            k <- params[2]
+            c(exp(-(t1*lambda)^k) - surv_t1,
+              exp(-(t2*lambda)^k) - surv_t1)
+          }
 
+          solution <- nleqslv(c(1, 1), fn = WeibFunc)
 
-group_sequential_decision <- function(z_scores, critical_values, futility_bound) {
-  for (i in seq_along(z_scores)) {
-    if (abs(z_scores[i]) > critical_values[i]) {
-      return(list(status = "Stop for efficacy", analysis = i, z_score = z_scores[i]))
-    } else if (abs(z_scores[i]) < futility_bound) {
-      return(list(status = "Stop for futility", analysis = i, z_score = z_scores[i]))
+          lambda_c <- solution$x[1]
+          gamma_c <- solution$x[2]
+        }
+      } else if (control_parameters=="Distribution"){
+        sampledS1to <- rbeta(1, t1_Beta_a, t1_Beta_b)
+        sampledDelta1 <- rbeta(1, diff_Beta_a, diff_Beta_b)
+        sampledS1toPrime <- sampledS1to - sampledDelta1
+
+        # Solve for lambda and gamma using sampled values
+        solution <- nleqslv(c(10, 1), function(params) {
+          lambda <- params[1]
+          k <- params[2]
+          c(exp(-(t1 / lambda)^k) - sampledS1to,
+            exp(-(t2 / lambda)^k) - sampledS1toPrime)
+        })
+
+        lambda_c <- 1 / solution$x[1]
+        gamma_c <- solution$x[2]
+      }
     }
+
+    if (runif(1) > P_S){
+      #Curves do not separate
+      delay_time <- 0
+      post_delay_HR <- 1
+    } else {
+      if (runif(1) > P_DTE){
+        #Curves separate with no delay
+        delay_time <- 0
+        post_delay_HR_sample <- SHELF::sampleFit(post_delay_HR_SHELF, n = 1)
+        post_delay_HR <- post_delay_HR_sample[,post_delay_HR_dist]
+      } else{
+        #Curves separate with a delay
+        delay_time_sample <- SHELF::sampleFit(delay_time_SHELF, n = 1)
+        post_delay_HR_sample <- SHELF::sampleFit(post_delay_HR_SHELF, n = 1)
+        delay_time <- delay_time_sample[,delay_time_dist]
+        post_delay_HR <- post_delay_HR_sample[,post_delay_HR_dist]
+      }
+    }
+
+    data <- sim_dte(n_c, n_t, lambda_c, delay_time, post_delay_HR, dist = control_dist, gamma_c = gamma_c)
+
+    if (rec_method=="power"){
+      data <- add_recruitment_time(data, rec_method,
+                                   rec_period, rec_power)
+    }
+
+    if (rec_method == "PWC"){
+      data <- add_recruitment_time(data, rec_method,
+                                   rec_rate, rec_duration)
+    }
+
+    z_scores <- rep(NA, length(cens_events_vec))
+    sample_sizes <- rep(NA, length(cens_events_vec))
+    durations <- rep(NA, length(cens_events_vec))
+
+    for (j in 1:length(cens_events_vec)){
+      data_after_cens <- cens_data(data, cens_method = "Events", cens_events = cens_events_vec[j])
+      coxmodel <- coxph(Surv(survival_time, status) ~ group, data = data_after_cens$data)
+      z_scores[j] <- -(coef(summary(coxmodel))[, 4])
+      sample_sizes[j] <- data_after_cens$sample_size
+      durations[j] <- data_after_cens$cens_time
+      #delta <- as.numeric(exp(coef(coxmodel)))
+    }
+
+
+    GSD_output <- group_sequential_decision(z_scores, design$criticalValues, design$futilityBounds,
+                                   sample_sizes, durations)
+
+    power_vec[i] <- GSD_output$successful
+    ss_vec[i] <- GSD_output$sample_size
+    duration_vec[i] <- GSD_output$duration
+
   }
-  return(list(status = "Continue", analysis = length(z_scores)))
-}
 
-
-
-
-
-
-
-
+  return(list(power = mean(power_vec), ss = mean(ss_vec), duration = mean(duration_vec)))
 
 
 }

@@ -1,13 +1,13 @@
 
 
-interimLookFunc <- function(dataCombined, observedHR){
-
-  coxmodel <- coxph(Surv(survival_time, status)~group, data = dataCombined)
-  deltad <- as.numeric(exp(coef(coxmodel)))
-  Outcome <- 1
-  if (deltad>observedHR){ Outcome <- 0}
-  return(Outcome)
-}
+# interimLookFunc <- function(dataCombined, observedHR){
+#
+#   coxmodel <- coxph(Surv(survival_time, status)~group, data = dataCombined)
+#   deltad <- as.numeric(exp(coef(coxmodel)))
+#   Outcome <- 1
+#   if (deltad>observedHR){ Outcome <- 0}
+#   return(Outcome)
+# }
 
 BPPFunc <- function(dataset, numPatients, numIAEvents, numFinalEvents, recTime, targetEff, elicitedDists){
 
@@ -338,58 +338,94 @@ WieandRuleFunc <- function(dataCombined, numEventsRequired){
 }
 
 # Define a function to compute Cox model and extract relevant information
-computeCox <- function(data, events) {
-  censDF <- CensFunc(data, events)
-  coxmodel <- coxph(Surv(survival_time, status) ~ group, data = censDF$dataCombined)
-  SS <- censDF$SS
-  Duration <- censDF$censTime
-  ZScore <- -(coef(summary(coxmodel))[, 4])
-  delta <- as.numeric(exp(coef(coxmodel)))
-  list(SS = SS, Duration = Duration, ZScore = ZScore, delta = delta)
+# computeCox <- function(data, events) {
+#   censDF <- CensFunc(data, events)
+#   coxmodel <- coxph(Surv(survival_time, status) ~ group, data = censDF$dataCombined)
+#   SS <- censDF$SS
+#   Duration <- censDF$censTime
+#   ZScore <- -(coef(summary(coxmodel))[, 4])
+#   delta <- as.numeric(exp(coef(coxmodel)))
+#   list(SS = SS, Duration = Duration, ZScore = ZScore, delta = delta)
+# }
+#
+# GSDOneIAFunc <- function(dataCombined, futBound, critValues, IF, numEvents) {
+#
+#   # Compute first and final IA
+#   IA1 <- computeCox(dataCombined, numEvents * IF[1])
+#   IA2 <- computeCox(dataCombined, numEvents * IF[2])
+#
+#   # Determine outcome based on ZScores
+#   Outcome <- ifelse(IA1$ZScore > critValues[1], "Efficacy",
+#                     ifelse(IA1$ZScore < futBound, "Futility",
+#                            ifelse(IA2$ZScore > critValues[2], "Successful", "Unsuccessful")))
+#
+#   # Determine SS and Duration based on outcome
+#   SS <- ifelse(Outcome %in% c("Efficacy", "Futility"), IA1$SS, IA2$SS)
+#   Duration <- ifelse(Outcome %in% c("Efficacy", "Futility"), IA1$Duration, IA2$Duration)
+#
+#   return(list(Outcome = Outcome, SS = SS, Duration = Duration,
+#               IA1Time = IA1$Duration, delta1 = IA1$delta, delta2 = IA2$delta))
+# }
+
+# GSDTwoIAFunc <- function(dataCombined, futBound, critValues, IF, numEvents) {
+#
+#   # Compute first and final IA
+#   IA1 <- computeCox(dataCombined, numEvents * IF[1])
+#   IA2 <- computeCox(dataCombined, numEvents * IF[2])
+#   IA3 <- computeCox(dataCombined, numEvents * IF[3])
+#
+#
+#   # Determine outcome based on ZScores
+#   Outcome <- ifelse(IA1$ZScore > critValues[1], "Efficacy1",
+#                     ifelse(IA1$ZScore < futBound[1], "Futility1",
+#                            ifelse(IA2$ZScore > critValues[2], "Efficacy2",
+#                                   ifelse(IA2$ZScore < futBound[2], "Futility2",
+#                                          ifelse(IA3$ZScore > critValues[3], "Successful", "Unsuccessful")))))
+#
+#   # Determine SS and Duration based on outcome
+#   SS <- ifelse(Outcome %in% c("Efficacy1", "Futility1"), IA1$SS, ifelse(Outcome %in% c("Efficacy2", "Futility2"), IA2$SS, IA3$SS))
+#   Duration <- ifelse(Outcome %in% c("Efficacy1", "Futility1"), IA1$Duration, ifelse(Outcome %in% c("Efficacy2", "Futility2"), IA2$Duration, IA3$Duration))
+#
+#   return(list(Outcome = Outcome, SS = SS, Duration = Duration, IA1Time = IA1$Duration, IA2Time = IA2$Duration,
+#               delta1 = IA1$delta, delta2 = IA2$delta, delta3 = IA3$delta))
+# }
+
+group_sequential_decision <- function(z_scores, critical_values, futility_values, sample_sizes, durations) {
+  for (i in seq_along(z_scores)) {
+    # Check futility if a futility boundary is provided
+    if (!is.na(futility_values[i]) && z_scores[i] < futility_values[i]) {
+      return(list(
+        status = "Stop for futility",
+        successful = FALSE,
+        analysis = i,
+        z_score = z_scores[i],
+        sample_size = sample_sizes[i],
+        duration = durations[i]
+      ))
+    }
+
+    # Check efficacy if a critical value is provided
+    if (!is.na(critical_values[i]) && z_scores[i] > critical_values[i]) {
+      return(list(
+        status = "Stop for efficacy",
+        successful = TRUE,
+        analysis = i,
+        z_score = z_scores[i],
+        sample_size = sample_sizes[i],
+        duration = durations[i]
+      ))
+    }
+  }
+
+  # If no stopping condition is met, continue to final analysis
+  return(list(
+    status = "Continue to final analysis",
+    successful = FALSE,  # Modify if a different definition of success applies
+    analysis = length(z_scores),
+    sample_size = sample_sizes[length(sample_sizes)],
+    duration = durations[length(durations)]
+  ))
 }
-
-GSDOneIAFunc <- function(dataCombined, futBound, critValues, IF, numEvents) {
-
-  # Compute first and final IA
-  IA1 <- computeCox(dataCombined, numEvents * IF[1])
-  IA2 <- computeCox(dataCombined, numEvents * IF[2])
-
-  # Determine outcome based on ZScores
-  Outcome <- ifelse(IA1$ZScore > critValues[1], "Efficacy",
-                    ifelse(IA1$ZScore < futBound, "Futility",
-                           ifelse(IA2$ZScore > critValues[2], "Successful", "Unsuccessful")))
-
-  # Determine SS and Duration based on outcome
-  SS <- ifelse(Outcome %in% c("Efficacy", "Futility"), IA1$SS, IA2$SS)
-  Duration <- ifelse(Outcome %in% c("Efficacy", "Futility"), IA1$Duration, IA2$Duration)
-
-  return(list(Outcome = Outcome, SS = SS, Duration = Duration,
-              IA1Time = IA1$Duration, delta1 = IA1$delta, delta2 = IA2$delta))
-}
-
-GSDTwoIAFunc <- function(dataCombined, futBound, critValues, IF, numEvents) {
-
-  # Compute first and final IA
-  IA1 <- computeCox(dataCombined, numEvents * IF[1])
-  IA2 <- computeCox(dataCombined, numEvents * IF[2])
-  IA3 <- computeCox(dataCombined, numEvents * IF[3])
-
-
-  # Determine outcome based on ZScores
-  Outcome <- ifelse(IA1$ZScore > critValues[1], "Efficacy1",
-                    ifelse(IA1$ZScore < futBound[1], "Futility1",
-                           ifelse(IA2$ZScore > critValues[2], "Efficacy2",
-                                  ifelse(IA2$ZScore < futBound[2], "Futility2",
-                                         ifelse(IA3$ZScore > critValues[3], "Successful", "Unsuccessful")))))
-
-  # Determine SS and Duration based on outcome
-  SS <- ifelse(Outcome %in% c("Efficacy1", "Futility1"), IA1$SS, ifelse(Outcome %in% c("Efficacy2", "Futility2"), IA2$SS, IA3$SS))
-  Duration <- ifelse(Outcome %in% c("Efficacy1", "Futility1"), IA1$Duration, ifelse(Outcome %in% c("Efficacy2", "Futility2"), IA2$Duration, IA3$Duration))
-
-  return(list(Outcome = Outcome, SS = SS, Duration = Duration, IA1Time = IA1$Duration, IA2Time = IA2$Duration,
-              delta1 = IA1$delta, delta2 = IA2$delta, delta3 = IA3$delta))
-}
-
 
 
 
