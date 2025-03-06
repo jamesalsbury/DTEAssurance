@@ -422,21 +422,27 @@ calc_dte_assurance_interim <- function(n_c, n_t,
                                post_delay_HR_SHELF, post_delay_HR_dist = "hist",
                                P_S = 1, P_DTE = 0, cens_events = NULL,
                                rec_method, rec_period=NULL, rec_power=NULL, rec_rate=NULL, rec_duration=NULL,
-                               alpha_spending = NULL, beta_spending = NULL, IF_vec = NULL,
+                               alpha_spending = NULL, beta_spending = NULL, IF_list = NULL, k = 1,
                                nSims=1e3){
 
-  cens_events_vec <- IF_vec*cens_events
 
-  # design <- getDesignGroupSequential(typeOfDesign = "asUser",
-  #                                    informationRates = IF_vec,
-  #                                    userAlphaSpending = alpha_spending,
-  #                                    typeBetaSpending = "bsUser",
-  #                                    userBetaSpending = beta_spending)
+  designList <- vector("list", length(IF_list))
 
-  design <- getDesignGroupSequential(kMax = 3,
-                                     typeOfDesign = "noEarlyEfficacy",
-                                     alpha = 0.025,
-                                     futilityBounds = c(0.011, 0.864))
+  for (j in 1:length(IF_list)){
+    design <- getDesignGroupSequential(typeOfDesign = "asUser",
+                                       informationRates = as.numeric(c(IF_list[j], 1)),
+                                       userAlphaSpending = alpha_spending,
+                                       typeBetaSpending = "bsUser",
+                                       userBetaSpending = beta_spending)
+
+    designList[[j]]$critValues <- design$criticalValues
+    designList[[j]]$futBounds <- design$futilityBounds
+
+  }
+
+
+
+
 
   power_vec <- rep(NA, nSims)
   ss_vec <- rep(NA, nSims)
