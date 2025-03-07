@@ -439,4 +439,3 @@ group_sequential_decision <- function(z_scores, critical_values, futility_values
 
 
 
-

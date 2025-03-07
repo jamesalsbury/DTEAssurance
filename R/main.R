@@ -239,12 +239,12 @@ calc_dte_assurance <- function(n_c, n_t,
     assurance <- mean(assurance_vec)
 
     calc_dte_assurance_list[[j]] <- list(assurance = assurance, CI_assurance = c(assurance - 1.96*sqrt(assurance*(1-assurance)/nSims),
-                                                        assurance + 1.96*sqrt(assurance*(1-assurance)/nSims)), duration = mean(cens_vec),
-                                                        sample_size = mean(ss_vec))
+                                                                                 assurance + 1.96*sqrt(assurance*(1-assurance)/nSims)), duration = mean(cens_vec),
+                                         sample_size = mean(ss_vec))
 
   }
 
-return(calc_dte_assurance_list = calc_dte_assurance_list)
+  return(calc_dte_assurance_list = calc_dte_assurance_list)
 
 }
 
@@ -411,42 +411,41 @@ add_recruitment_time <- function(data, rec_method,
 #' @param nSims Number of simulations, default is 1000
 
 calc_dte_assurance_interim <- function(n_c, n_t,
-                               control_dist = "Exponential", control_parameters = "Fixed",
-                               fixed_parameters_type = "Parameter",
-                               lambda_c = NULL, gamma_c = NULL,
-                               t1 = NULL, t2 = NULL,
-                               surv_t1 = NULL, surv_t2 = NULL,
-                               t1_Beta_a = NULL, t1_Beta_b = NULL,
-                               diff_Beta_a = NULL, diff_Beta_b = NULL,
-                               delay_time_SHELF, delay_time_dist = "hist",
-                               post_delay_HR_SHELF, post_delay_HR_dist = "hist",
-                               P_S = 1, P_DTE = 0, cens_events = NULL,
-                               rec_method, rec_period=NULL, rec_power=NULL, rec_rate=NULL, rec_duration=NULL,
-                               alpha_spending = NULL, beta_spending = NULL, IF_list = NULL, k = 1,
-                               nSims=1e3){
+                                       control_dist = "Exponential", control_parameters = "Fixed",
+                                       fixed_parameters_type = "Parameter",
+                                       lambda_c = NULL, gamma_c = NULL,
+                                       t1 = NULL, t2 = NULL,
+                                       surv_t1 = NULL, surv_t2 = NULL,
+                                       t1_Beta_a = NULL, t1_Beta_b = NULL,
+                                       diff_Beta_a = NULL, diff_Beta_b = NULL,
+                                       delay_time_SHELF, delay_time_dist = "hist",
+                                       post_delay_HR_SHELF, post_delay_HR_dist = "hist",
+                                       P_S = 1, P_DTE = 0, cens_events = NULL,
+                                       rec_method, rec_period=NULL, rec_power=NULL, rec_rate=NULL, rec_duration=NULL,
+                                       alpha_spending = NULL, beta_spending = NULL, IF_list = NULL, k = 1,
+                                       nSims=1e3){
 
 
   designList <- vector("list", length(IF_list))
 
   for (j in 1:length(IF_list)){
+
+    info_rates <- as.numeric(strsplit(IF_list[j], ", ")[[1]])
+
     design <- getDesignGroupSequential(typeOfDesign = "asUser",
-                                       informationRates = as.numeric(c(IF_list[j], 1)),
+                                       informationRates = info_rates,
                                        userAlphaSpending = alpha_spending,
                                        typeBetaSpending = "bsUser",
                                        userBetaSpending = beta_spending)
 
-    designList[[j]]$critValues <- design$criticalValues
-    designList[[j]]$futBounds <- design$futilityBounds
+    designList[[j]] <- list(
+      IF = info_rates,
+      critValues = design$criticalValues,
+      futBounds = design$futilityBounds,
+      power = rep(NA, 10)
+    )
 
   }
-
-
-
-
-
-  power_vec <- rep(NA, nSims)
-  ss_vec <- rep(NA, nSims)
-  duration_vec <- rep(NA, nSims)
 
   for (i in 1:nSims){
 
@@ -527,30 +526,47 @@ calc_dte_assurance_interim <- function(n_c, n_t,
                                    rec_rate, rec_duration)
     }
 
-    z_scores <- rep(NA, length(cens_events_vec))
-    sample_sizes <- rep(NA, length(cens_events_vec))
-    durations <- rep(NA, length(cens_events_vec))
 
-    for (j in 1:length(cens_events_vec)){
-      data_after_cens <- cens_data(data, cens_method = "Events", cens_events = cens_events_vec[j])
+    unique_IF <- sort(unique(unlist(lapply(strsplit(IF_list, ", "), as.numeric))))
+    #Need to censor the data set at all the different information fractions possible
+
+    unique_IF_DF <- data.frame(IF = unique_IF, SS = NA, Duration = NA, `Z-Scores` = NA)
+
+    for (j in 1:length(unique_IF)){
+      data_after_cens <- cens_data(data, cens_method = "Events", cens_events = unique_IF_DF$IF[j]*cens_events)
       coxmodel <- coxph(Surv(survival_time, status) ~ group, data = data_after_cens$data)
-      z_scores[j] <- -(coef(summary(coxmodel))[, 4])
-      sample_sizes[j] <- data_after_cens$sample_size
-      durations[j] <- data_after_cens$cens_time
-      #delta <- as.numeric(exp(coef(coxmodel)))
+      unique_IF_DF$`Z-Scores`[j] <- -(coef(summary(coxmodel))[, 4])
+      unique_IF_DF$SS[j] <- data_after_cens$sample_size
+      unique_IF_DF$Duration[j] <- data_after_cens$cens_time
+      #   #delta <- as.numeric(exp(coef(coxmodel)))
     }
 
 
-    GSD_output <- group_sequential_decision(z_scores, design$criticalValues, design$futilityBounds,
-                                   sample_sizes, durations)
+    for (k in 1:length(designList)){
+      subset_table <- unique_IF_DF[unique_IF_DF$IF %in% designList[[k]]$IF,]
+      GSD_output <- group_sequential_decision(z_scores = subset_table$`Z-Scores` ,
+                                        critical_values = designList[[k]]$critValues,
+                                        futility_values = designList[[k]]$futBounds,
+                                        sample_sizes = subset_table$SS,
+                                        durations = subset_table$Duration)
 
-    power_vec[i] <- GSD_output$successful
-    ss_vec[i] <- GSD_output$sample_size
-    duration_vec[i] <- GSD_output$duration
+      designList[[k]]$power[i] <- GSD_output$successful
+      designList[[k]]$ss[i] <- GSD_output$sample_size
+      designList[[k]]$duration[i] <- GSD_output$duration
 
-  }
+    }
 
-  return(list(power = mean(power_vec), ss = mean(ss_vec), duration = mean(duration_vec)))
+}
 
+ for (j in 1:length(designList)){
+   designList[[j]]$power_mean <- mean(designList[[j]]$power)
+   designList[[j]]$ss_mean <- mean(designList[[j]]$ss)
+   designList[[j]]$duration_mean <- mean(designList[[j]]$duration)
+
+ }
+
+  #print(designList)
+
+  return(designList)
 
 }
