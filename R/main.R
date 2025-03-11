@@ -542,17 +542,17 @@ calc_dte_assurance_interim <- function(n_c, n_t,
     }
 
 
-    for (k in 1:length(designList)){
-      subset_table <- unique_IF_DF[unique_IF_DF$IF %in% designList[[k]]$IF,]
+    for (l in 1:length(designList)){
+      subset_table <- unique_IF_DF[unique_IF_DF$IF %in% designList[[l]]$IF,]
       GSD_output <- group_sequential_decision(z_scores = subset_table$`Z-Scores` ,
-                                        critical_values = designList[[k]]$critValues,
-                                        futility_values = designList[[k]]$futBounds,
+                                        critical_values = designList[[l]]$critValues,
+                                        futility_values = designList[[l]]$futBounds,
                                         sample_sizes = subset_table$SS,
                                         durations = subset_table$Duration)
 
-      designList[[k]]$power[i] <- GSD_output$successful
-      designList[[k]]$ss[i] <- GSD_output$sample_size
-      designList[[k]]$duration[i] <- GSD_output$duration
+      designList[[l]]$power[i] <- GSD_output$successful
+      designList[[l]]$ss[i] <- GSD_output$sample_size
+      designList[[l]]$duration[i] <- GSD_output$duration
 
     }
 
