@@ -407,7 +407,28 @@ ui <- fluidPage(
 
                    ),
                    mainPanel = mainPanel(
-                     verbatimTextOutput("display_func"),
+                     tags$h4(
+                       id = "toggleHeader",
+                       style = "cursor: pointer; display: flex; align-items: center;",
+                       tags$span(id = "arrow", "►"),  # Arrow icon
+                       "Show/hide the function"
+                     ),
+                     tags$div(
+                       id = "collapseText",
+                       class = "collapse",
+                       verbatimTextOutput("display_func")
+                     ),
+                     tags$script(
+                       "$(document).on('click', '#toggleHeader', function() {
+      $('#collapseText').collapse('toggle');
+      var arrow = $('#arrow');
+      if (arrow.text() == '►') {
+        arrow.text('▼');
+      } else {
+        arrow.text('►');
+      }
+    });"
+                     ),
                      plotOutput("assurancePlot"),
                      plotOutput("assuranceFeedbackPlot"),
                      htmlOutput("assuranceText"),
