@@ -12,16 +12,16 @@ library(plotly)
 # library(survminer)
 library(shinyBS)
 
-# rowCallback <- c(
-#   "function(row, data){",
-#   "  for(var i=0; i<data.length; i++){",
-#   "    if(data[i] === null){",
-#   "      $('td:eq('+i+')', row).html('NA')",
-#   "        .css({'color': 'rgb(151,151,151)', 'font-style': 'italic'});",
-#   "    }",
-#   "  }",
-#   "}"
-# )
+rowCallback <- c(
+  "function(row, data){",
+  "  for(var i=0; i<data.length; i++){",
+  "    if(data[i] === null){",
+  "      $('td:eq('+i+')', row).html('NA')",
+  "        .css({'color': 'rgb(151,151,151)', 'font-style': 'italic'});",
+  "    }",
+  "  }",
+  "}"
+)
 
 
 # UI definition
@@ -370,7 +370,7 @@ ui <- fluidPage(
                    tags$div(
                      id = "collapseText",
                      class = "collapse",
-                     verbatimTextOutput("display_func_one_look")
+                     verbatimTextOutput("display_func_sim")
                    ),
                    tags$script(
                      "$(document).on('click', '#toggleHeader', function() {
@@ -385,11 +385,9 @@ ui <- fluidPage(
                    ),
                    tabsetPanel(
                      tabPanel("Tables",
-                              hidden(selectizeInput("selectedOptionsIATableOneLook", "Selected Metrics",
+                              hidden(selectizeInput("selected_columns_sim_table", "Selected Metrics",
                                                     choices = c("Interim Analysis Time", "Assurance", "Duration", "Sample Size",
-                                                                "% Stop", "% Stop for Efficacy", "% Stop for Futility",
-                                                                "% Correctly Stop", "% Correctly Stop for Efficacy", "% Correctly Stop for Futility",
-                                                                "% Correctly Continue"),
+                                                                "% Stop", "% Stop for Efficacy", "% Stop for Futility"),
                                                     selected = c("Assurance", "Duration", "Sample Size"),
                                                     multiple = TRUE)),
                               DTOutput("sim_table"),
@@ -538,15 +536,6 @@ server <- function(input, output, session) {
   })
 
 
-  reactValues <- reactiveValues(treatmentSamplesDF = NULL,
-                                errorSeqOneLook = FALSE,
-                                errorSeqTwoLooks = FALSE,
-                                errorBayesian = FALSE,
-                                iterationList = NULL,
-                                TwoLooksSeq1 = NULL,
-                                TwoLooksSeq2 = NULL,
-                                lambdac = NULL)
-
   rds_data <- reactive({
     req(input$parametersFile)  # Ensure file is uploaded
 
@@ -557,7 +546,7 @@ server <- function(input, output, session) {
   observe({
     req(rds_data())  # Ensure data is loaded
 
-    inputData <<- rds_data()
+    inputData <- rds_data()
 
     updateNumericInput(session, inputId = "P_S", value = inputData$P_S)
     updateNumericInput(session, inputId = "P_DTE", value = inputData$P_DTE)
@@ -641,15 +630,112 @@ server <- function(input, output, session) {
     num_looks <- input$number_of_looks - 1
     input_list <- lapply(1:num_looks, function(i) {
       fluidRow(
-        column(4, numericInput(paste0("OneLookLB_", i), paste0("IA", i, ", from:"), value = 0.25)),
-        column(4, numericInput(paste0("OneLookUB_", i), "to:", value = 0.75)),
-        column(4, numericInput(paste0("OneLookBy_", i), "by:", value = 0.25))
+        column(4, numericInput(paste0("IA_LB", i), paste0("IA", i, ", from:"), value = 0.25)),
+        column(4, numericInput(paste0("IA_UB", i), "to:", value = 0.75)),
+        column(4, numericInput(paste0("IA_By", i), "by:", value = 0.25))
       )
     })
     do.call(tagList, input_list)
   })
 
-  function_call_one_look <- reactive({
+  observe({
+    req(input$number_of_looks > 1)  # Ensure a valid number of looks
+
+    IA_List <- vector("list", input$number_of_looks - 1)
+
+    for (k in 1:(input$number_of_looks - 1)) {
+      # Extract values first and check for NULL before using them
+      lb <- input[[paste0("IA_LB", k)]]
+      ub <- input[[paste0("IA_UB", k)]]
+      by <- input[[paste0("IA_By", k)]]
+
+      req(!is.null(lb), !is.null(ub), !is.null(by))  # Ensure values exist
+
+      # Check for valid sequence parameters
+      if (!is.numeric(lb) || !is.numeric(ub) || !is.numeric(by) || by <= 0 || lb >= ub) {
+        return()  # Skip invalid sequences
+      }
+
+      IA_List[[k]] <- seq(from = lb, to = ub, by = by)
+    }
+
+    # Check if IA_List is empty to prevent errors
+    if (length(IA_List) == 0 || all(sapply(IA_List, length) == 0)) {
+      return()  # Exit observe to prevent crashes
+    }
+
+    # Generate IF_list based on number_of_looks
+    if (input$number_of_looks > 2) {
+      IF_list <- strictly_increasing_combinations(IA_List)
+    } else {
+      IF_list <- seq(input$IA_LB1, input$IA_UB1, by = input$IA_By1)
+    }
+
+    # Ensure IF_list is valid before updating UI
+    if (length(IF_list) == 0) return()
+
+    IF_list <- paste(IF_list, ", 1", sep = "")
+
+    updateSelectInput(session, "BoundaryIA", choices = IF_list)
+  })
+
+
+  observe({
+
+    req(input$error_spending_table)
+    req(input$BoundaryIA)
+
+    values <- hot_to_r(input$error_spending_table)
+
+    design <- getDesignGroupSequential(typeOfDesign = "asUser",
+                                         informationRates = as.numeric(input$BoundaryIA),
+                                         userAlphaSpending = as.numeric(values[,2]),
+                                         typeBetaSpending = "bsUser",
+                                         userBetaSpending = as.numeric(values[,3]))
+
+
+
+    output$boundary_plot <- renderPlotly({
+
+
+         boundaryDFEff <- data.frame(IF = as.numeric(unlist(strsplit(input$BoundaryIA, ", "))),
+                                  zStat = design$criticalValues)
+
+        boundaryDFFut <- data.frame(IF = as.numeric(unlist(strsplit(input$BoundaryIA, ", "))),
+                                zStat = c(design$futilityBounds, design$criticalValues[length(design$criticalValues)]))
+
+        # Calculate dynamic y-axis limits
+        all_zStat <- c(boundaryDFEff$zStat, boundaryDFFut$zStat)
+        ylim <- range(all_zStat)
+
+        # Extend the limits by 10% on each side
+        buffer <- 0.1 * (ylim[2] - ylim[1])
+        extended_ylim <- c(ylim[1] - buffer, ylim[2] + buffer)
+
+        # Create the plot using plotly
+        p <- plot_ly() %>%
+          add_trace(data = boundaryDFEff, x = ~IF, y = ~zStat, type = 'scatter', mode = 'lines+markers',
+                    line = list(color = 'red', width = 3),
+                    marker = list(color = 'red', size = 10, symbol = 'circle'),
+                    name = "Critical value") %>%
+          add_trace(data = boundaryDFFut, x = ~IF, y = ~zStat, type = 'scatter', mode = 'lines+markers',
+                    line = list(color = 'blue', width = 3),
+                    marker = list(color = 'blue', size = 10, symbol = 'circle'),
+                    name = "Futility bound") %>%
+          layout(yaxis = list(range = extended_ylim, title = "Futility Bound and Critical Value"),
+                 title = "Boundaries",
+                 xaxis = list(title = "Information Fraction"))
+
+
+        # Show the plot
+       p
+
+      })
+
+  })
+
+
+  function_call_sim <- reactive({
     n_c <- (input$numofpatients*input$ControlRatio)/(sum(input$ControlRatio+input$TreatmentRatio))
     n_t <- (input$numofpatients*input$TreatmentRatio)/(sum(input$ControlRatio+input$TreatmentRatio))
 
@@ -657,11 +743,11 @@ server <- function(input, output, session) {
       IA_List <- vector("list", input$number_of_looks-1)
 
       for (k in 1:(input$number_of_looks-1)){
-        IA_List[[k]] <- seq(from = input[[paste0("OneLookLB_", k)]], to = input[[paste0("OneLookUB_", k)]], by = input[[paste0("OneLookBy_", k)]])
+        IA_List[[k]] <- seq(from = input[[paste0("IA_LB", k)]], to = input[[paste0("IA_UB", k)]], by = input[[paste0("IA_By", k)]])
       }
       IF_list <- strictly_increasing_combinations(IA_List)
     } else {
-      IF_list <- seq(input$OneLookLB_1, input$OneLookUB_1, by = input$OneLookBy_1)
+      IF_list <- seq(input$IA_LB1, input$IA_UB1, by = input$IA_By1)
 
     }
     IF_list <- paste(IF_list, ", 1", sep = "")
@@ -821,33 +907,17 @@ server <- function(input, output, session) {
 
   })
 
-  output$display_func_one_look <- renderText({
-    function_call_one_look()
+  output$display_func_sim <- renderText({
+    function_call_sim()
   })
 
   calculateGSDAssurance <- eventReactive(input$calc_GSD_assurance, {
-    call_string <- function_call_one_look()
+    call_string <- function_call_sim()
     result <- eval(parse(text = call_string))
+    shinyjs::show("selected_columns_sim_table")
     return(result)
   })
 
-
-  observe({
-    if (reactValues$errorSeqOneLook==TRUE){
-      shinyjs::show("oneLookErrorMessage")
-    } else{
-      shinyjs::hide("oneLookErrorMessage")
-    }
-  })
-
-  output$oneLookErrorMessage <- renderText({
-    if (reactValues$errorSeqOneLook==TRUE){
-      return("Your inputs are incorrect!")
-    }
-
-    return("")
-
-  })
 
 
   output$error_spending_table <- renderRHandsontable({
@@ -877,15 +947,53 @@ server <- function(input, output, session) {
 
       sim_output_DF <- do.call(rbind, lapply(sim_output, function(x) {
         data.frame(
-          `Information Fraction` = paste(x$IF, collapse = ", "),  # Convert vector to a comma-separated string
+          `Information Fraction` = paste(x$IF, collapse = ", "),
           Assurance = round(x$power_mean, 2),
           `Sample Size` = round(x$ss_mean, 1),
-          Duration = round(x$duration_mean, 1)
+          Duration = round(x$duration_mean, 1),
+          `Stop Early`= round(x$stop_mean, 2),
+          `Stop Early for Efficacy` = round(x$eff_mean, 2),
+          `Stop Early for Futility` = round(x$fut_mean, 2)
         )
       }))
 
-      datatable(sim_output_DF, rownames = F)
+
+      colnames(sim_output_DF) <- c("Information Fraction", "Assurance", "Sample Size", "Duration",
+                                   "% Stop", "% Stop for Efficacy", "% Stop for Futility")
+
+      sim_output_DF <- subset(sim_output_DF, select = c("Information Fraction", input$selected_columns_sim_table))
+
+      datatable(sim_output_DF, options = list(rowCallback = JS(rowCallback)),
+                rownames = F) %>% formatStyle(
+                  columns = colnames(sim_output_DF)
+                ) %>%
+        formatSignif(
+          columns = colnames(sim_output_DF),
+          digits = 3
+        )
     })
+
+
+
+
+
+
+    output$IATableTwoLooks <- renderDT({
+
+      IADFTwoLooks <- subset(twoLooksOutput$IADFTwoLooks, select = c("Information Fraction 1", "Information Fraction 2", input$selectedOptionsIATableTwoLooks))
+
+      datatable(IADFTwoLooks, options = list(rowCallback = JS(rowCallback)),
+                rownames = F) %>% formatStyle(
+                  columns = colnames(IADFTwoLooks)
+                ) %>%
+        formatSignif(
+          columns = colnames(IADFTwoLooks),
+          digits = 3
+        )
+    })
+
+
+
 
     output$sim_plot <- renderPlotly({
       sim_output <- calculateGSDAssurance()
@@ -916,61 +1024,7 @@ server <- function(input, output, session) {
 
   # Bayesian Logic ---------------------------------
 
-  observe({
-    if (!is.null(reactValues$treatmentSamplesDF)&reactValues$errorBayesian==F) {
-      updateActionButton(session, "calcBayesian", disabled = FALSE)
-    } else {
-      updateActionButton(session, "calcBayesian", disabled = TRUE)
-    }
-  })
-
-
-  observe({
-    # Check if any of the inputs are NA
-    if (is.na(input$IFBayesian) ||
-        is.na(input$tEffBayesian)){
-      reactValues$errorBayesian <- TRUE
-    } else {
-      # Check validity of input ranges
-      if (input$IFBayesian <= 0 | input$IFBayesian >= 1 ||
-          input$tEffBayesian <= 0) {
-        reactValues$errorBayesian <- TRUE
-      } else {
-        reactValues$errorBayesian <- FALSE
-      }
-    }
-  })
-
-  observe({
-    if (reactValues$errorBayesian==TRUE){
-      shinyjs::show("bayesianErrorMessage")
-    } else{
-      shinyjs::hide("bayesianErrorMessage")
-    }
-  })
-
-  output$bayesianErrorMessage <- renderText({
-    if (reactValues$errorBayesian==TRUE){
-      return("Your inputs are incorrect!")
-    }
-
-    return("")
-
-  })
-
-
   bayesianFunc <- reactive({
-
-    #Parallel: # Set up parallel processing
-    cl <- makeCluster(detectCores())  # Use all available cores
-    registerDoParallel(cl)
-
-    NRep <- 50
-
-    conc.probs <- matrix(0, 2, 2)
-    conc.probs[1, 2] <- 0.5
-
-
 
     # Extract required input values
     ratioControl <- input$ratioControl
@@ -1066,88 +1120,7 @@ server <- function(input, output, session) {
 
     })
 
-
   })
-
-
-  # Interim Look Logic ---------------------------------
-
-  observeEvent(input$generateButton, {
-
-    n_control <- round((input$ratioControl*input$numPatients)/(input$ratioControl+input$ratioTreatment))
-    n_treatment <- round((input$ratioTreatment*input$numPatients)/(input$ratioControl+input$ratioTreatment))
-
-    conc.probs <- matrix(0, 2, 2)
-    conc.probs[1, 2] <- 0.5
-    treatmentSamplesDF <- SHELF::copulaSample(reactValues$treatmentSamplesDF$fit1, reactValues$treatmentSamplesDF$fit2,
-                                              cp = conc.probs, n = 1e4, d = reactValues$treatmentSamplesDF$d)
-
-    u <- runif(1)
-    if (u > reactValues$treatmentSamplesDF$P_S) {
-      HRStar <- 1
-      bigT <- 0
-    } else {
-      HRStar <- sample(treatmentSamplesDF[, 2], 1)
-      w <- runif(1)
-      bigT <- ifelse(w > reactValues$treatmentSamplesDF$P_DTE, 0, sample(treatmentSamplesDF[, 1], 1))
-    }
-
-    sampledData <- SimDTEDataSet(n_control, n_treatment, reactValues$lambdac, bigT, HRStar, input$recTime)
-
-    #Now need to censor this
-    if (input$censChoice=="Time"){
-      sampledData <- CensFunc(sampledData, censTime = input$censTimeInterim)
-    }
-
-    if (input$censChoice=="Events"){
-      sampledData <- CensFunc(sampledData, censEvents = input$censEventsInterim)
-    }
-
-    output$interimPlotKM <- renderPlot({
-
-      kmfit <- survfit(Surv(survival_time, status)~group, data = sampledData$dataCombined)
-
-      ggsurvplot(
-        kmfit,
-        data = sampledData$dataCombined,
-        risk.table = TRUE,         # Add number at risk table
-        risk.table.col = "strata", # Color by strata (group)
-        ggtheme = theme_minimal(), # Apply minimal theme
-        xlab = "Time",      # X-axis label
-        ylab = "Survival Probability", # Y-axis label
-        risk.table.y.text.col = TRUE,  # Use colored text for groups
-        risk.table.y.text = F      # Turn off group names on the y-axis of the risk table
-      )
-
-    })
-
-    output$summaryOutput <- renderText({
-
-
-      # Fit Cox PH model
-      cox_model <- coxph(Surv(survival_time, status) ~ group, data = sampledData$dataCombined)
-
-      # Extract key results
-      cox_summary <- summary(cox_model)
-      hazard_ratio <- exp(cox_summary$coefficients[, "coef"])
-      conf_int <-cox_summary$conf.int[, c("lower .95", "upper .95")]
-      p_value <- cox_summary$coefficients[, "Pr(>|z|)"]
-
-      # Create a formatted output
-      paste0(
-        "Cox Proportional Hazards Model Summary:\n",
-        "--------------------------------------\n",
-        "Variable: group\n",
-        "Hazard Ratio: ", round(hazard_ratio, 2), "\n",
-        "95% Confidence Interval: (", round(conf_int[1], 2), ", ", round(conf_int[2], 2), ")\n",
-        "p-value: ", signif(p_value, 3), "\n"
-      )
-    })
-
-
-  })
-
-
 
 
 
@@ -1203,13 +1176,6 @@ server <- function(input, output, session) {
     }
   })
 
-  observe({
-    if (!is.null(reactValues$treatmentSamplesDF)) {
-      shinyjs::show("checkDesign")
-    } else {
-      shinyjs::hide("checkDesign")
-    }
-  })
 
   output$downloadHTML <- downloadHandler(
     filename = function() {

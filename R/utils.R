@@ -391,11 +391,13 @@ WieandRuleFunc <- function(dataCombined, numEventsRequired){
 # }
 
 group_sequential_decision <- function(z_scores, critical_values, futility_values, sample_sizes, durations) {
-  for (i in seq_along(z_scores)) {
+  num_stages <- length(z_scores)
+
+  for (i in seq_len(num_stages - 1)) {  # Loop through all interim stages, not including the final one
     # Check futility if a futility boundary is provided
     if (!is.na(futility_values[i]) && z_scores[i] < futility_values[i]) {
       return(list(
-        status = "Stop for futility",
+        status = paste("Stopped for futility at IA", i),
         successful = FALSE,
         analysis = i,
         z_score = z_scores[i],
@@ -407,7 +409,7 @@ group_sequential_decision <- function(z_scores, critical_values, futility_values
     # Check efficacy if a critical value is provided
     if (!is.na(critical_values[i]) && z_scores[i] > critical_values[i]) {
       return(list(
-        status = "Stop for efficacy",
+        status = paste("Stopped for efficacy at IA", i),
         successful = TRUE,
         analysis = i,
         z_score = z_scores[i],
@@ -417,15 +419,20 @@ group_sequential_decision <- function(z_scores, critical_values, futility_values
     }
   }
 
-  # If no stopping condition is met, continue to final analysis
+  # Now handle the final analysis (last stage)
+  final_success <- z_scores[num_stages] > critical_values[num_stages]
+
   return(list(
-    status = "Continue to final analysis",
-    successful = FALSE,  # Modify if a different definition of success applies
-    analysis = length(z_scores),
-    sample_size = sample_sizes[length(sample_sizes)],
-    duration = durations[length(durations)]
+    status = if (final_success) "Successful at final analysis" else "Unsuccessful at final analysis",
+    successful = final_success,
+    analysis = num_stages,  # This is the final analysis
+    z_score = z_scores[num_stages],
+    sample_size = sample_sizes[num_stages],
+    duration = durations[num_stages]
   ))
 }
+
+
 
 
 

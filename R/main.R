@@ -442,7 +442,11 @@ calc_dte_assurance_interim <- function(n_c, n_t,
       IF = info_rates,
       critValues = design$criticalValues,
       futBounds = design$futilityBounds,
-      power = rep(NA, 10)
+      power = rep(NA, nSims),
+      ss = rep(NA, nSims),
+      duration = rep(NA, nSims),
+      status = rep(NA, nSims)
+
     )
 
   }
@@ -550,10 +554,11 @@ calc_dte_assurance_interim <- function(n_c, n_t,
                                         sample_sizes = subset_table$SS,
                                         durations = subset_table$Duration)
 
+
       designList[[l]]$power[i] <- GSD_output$successful
       designList[[l]]$ss[i] <- GSD_output$sample_size
       designList[[l]]$duration[i] <- GSD_output$duration
-
+      designList[[l]]$status[i] <- GSD_output$status
     }
 
 }
@@ -562,10 +567,14 @@ calc_dte_assurance_interim <- function(n_c, n_t,
    designList[[j]]$power_mean <- mean(designList[[j]]$power)
    designList[[j]]$ss_mean <- mean(designList[[j]]$ss)
    designList[[j]]$duration_mean <- mean(designList[[j]]$duration)
-
+   designList[[j]]$eff_mean <- mean(grepl("Stopped for efficacy at IA", designList[[j]]$status))
+   designList[[j]]$fut_mean <- mean(grepl("Stopped for futility at IA", designList[[j]]$status))
  }
 
-  #print(designList)
+  for (j in 1:length(designList)){
+    designList[[j]]$stop_mean <- designList[[j]]$eff_mean + designList[[j]]$fut_mean
+
+  }
 
   return(designList)
 
