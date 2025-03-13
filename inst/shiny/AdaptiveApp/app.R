@@ -6,6 +6,7 @@ library(survival)
 library(DT)
 library(rhandsontable)
 library(rpact)
+library(dplyr)
 # library(SHELF)
 library(plotly)
 # library(survminer)
@@ -398,13 +399,7 @@ ui <- fluidPage(
                               plotlyOutput("boundary_plot"),
                               br(), br(),
                               br(), br(),
-                              plotlyOutput("oneLookObservedHRBoundaries"),
-                              br(), br(),
-                              br(), br(),
-                              plotOutput("oneLookPlotDuration"),
-                              br(), br(),
-                              br(), br(),
-                              plotlyOutput("oneLookPlotSS")),
+                              plotlyOutput("sim_plot")),
                    ),
 
                  )
@@ -877,29 +872,46 @@ server <- function(input, output, session) {
   })
 
 
-  output$sim_table <- renderDT({
+    output$sim_table <- renderDT({
+      sim_output <- calculateGSDAssurance()
 
-    sim_output <- calculateGSDAssurance()
+      sim_output_DF <- do.call(rbind, lapply(sim_output, function(x) {
+        data.frame(
+          `Information Fraction` = paste(x$IF, collapse = ", "),  # Convert vector to a comma-separated string
+          Assurance = round(x$power_mean, 2),
+          `Sample Size` = round(x$ss_mean, 1),
+          Duration = round(x$duration_mean, 1)
+        )
+      }))
 
-    x<<- sim_output
+      datatable(sim_output_DF, rownames = F)
+    })
 
-    print(sim_output)
+    output$sim_plot <- renderPlotly({
+      sim_output <- calculateGSDAssurance()
 
-    length(x)
+      # Convert list to data frame
+      sim_output_DF <- bind_rows(lapply(sim_output, function(x) {
+        tibble(
+          `Information Fraction` = paste(x$IF, collapse = ", "),  # Convert vector to string
+          Assurance = round(x$power_mean, 2),
+          `Sample Size` = round(x$ss_mean, 1),
+          Duration = round(x$duration_mean, 1)
+        )
+      }))
 
-    sim_output_DF <- data.frame(matrix(NA, nrow = length(x), ncol = 3))
 
-    colnames(sim_output_DF) <- c("Assurance", "Sample Size", "Duration")
+      # Create interactive plot with labels
+      plot_ly(sim_output_DF, x = ~Duration, y = ~Assurance, type = "scatter", mode = "markers",
+              marker = list(color = "blue", size = 8),
+              text = ~`Information Fraction`,  # ✅ Hover text
+              hoverinfo = "text") %>%
+        layout(title = "Assurance vs Duration",
+               xaxis = list(title = "Duration"),
+               yaxis = list(title = "Assurance"))
 
-    for (i in 1:length(x)){
-      sim_output_DF[i,]$Assurance <- x[[i]]$power_mean
-      sim_output_DF[i,]$`Sample Size` <- x[[i]]$ss_mean
-      sim_output_DF[i,]$`Sample Size` <- x[[i]]$duration_mean
-    }
+    })
 
-    sim_output_DF
-
-  })
 
 
   # Bayesian Logic ---------------------------------
