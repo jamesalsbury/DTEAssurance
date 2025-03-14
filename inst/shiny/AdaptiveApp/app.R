@@ -23,6 +23,10 @@ rowCallback <- c(
   "}"
 )
 
+table_choices <- c("Assurance", "Duration", "Sample Size",
+                   "% Stop", "% Stop for Efficacy", "% Stop for Futility")
+
+
 
 # UI definition
 ui <- fluidPage(
@@ -385,10 +389,8 @@ ui <- fluidPage(
                    ),
                    tabsetPanel(
                      tabPanel("Tables",
-                              hidden(selectizeInput("selected_columns_sim_table", "Selected Metrics",
-                                                    choices = c("Interim Analysis Time", "Assurance", "Duration", "Sample Size",
-                                                                "% Stop", "% Stop for Efficacy", "% Stop for Futility"),
-                                                    selected = c("Assurance", "Duration", "Sample Size"),
+                              hidden(selectizeInput("selected_columns_sim_table", "Metrics to Plot",
+                                                    choices = table_choices, selected = c("Assurance", "Duration", "Sample Size"),
                                                     multiple = TRUE)),
                               DTOutput("sim_table"),
                               hidden(uiOutput("finalAssTable1LookText"))),
@@ -397,6 +399,9 @@ ui <- fluidPage(
                               plotlyOutput("boundary_plot"),
                               br(), br(),
                               br(), br(),
+                              hidden(selectizeInput("selected_metrics_sim_plot", "Selected Metrics",
+                                                    choices = table_choices, selected = c("Assurance", "Duration", "Sample Size"),
+                                                    multiple = TRUE, options = list(maxItems = 2))),
                               plotlyOutput("sim_plot")),
                    ),
 
@@ -521,6 +526,7 @@ ui <- fluidPage(
 server <- function(input, output, session) {
 
   # Design Logic ---------------------------------
+
 
   output$ExpDistText <- renderUI({
     HTML(paste0("S(", input$ExpSurvTime, ") ~ Beta("))
@@ -915,6 +921,7 @@ server <- function(input, output, session) {
     call_string <- function_call_sim()
     result <- eval(parse(text = call_string))
     shinyjs::show("selected_columns_sim_table")
+    shinyjs::show("selected_metrics_sim_plot")
     return(result)
   })
 
@@ -942,6 +949,23 @@ server <- function(input, output, session) {
   })
 
 
+  observe({
+
+    sim_output <- calculateGSDAssurance()
+
+    num_IAs <- input$number_of_looks - 1
+    extra_column_names <- rep(NA, num_IAs)
+
+    for (k in 1:num_IAs){
+      extra_column_names[k] <- paste("Timing_IA", k, sep="")
+    }
+
+    updateSelectizeInput(session, "selected_columns_sim_table", choices = c(table_choices, extra_column_names),
+                         selected = c("Assurance", "Duration", "Sample Size"))
+
+  })
+
+
     output$sim_table <- renderDT({
       sim_output <- calculateGSDAssurance()
 
@@ -957,66 +981,89 @@ server <- function(input, output, session) {
         )
       }))
 
-
       colnames(sim_output_DF) <- c("Information Fraction", "Assurance", "Sample Size", "Duration",
                                    "% Stop", "% Stop for Efficacy", "% Stop for Futility")
 
+
+      for (k in 1:length(sim_output)){
+        num_IAs <- input$number_of_looks - 1
+
+        for (ia in 1:num_IAs){
+          column_name <- paste("Timing_IA", ia, sep="")
+
+          sim_output_DF[[column_name]][k] <- round(mean(as.numeric(sapply(strsplit(sim_output[[k]]$IATimes, ", "), function(x) x[ia]))), 1)
+        }
+      }
+
       sim_output_DF <- subset(sim_output_DF, select = c("Information Fraction", input$selected_columns_sim_table))
 
-      datatable(sim_output_DF, options = list(rowCallback = JS(rowCallback)),
-                rownames = F) %>% formatStyle(
-                  columns = colnames(sim_output_DF)
-                ) %>%
-        formatSignif(
-          columns = colnames(sim_output_DF),
-          digits = 3
-        )
+      datatable(sim_output_DF)
+
+      # datatable(sim_output_DF, options = list(rowCallback = JS(rowCallback)),
+      #           rownames = F) %>% formatStyle(
+      #             columns = colnames(sim_output_DF)
+      #           ) %>%
+      #   formatSignif(
+      #     columns = colnames(sim_output_DF)
+      #
+      #   )
     })
-
-
-
-
-
-
-    output$IATableTwoLooks <- renderDT({
-
-      IADFTwoLooks <- subset(twoLooksOutput$IADFTwoLooks, select = c("Information Fraction 1", "Information Fraction 2", input$selectedOptionsIATableTwoLooks))
-
-      datatable(IADFTwoLooks, options = list(rowCallback = JS(rowCallback)),
-                rownames = F) %>% formatStyle(
-                  columns = colnames(IADFTwoLooks)
-                ) %>%
-        formatSignif(
-          columns = colnames(IADFTwoLooks),
-          digits = 3
-        )
-    })
-
-
 
 
     output$sim_plot <- renderPlotly({
       sim_output <- calculateGSDAssurance()
 
-      # Convert list to data frame
-      sim_output_DF <- bind_rows(lapply(sim_output, function(x) {
-        tibble(
-          `Information Fraction` = paste(x$IF, collapse = ", "),  # Convert vector to string
+      sim_output_DF <- do.call(rbind, lapply(sim_output, function(x) {
+        data.frame(
+          `Information Fraction` = paste(x$IF, collapse = ", "),
           Assurance = round(x$power_mean, 2),
           `Sample Size` = round(x$ss_mean, 1),
-          Duration = round(x$duration_mean, 1)
+          Duration = round(x$duration_mean, 1),
+          `Stop Early`= round(x$stop_mean, 2),
+          `Stop Early for Efficacy` = round(x$eff_mean, 2),
+          `Stop Early for Futility` = round(x$fut_mean, 2)
         )
       }))
 
+      colnames(sim_output_DF) <- c("Information Fraction", "Assurance", "Sample Size", "Duration",
+                                   "% Stop", "% Stop for Efficacy", "% Stop for Futility")
 
-      # Create interactive plot with labels
-      plot_ly(sim_output_DF, x = ~Duration, y = ~Assurance, type = "scatter", mode = "markers",
+
+      for (k in 1:length(sim_output)){
+        num_IAs <- input$number_of_looks - 1
+
+        for (ia in 1:num_IAs){
+          column_name <- paste("Timing_IA", ia, sep="")
+
+          sim_output_DF[[column_name]][k] <- mean(as.numeric(sapply(strsplit(sim_output[[k]]$IATimes, ", "), function(x) x[ia])))
+        }
+      }
+
+      sim_output_DF <- subset(sim_output_DF, select = c("Information Fraction", input$selected_metrics_sim_plot))
+
+      print(sim_output_DF)
+
+
+
+
+      # Get the second and third column names
+      x_col <- colnames(sim_output_DF)[2]
+      y_col <- colnames(sim_output_DF)[3]
+
+      # Create the plot using the second and third columns
+      plot_ly(sim_output_DF,
+              x = ~get(x_col),  # Dynamically refer to the second column
+              y = ~get(y_col),  # Dynamically refer to the third column
+              type = "scatter",
+              mode = "markers",
               marker = list(color = "blue", size = 8),
-              text = ~`Information Fraction`,  # ✅ Hover text
+              text = ~`Information Fraction`,  # Hover text
               hoverinfo = "text") %>%
-        layout(title = "Assurance vs Duration",
-               xaxis = list(title = "Duration"),
-               yaxis = list(title = "Assurance"))
+        layout(
+          title = paste(y_col, "vs", x_col),
+          xaxis = list(title = x_col),
+          yaxis = list(title = y_col)
+        )
 
     })
 

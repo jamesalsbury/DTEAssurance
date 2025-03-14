@@ -545,6 +545,8 @@ calc_dte_assurance_interim <- function(n_c, n_t,
       #   #delta <- as.numeric(exp(coef(coxmodel)))
     }
 
+    #print(unique_IF_DF)
+
 
     for (l in 1:length(designList)){
       subset_table <- unique_IF_DF[unique_IF_DF$IF %in% designList[[l]]$IF,]
@@ -559,6 +561,7 @@ calc_dte_assurance_interim <- function(n_c, n_t,
       designList[[l]]$ss[i] <- GSD_output$sample_size
       designList[[l]]$duration[i] <- GSD_output$duration
       designList[[l]]$status[i] <- GSD_output$status
+      designList[[l]]$IATimes[i] <- paste(subset_table$Duration, collapse = ", ")
     }
 
 }
