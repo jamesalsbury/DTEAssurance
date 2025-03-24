@@ -23,8 +23,7 @@ rowCallback <- c(
   "}"
 )
 
-table_choices <- c("Assurance", "Duration", "Sample Size",
-                   "% Stop", "% Stop for Efficacy", "% Stop for Futility")
+table_choices <- c("% Stop", "% Stop for Efficacy", "% Stop for Futility")
 
 
 
@@ -360,8 +359,9 @@ ui <- fluidPage(
                  sidebarPanel = sidebarPanel(
                    numericInput("number_of_looks", "Number of Stages", value = 2),
                     uiOutput("IA_inputs"),
-                   wellPanel(
-                     rHandsontableOutput("error_spending_table")),
+
+                     rHandsontableOutput("error_spending_table"),
+                   hidden(numericInput("alpha_spending_one_look", "Type I error", value = 0.025)),
                    actionButton("calc_GSD_assurance", label  = "Calculate")
                  ),
                  mainPanel = mainPanel(
@@ -389,8 +389,8 @@ ui <- fluidPage(
                    ),
                    tabsetPanel(
                      tabPanel("Tables",
-                              hidden(selectizeInput("selected_columns_sim_table", "Metrics to Plot",
-                                                    choices = table_choices, selected = c("Assurance", "Duration", "Sample Size"),
+                              hidden(selectizeInput("selected_columns_sim_table", "Metrics to View",
+                                                    choices = c("Assurance", "Duration", "Sample Size"), selected = c("Assurance", "Duration", "Sample Size"),
                                                     multiple = TRUE)),
                               DTOutput("sim_table"),
                               hidden(uiOutput("finalAssTable1LookText"))),
@@ -400,7 +400,7 @@ ui <- fluidPage(
                               br(), br(),
                               br(), br(),
                               hidden(selectizeInput("selected_metrics_sim_plot", "Selected Metrics",
-                                                    choices = table_choices, selected = c("Assurance", "Duration", "Sample Size"),
+                                                    choices = c("Assurance", "Duration", "Sample Size"), selected = c("Assurance", "Duration", "Sample Size"),
                                                     multiple = TRUE, options = list(maxItems = 2))),
                               plotlyOutput("sim_plot")),
                    ),
@@ -632,16 +632,43 @@ server <- function(input, output, session) {
 
   # Simulate Logic ---------------------------------
 
+  observe({
+
+    req(input$number_of_looks)
+
+    if (input$number_of_looks == 1){
+      shinyjs::show("alpha_spending_one_look")
+      shinyjs::hide("IA_inputs")
+      shinyjs::hide("error_spending_table")
+      shinyjs::hide("BoundaryIA")
+      shinyjs::hide("boundary_plot")
+    } else {
+      shinyjs::hide("alpha_spending_one_look")
+      shinyjs::show("IA_inputs")
+      shinyjs::show("error_spending_table")
+      shinyjs::show("BoundaryIA")
+      shinyjs::show("boundary_plot")
+    }
+
+
+
+  })
+
   output$IA_inputs <- renderUI({
-    num_looks <- input$number_of_looks - 1
-    input_list <- lapply(1:num_looks, function(i) {
-      fluidRow(
-        column(4, numericInput(paste0("IA_LB", i), paste0("IA", i, ", from:"), value = 0.25)),
-        column(4, numericInput(paste0("IA_UB", i), "to:", value = 0.75)),
-        column(4, numericInput(paste0("IA_By", i), "by:", value = 0.25))
-      )
-    })
-    do.call(tagList, input_list)
+
+    if (input$number_of_looks>1){
+      num_looks <- input$number_of_looks - 1
+      input_list <- lapply(1:num_looks, function(i) {
+        fluidRow(
+          column(4, numericInput(paste0("IA_LB", i), paste0("IA", i, ", from:"), value = 0.25)),
+          column(4, numericInput(paste0("IA_UB", i), "to:", value = 0.75)),
+          column(4, numericInput(paste0("IA_By", i), "by:", value = 0.25))
+        )
+      })
+      do.call(tagList, input_list)
+    }
+
+
   })
 
   observe({
@@ -687,6 +714,9 @@ server <- function(input, output, session) {
 
 
   observe({
+
+
+    req(input$number_of_looks > 1)
 
     req(input$error_spending_table)
     req(input$BoundaryIA)
@@ -899,12 +929,23 @@ server <- function(input, output, session) {
                         ", \n nSims = ",
                         input$nSamples,
                         ", \n k = ",
-                        input$number_of_looks,
-                        ", \n IF_list = ",
-                        paste0("c(", paste0('"', IF_list, '"', collapse = ", "), ")"),
-                        paste0(", \n alpha_spending = c(", paste(spendingTable[,2], collapse = ", "), ")"),
-                        paste0(", \n beta_spending = c(", paste(spendingTable[,3], collapse = ", "), ")")
-    )
+                        input$number_of_looks)
+
+
+    if (input$number_of_looks > 1){
+      base_call <- paste0(base_call,
+                          ", \n IF_list = ",
+                          paste0("c(", paste0('"', IF_list, '"', collapse = ", "), ")"),
+                          paste0(", \n alpha_spending = c(", paste(spendingTable[,2], collapse = ", "), ")"),
+                          paste0(", \n beta_spending = c(", paste(spendingTable[,3], collapse = ", "), ")")
+      )
+    } else {
+      base_call <- paste0(base_call,
+                          ", \n type_one_error = ",
+                          input$alpha_spending_one_look)
+    }
+
+
 
 
     base_call <- paste0(base_call, ")")
@@ -929,23 +970,27 @@ server <- function(input, output, session) {
 
   output$error_spending_table <- renderRHandsontable({
 
-    k <- input$number_of_looks  # Set the desired number of rows
+    if (input$number_of_looks > 1){
+      k <- input$number_of_looks  # Set the desired number of rows
 
-    stage_names <- paste0("IA", 1:(k-1))
-    stage_names <- c(stage_names, "Final")
+      stage_names <- paste0("IA", 1:(k-1))
+      stage_names <- c(stage_names, "Final")
 
 
-    # Create the data frame with k rows
-    initial_data <- data.frame(
-      Stage = stage_names,
-      alphaspending = seq(0.01, 0.025, length.out = k),  # Example values
-      betaspending = seq(0.05, 0.1, length.out = k)      # Example values
-    )
+      # Create the data frame with k rows
+      initial_data <- data.frame(
+        Stage = stage_names,
+        alphaspending = seq(0.01, 0.025, length.out = k),  # Example values
+        betaspending = seq(0.05, 0.1, length.out = k)      # Example values
+      )
 
-    colnames(initial_data) <- c("Stage", "Alpha spending (cumulative)", "Beta spending (cumulative)")
+      colnames(initial_data) <- c("Stage", "Alpha spending (cumulative)", "Beta spending (cumulative)")
 
-    rhandsontable(initial_data, rowHeaders = FALSE)  %>%
-      hot_col(col = "Stage", readOnly = TRUE)
+      rhandsontable(initial_data, rowHeaders = FALSE)  %>%
+        hot_col(col = "Stage", readOnly = TRUE)
+    }
+
+
   })
 
 
@@ -953,15 +998,24 @@ server <- function(input, output, session) {
 
     sim_output <- calculateGSDAssurance()
 
-    num_IAs <- input$number_of_looks - 1
-    extra_column_names <- rep(NA, num_IAs)
+    if (input$number_of_looks > 1){
+      num_IAs <- input$number_of_looks - 1
+      extra_column_names <- rep(NA, num_IAs)
 
-    for (k in 1:num_IAs){
-      extra_column_names[k] <- paste("Timing_IA", k, sep="")
-    }
+      for (k in 1:num_IAs){
+        extra_column_names[k] <- paste("Timing_IA", k, sep="")
+      }
 
-    updateSelectizeInput(session, "selected_columns_sim_table", choices = c(table_choices, extra_column_names),
-                         selected = c("Assurance", "Duration", "Sample Size"))
+      updateSelectizeInput(session, "selected_columns_sim_table", choices = c("Assurance", "Duration", "Sample Size", table_choices, extra_column_names),
+                           selected = c("Assurance", "Duration", "Sample Size"))
+
+    } else {
+      updateSelectizeInput(session, "selected_columns_sim_table", choices = c("Assurance", "Duration", "Sample Size"),
+                           selected = c("Assurance", "Duration", "Sample Size"))
+      }
+
+
+
 
   })
 
@@ -969,101 +1023,139 @@ server <- function(input, output, session) {
     output$sim_table <- renderDT({
       sim_output <- calculateGSDAssurance()
 
-      sim_output_DF <- do.call(rbind, lapply(sim_output, function(x) {
-        data.frame(
-          `Information Fraction` = paste(x$IF, collapse = ", "),
-          Assurance = round(x$power_mean, 2),
-          `Sample Size` = round(x$ss_mean, 1),
-          Duration = round(x$duration_mean, 1),
-          `Stop Early`= round(x$stop_mean, 2),
-          `Stop Early for Efficacy` = round(x$eff_mean, 2),
-          `Stop Early for Futility` = round(x$fut_mean, 2)
-        )
-      }))
+      if (input$number_of_looks > 1){
+        sim_output_DF <- do.call(rbind, lapply(sim_output, function(x) {
+          data.frame(
+            `Information Fraction` = paste(x$IF, collapse = ", "),
+            Assurance = round(x$power_mean, 2),
+            `Sample Size` = round(x$ss_mean, 1),
+            Duration = round(x$duration_mean, 1),
+            `Stop Early`= round(x$stop_mean, 2),
+            `Stop Early for Efficacy` = round(x$eff_mean, 2),
+            `Stop Early for Futility` = round(x$fut_mean, 2)
+          )
+        }))
 
-      colnames(sim_output_DF) <- c("Information Fraction", "Assurance", "Sample Size", "Duration",
-                                   "% Stop", "% Stop for Efficacy", "% Stop for Futility")
+        colnames(sim_output_DF) <- c("Information Fraction", "Assurance", "Sample Size", "Duration",
+                                     "% Stop", "% Stop for Efficacy", "% Stop for Futility")
 
 
-      for (k in 1:length(sim_output)){
-        num_IAs <- input$number_of_looks - 1
+        for (k in 1:length(sim_output)){
+          num_IAs <- input$number_of_looks - 1
 
-        for (ia in 1:num_IAs){
-          column_name <- paste("Timing_IA", ia, sep="")
+          for (ia in 1:num_IAs){
+            column_name <- paste("Timing_IA", ia, sep="")
 
-          sim_output_DF[[column_name]][k] <- round(mean(as.numeric(sapply(strsplit(sim_output[[k]]$IATimes, ", "), function(x) x[ia]))), 1)
+            sim_output_DF[[column_name]][k] <- round(mean(as.numeric(sapply(strsplit(sim_output[[k]]$IATimes, ", "), function(x) x[ia]))), 1)
+          }
         }
+
+        sim_output_DF <- subset(sim_output_DF, select = c("Information Fraction", input$selected_columns_sim_table))
+
+        datatable(sim_output_DF)
+
+      } else {
+
+        sim_output_DF <- data.frame(
+            Assurance = round(sim_output[[1]]$assurance, 2),
+            `Sample Size` = round(sim_output[[1]]$sample_size, 1),
+            Duration = round(sim_output[[1]]$duration, 1)
+          )
+
+        colnames(sim_output_DF) <- c("Assurance", "Sample Size", "Duration")
+
+        sim_output_DF <- subset(sim_output_DF, select =  input$selected_columns_sim_table)
+
+        datatable(sim_output_DF)
+
       }
 
-      sim_output_DF <- subset(sim_output_DF, select = c("Information Fraction", input$selected_columns_sim_table))
 
-      datatable(sim_output_DF)
-
-      # datatable(sim_output_DF, options = list(rowCallback = JS(rowCallback)),
-      #           rownames = F) %>% formatStyle(
-      #             columns = colnames(sim_output_DF)
-      #           ) %>%
-      #   formatSignif(
-      #     columns = colnames(sim_output_DF)
-      #
-      #   )
     })
 
 
     output$sim_plot <- renderPlotly({
       sim_output <- calculateGSDAssurance()
 
-      sim_output_DF <- do.call(rbind, lapply(sim_output, function(x) {
-        data.frame(
-          `Information Fraction` = paste(x$IF, collapse = ", "),
-          Assurance = round(x$power_mean, 2),
-          `Sample Size` = round(x$ss_mean, 1),
-          Duration = round(x$duration_mean, 1),
-          `Stop Early`= round(x$stop_mean, 2),
-          `Stop Early for Efficacy` = round(x$eff_mean, 2),
-          `Stop Early for Futility` = round(x$fut_mean, 2)
-        )
-      }))
+      if (input$number_of_looks>1){
+        sim_output_DF <- do.call(rbind, lapply(sim_output, function(x) {
+          data.frame(
+            `Information Fraction` = paste(x$IF, collapse = ", "),
+            Assurance = round(x$power_mean, 2),
+            `Sample Size` = round(x$ss_mean, 1),
+            Duration = round(x$duration_mean, 1),
+            `Stop Early`= round(x$stop_mean, 2),
+            `Stop Early for Efficacy` = round(x$eff_mean, 2),
+            `Stop Early for Futility` = round(x$fut_mean, 2)
+          )
+        }))
 
-      colnames(sim_output_DF) <- c("Information Fraction", "Assurance", "Sample Size", "Duration",
-                                   "% Stop", "% Stop for Efficacy", "% Stop for Futility")
+        colnames(sim_output_DF) <- c("Information Fraction", "Assurance", "Sample Size", "Duration",
+                                     "% Stop", "% Stop for Efficacy", "% Stop for Futility")
 
 
-      for (k in 1:length(sim_output)){
-        num_IAs <- input$number_of_looks - 1
+        for (k in 1:length(sim_output)){
+          num_IAs <- input$number_of_looks - 1
 
-        for (ia in 1:num_IAs){
-          column_name <- paste("Timing_IA", ia, sep="")
+          for (ia in 1:num_IAs){
+            column_name <- paste("Timing_IA", ia, sep="")
 
-          sim_output_DF[[column_name]][k] <- mean(as.numeric(sapply(strsplit(sim_output[[k]]$IATimes, ", "), function(x) x[ia])))
+            sim_output_DF[[column_name]][k] <- mean(as.numeric(sapply(strsplit(sim_output[[k]]$IATimes, ", "), function(x) x[ia])))
+          }
         }
-      }
 
-      sim_output_DF <- subset(sim_output_DF, select = c("Information Fraction", input$selected_metrics_sim_plot))
+        sim_output_DF <- subset(sim_output_DF, select = c("Information Fraction", input$selected_metrics_sim_plot))
 
-      print(sim_output_DF)
+        # Get the second and third column names
+        x_col <- colnames(sim_output_DF)[2]
+        y_col <- colnames(sim_output_DF)[3]
 
+        # Create the plot using the second and third columns
+        plot_ly(sim_output_DF,
+                x = ~get(x_col),  # Dynamically refer to the second column
+                y = ~get(y_col),  # Dynamically refer to the third column
+                type = "scatter",
+                mode = "markers",
+                marker = list(color = "blue", size = 8),
+                text = ~`Information Fraction`,  # Hover text
+                hoverinfo = "text") %>%
+          layout(
+            title = paste(x_col, "vs", y_col),
+            xaxis = list(title = x_col),
+            yaxis = list(title = y_col)
+          )
 
+      } else {
 
-
-      # Get the second and third column names
-      x_col <- colnames(sim_output_DF)[2]
-      y_col <- colnames(sim_output_DF)[3]
-
-      # Create the plot using the second and third columns
-      plot_ly(sim_output_DF,
-              x = ~get(x_col),  # Dynamically refer to the second column
-              y = ~get(y_col),  # Dynamically refer to the third column
-              type = "scatter",
-              mode = "markers",
-              marker = list(color = "blue", size = 8),
-              text = ~`Information Fraction`,  # Hover text
-              hoverinfo = "text") %>%
-        layout(
-          title = paste(y_col, "vs", x_col),
-          xaxis = list(title = x_col),
-          yaxis = list(title = y_col)
+        sim_output_DF <- data.frame(
+          Assurance = round(sim_output[[1]]$assurance, 2),
+          `Sample Size` = round(sim_output[[1]]$sample_size, 1),
+          Duration = round(sim_output[[1]]$duration, 1)
         )
+
+        colnames(sim_output_DF) <- c("Assurance", "Sample Size", "Duration")
+
+        sim_output_DF <- subset(sim_output_DF, select = input$selected_metrics_sim_plot)
+
+        # Get the second and third column names
+        x_col <- colnames(sim_output_DF)[1]
+        y_col <- colnames(sim_output_DF)[2]
+
+        # Create the plot using the second and third columns
+        plot_ly(sim_output_DF,
+                x = ~get(x_col),  # Dynamically refer to the second column
+                y = ~get(y_col),  # Dynamically refer to the third column
+                type = "scatter",
+                mode = "markers",
+                marker = list(color = "blue", size = 8)
+                ) %>%
+          layout(
+            title = paste(x_col, "vs", y_col),
+            xaxis = list(title = x_col),
+            yaxis = list(title = y_col)
+          )
+
+      }
 
     })
 
