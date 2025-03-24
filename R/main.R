@@ -672,7 +672,7 @@ calc_BPP_hist <- function(n_c, n_t,
     }
   }
 
-  data <- sim_dte(n_c[j], n_t[j], lambda_c, delay_time, post_delay_HR, dist = control_dist, gamma_c = gamma_c)
+  data <- sim_dte(n_c, n_t, lambda_c, delay_time, post_delay_HR, dist = control_dist, gamma_c = gamma_c)
 
   if (rec_method=="power"){
     data <- add_recruitment_time(data, rec_method,
@@ -685,8 +685,33 @@ calc_BPP_hist <- function(n_c, n_t,
   }
 
 
-  data_after_cens <- cens_data(data, cens_method, cens_events, cens_time)
+  data_after_cens <- cens_data(data, cens_method = "Events", cens_events = cens_events)
   data <- data_after_cens$data
+
+  data <- data[order(data$group), ]
+
+  #Choose the correct elicited distribution for bigT
+  if (delay_time_dist == "beta") {
+    distParambigT <- paste0("bigT2 ~ dbeta(", elicitedDists$fit1$Beta[1], ", ", elicitedDists$fit1$Beta[2], ")")
+  } else if (delay_time_dist == "gamma") {
+    distParambigT <- paste0("bigT2 ~ dgamma(", elicitedDists$fit1$Gamma[1], ", ", elicitedDists$fit1$Gamma[2], ")")
+  } else if (delay_time_dist == "lognormal") {
+    distParambigT <- paste0("bigT2 ~ dlnorm(", elicitedDists$fit1$Log.normal[1], ", ", 1/elicitedDists$fit1$Log.normal[2]^2, ")")
+  }
+
+  #Choose the correct elicited distribution for HR*
+  if (elicitedDists$d[2] == "beta") {
+    distParamHR <- paste0("HR2 ~ dbeta(", elicitedDists$fit2$Beta[1], ", ", elicitedDists$fit2$Beta[2], ")")
+  } else if (elicitedDists$d[2] == "gamma") {
+    distParamHR <- paste0("HR2 ~ dgamma(", elicitedDists$fit2$Gamma[1], ", ", elicitedDists$fit2$Gamma[2], ")")
+  } else if (elicitedDists$d[2] == "lognormal") {
+    distParamHR <- paste0("HR2 ~ dlnorm(", elicitedDists$fit2$Log.normal[1], ", ", 1/elicitedDists$fit2$Log.normal[2]^2, ")")
+  } else if (elicitedDists$d[2] == "student-t") {
+    distParamHR <- paste0("HR2 ~ dt(", elicitedDists$fit2$Student.t[1], ", ", elicitedDists$fit2$Student.t[2], ", ", elicitedDists$fit2$Student.t[3], ")")
+  } else if (elicitedDists$d[2] == "normal") {
+    distParamHR <- paste0("HR2 ~ dnorm(", elicitedDists$fit2$Normal[1], ", ", 1/elicitedDists$fit2$Normal[2]^2, ")")
+  }
+
 
 
 }
