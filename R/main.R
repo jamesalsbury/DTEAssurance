@@ -623,20 +623,24 @@ calc_dte_assurance_interim <- function(n_c, n_t,
 
 
 calc_BPP_hist <- function(n_c, n_t,
-                           control_dist = "Exponential",
-                           t1 = NULL, t2 = NULL,
-                           t1_Beta_a = NULL, t1_Beta_b = NULL,
-                           diff_Beta_a = NULL, diff_Beta_b = NULL,
-                           delay_time_SHELF, delay_time_dist = "hist",
-                           post_delay_HR_SHELF, post_delay_HR_dist = "hist",
-                           P_S = 1, P_DTE = 0, cens_events = NULL, IF = NULL,
-                           rec_method, rec_period=NULL, rec_power=NULL, rec_rate=NULL, rec_duration=NULL,
-                           type_one_error = NULL, N = 50, M = 50){
+                          control_dist = "Exponential",
+                          t1 = NULL, t2 = NULL,
+                          t1_Beta_a = NULL, t1_Beta_b = NULL,
+                          diff_Beta_a = NULL, diff_Beta_b = NULL,
+                          delay_time_SHELF, delay_time_dist = "hist",
+                          post_delay_HR_SHELF, post_delay_HR_dist = "hist",
+                          P_S = 1, P_DTE = 0, cens_events = NULL, IF = NULL,
+                          rec_method, rec_period=NULL, rec_power=NULL, rec_rate=NULL, rec_duration=NULL,
+                          type_one_error = NULL, N = 50, M = 50){
 
 
-  if (control_dist=="Exponential"){
+  outerBPPVec <- rep(NA, N)
+
+  for (i in 1:N){
+
+    if (control_dist=="Exponential"){
       lambda_c <- -log(rbeta(1, t1_Beta_a, t1_Beta_b)) / t1
-  } else if (control_dist=="Weibull"){
+    } else if (control_dist=="Weibull"){
       sampledS1to <- rbeta(1, t1_Beta_a, t1_Beta_b)
       sampledDelta1 <- rbeta(1, diff_Beta_a, diff_Beta_b)
       sampledS1toPrime <- sampledS1to - sampledDelta1
@@ -653,250 +657,247 @@ calc_BPP_hist <- function(n_c, n_t,
       gamma_c <- solution$x[2]
     }
 
-  if (runif(1) > P_S){
-    #Curves do not separate
-    delay_time <- 0
-    post_delay_HR <- 1
-  } else {
-    if (runif(1) > P_DTE){
-      #Curves separate with no delay
+    if (runif(1) > P_S){
+      #Curves do not separate
       delay_time <- 0
-      post_delay_HR_sample <- SHELF::sampleFit(post_delay_HR_SHELF, n = 1)
-      post_delay_HR <- post_delay_HR_sample[,post_delay_HR_dist]
-    } else{
-      #Curves separate with a delay
-      delay_time_sample <- SHELF::sampleFit(delay_time_SHELF, n = 1)
-      post_delay_HR_sample <- SHELF::sampleFit(post_delay_HR_SHELF, n = 1)
-      delay_time <- delay_time_sample[,delay_time_dist]
-      post_delay_HR <- post_delay_HR_sample[,post_delay_HR_dist]
+      post_delay_HR <- 1
+    } else {
+      if (runif(1) > P_DTE){
+        #Curves separate with no delay
+        delay_time <- 0
+        post_delay_HR_sample <- SHELF::sampleFit(post_delay_HR_SHELF, n = 1)
+        post_delay_HR <- post_delay_HR_sample[,post_delay_HR_dist]
+      } else{
+        #Curves separate with a delay
+        delay_time_sample <- SHELF::sampleFit(delay_time_SHELF, n = 1)
+        post_delay_HR_sample <- SHELF::sampleFit(post_delay_HR_SHELF, n = 1)
+        delay_time <- delay_time_sample[,delay_time_dist]
+        post_delay_HR <- post_delay_HR_sample[,post_delay_HR_dist]
+      }
     }
+
+    data <- sim_dte(n_c, n_t, lambda_c, delay_time, post_delay_HR, dist = control_dist, gamma_c = gamma_c)
+
+    if (rec_method=="power"){
+      data <- add_recruitment_time(data, rec_method,
+                                   rec_period, rec_power)
+    }
+
+    if (rec_method == "PWC"){
+      data <- add_recruitment_time(data, rec_method,
+                                   rec_rate, rec_duration)
+    }
+
+
+    data_after_cens <- cens_data(data, cens_method = "Events", cens_events = cens_events*IF)
+    data <- data_after_cens$data
+
+    data <- data[order(data$group), ]
+
+    #Choose the correct elicited distribution for bigT
+    if (delay_time_dist == "beta") {
+      distParambigT <- paste0("bigT2 ~ dbeta(", delay_time_SHELF$Beta[1], ", ", delay_time_SHELF$Beta[2], ")")
+    } else if (delay_time_dist == "gamma") {
+      distParambigT <- paste0("bigT2 ~ dgamma(", delay_time_SHELF$Gamma[1], ", ", delay_time_SHELF$Gamma[2], ")")
+    } else if (delay_time_dist == "lognormal") {
+      distParambigT <- paste0("bigT2 ~ dlnorm(", delay_time_SHELF$Log.normal[1], ", ", 1/delay_time_SHELF$Log.normal[2]^2, ")")
+    }
+
+    #Choose the correct elicited distribution for HR*
+    if (post_delay_HR_dist == "beta") {
+      distParamHR <- paste0("HR2 ~ dbeta(", post_delay_HR_SHELF$Beta[1], ", ", post_delay_HR_SHELF$Beta[2], ")")
+    } else if (post_delay_HR_dist == "gamma") {
+      distParamHR <- paste0("HR2 ~ dgamma(", post_delay_HR_SHELF$Gamma[1], ", ", post_delay_HR_SHELF$Gamma[2], ")")
+    } else if (post_delay_HR_dist == "lognormal") {
+      distParamHR <- paste0("HR2 ~ dlnorm(", post_delay_HR_SHELF$Log.normal[1], ", ", 1/post_delay_HR_SHELF$Log.normal[2]^2, ")")
+    } else if (post_delay_HR_dist == "student-t") {
+      distParamHR <- paste0("HR2 ~ dt(", post_delay_HR_SHELF$Student.t[1], ", ", post_delay_HR_SHELF$Student.t[2], ", ", post_delay_HR_SHELF$Student.t[3], ")")
+    } else if (post_delay_HR_dist == "normal") {
+      distParamHR <- paste0("HR2 ~ dnorm(", post_delay_HR_SHELF$Normal[1], ", ", 1/post_delay_HR_SHELF$Normal[2]^2, ")")
+    }
+
+    modelString <- paste0(
+      "data {\n",
+      "  for (j in 1:m){\n",
+      "    zeros[j] <- 0\n",
+      "  }\n",
+      "}\n",
+      "\n",
+      "model {\n",
+      "  C <- 10000\n",
+      "  for (i in 1:n){\n",
+      "    zeros[i] ~ dpois(zeros.mean[i])\n",
+      "    zeros.mean[i] <-  -l[i] + C\n",
+      "    l[i] <- ifelse(datEvent[i]==1, log(lambda_c)-(lambda_c*datTimes[i]), -(lambda_c*datTimes[i]))\n",
+      "  }\n",
+      "  for (i in (n+1):m){\n",
+      "    zeros[i] ~ dpois(zeros.mean[i])\n",
+      "    zeros.mean[i] <-  -l[i] + C\n",
+      "    l[i] <- ifelse(datEvent[i]==1, ifelse(datTimes[i]<bigT, log(lambda_c)-(lambda_c*datTimes[i]), log(lambda_t)-lambda_t*(datTimes[i]-bigT)-(bigT*lambda_c)),\n",
+      "      ifelse(datTimes[i]<bigT, -(lambda_c*datTimes[i]), -(lambda_c*bigT)-lambda_t*(datTimes[i]-bigT)))\n",
+      "  }\n",
+      " \n",
+      "    lambda_c ~ dbeta(1, 1)T(0,)\n",
+      "   \n",
+      "    mixT ~ dbern(1-P_S*P_DTE)\n",
+      "    bigT <- mixT * bigT1 + (1-mixT) * bigT2\n",
+      "    bigT1 ~ dnorm(0, 100)T(0,)\n",
+      "    ", distParambigT, "\n",
+      "   \n",
+      "    mixHR ~ dbern(1-P_S)\n",
+      "    HR <- mixHR * HR1 + (1-mixHR) * HR2\n",
+      "    HR1 ~ dnorm(1, 10000)T(0,)\n",
+      "    ", distParamHR, "\n",
+      "   \n",
+      "    lambda_t <- lambda_c*HR\n",
+      "}"
+    )
+
+    model = jags.model(textConnection(modelString), data = list(datTimes = data$survival_time,
+                                                                datEvent = data$status, n = sum(data$group=="Control"),
+                                                                m=nrow(data),
+                                                                P_S = P_S,
+                                                                P_DTE = P_DTE), quiet = T)
+
+    update(model, n.iter=50, progress.bar = "none")
+    output=coda.samples(model=model, variable.names=c("HR", "bigT", "lambda_c"), n.iter = 100, progress.bar = "none")
+
+    #The number of unenrolled patients in each group
+    cPatientsLeft <- n_c - sum(data$group=="Control")
+    tPatientsLeft <- n_t - sum(data$group=="Treatment")
+
+    #Extract realisations from the MCMC
+    HRoutput <- as.numeric(unlist(output[,1]))
+    bigToutput <- as.numeric(unlist(output[,2]))
+    lambda_coutput <- as.numeric(unlist(output[,3]))
+
+    BPPVec <- rep(NA, M)
+
+    for (j in 1:M){
+
+      #Need to sample a recuitment time for the unenrolled patients
+      #NEEDS CHANGING
+      unenrolledrec_times <- runif(cPatientsLeft+tPatientsLeft, data_after_cens$cens_time, rec_period)
+
+      #Sample values from the MCMC output
+      sampledHR <- sample(HRoutput, 1)
+      sampledbigT <- sample(bigToutput, 1)
+      sampledlambda_c <- sample(lambda_coutput, 1)
+      sampledlambda_t <- sampledlambda_c*sampledHR
+
+
+      #For the unenrolled data, we can sample the remaining data according to the updated (sampled) parameters
+      CP <- exp(-(sampledlambda_c*sampledbigT))
+      u <- runif(tPatientsLeft)
+
+      unenrolledData <- data.frame(time = c(rexp(cPatientsLeft, rate = sampledlambda_c), ifelse(u>CP, (-log(u))/sampledlambda_c, (1/sampledlambda_t)*(sampledbigT*sampledlambda_t-log(u)-sampledbigT*sampledlambda_c))), group = c(rep("Control", cPatientsLeft),
+                                                                                                                                                                                                                                   rep("Treatment", tPatientsLeft)), rec_time = unenrolledrec_times)
+
+      unenrolledData$pseudo_time <- unenrolledData$time + unenrolledData$rec_time
+
+
+      #Extracting the observations that were censored at the IA
+      censoredData <- data[data$status==0,]
+
+
+      #Number of censored observations in each group
+      cCensored <- sum(censoredData$group=="Control")
+      tCensored <- sum(censoredData$group=="Treatment")
+
+      #Extracting the censored observations in the control group
+      cCensoredData <- censoredData %>%
+        filter(group=="Control")
+
+      #Adding a exp(sampledlambda_c) value to the censored value
+      cCensoredData$finalsurvTime <- cCensoredData$survival_time + rexp(cCensored, rate = sampledlambda_c)
+
+      #Calculating the psuedo time
+      cCensoredData$finalPsuedoTime <- cCensoredData$rec_time + cCensoredData$finalsurvTime
+
+
+      #Extacting the observations in the treatment group which may still be influenced by the delay (their observation time is smaller than the sampled delay time)
+      tBeforeDelay <- censoredData %>%
+        filter(group=="Treatment") %>%
+        filter(survival_time < sampledbigT)
+
+      #Extracting the observations in the treatment group which will not be influenced by the delay (their observation time is bigger than the sampled delay time)
+      tAfterDelay <- censoredData %>%
+        filter(group=="Treatment") %>%
+        filter(survival_time > sampledbigT)
+
+      #As these observations are still subject to a delay, we add on a Exp(lambda_c) (lambdac) time
+      tBeforeDelay$IASurv <- tBeforeDelay$survival_time + rexp(nrow(tBeforeDelay), rate = sampledlambda_c)
+
+      #Extracting the observations in which the survival time is smaller than the sampled delay time
+      tBeforeDelay1 <- tBeforeDelay %>%
+        filter(IASurv < sampledbigT)
+
+      #Extracting the observations in which the survival time is bigger than the sampled delay time
+      tBeforeDelay2 <- tBeforeDelay %>%
+        filter(IASurv > sampledbigT)
+
+      #For the observations in which the survival time is bigger, we sample a Exp(lambda_t) and add it to the sampled delay time
+      tBeforeDelay2$IASurv2 <- sampledbigT + rexp(nrow(tBeforeDelay2), rate = sampledlambda_t)
+
+      #For the observations not influenced by the delay, we sample a Exp(lambda_t) time and add it to the current survival time
+      tAfterDelay$IASurv <- tAfterDelay$survival_time + rexp(nrow(tAfterDelay), rate = sampledlambda_t)
+
+      #Calculate the pseudo time for all the data frames
+      tBeforeDelay1$IApsuedoTime <- tBeforeDelay1$IASurv + tBeforeDelay1$rec_time
+      tBeforeDelay2$IApsuedoTime <- tBeforeDelay2$IASurv2 + tBeforeDelay2$rec_time
+      tAfterDelay$IApsuedoTime <- tAfterDelay$IASurv + tAfterDelay$rec_time
+
+      #Only keeping the columns of interest
+      cCensoredData <- cCensoredData[,c(8, 2, 3, 9)]
+      tBeforeDelay1 <- tBeforeDelay1[,c(8, 2, 3, 9)]
+      tBeforeDelay2 <- tBeforeDelay2[,c(9, 2, 3, 10)]
+      tAfterDelay <- tAfterDelay[,c(8, 2, 3, 9)]
+
+      #Keeping the column names consistent
+      colnames(cCensoredData) <- c("time", "group", "rec_time", "pseudo_time")
+      colnames(tBeforeDelay1) <- c("time", "group", "rec_time", "pseudo_time")
+      colnames(tBeforeDelay2) <- c("time", "group", "rec_time", "pseudo_time")
+      colnames(tAfterDelay) <- c("time", "group", "rec_time", "pseudo_time")
+
+      #Only keeping observations from the censored data set which are dead
+      finalDataset <- data %>%
+        filter(status==1)
+
+      finalDataset <- finalDataset[,1:4]
+
+      #Combining all the above data sets
+      finalDataset <- rbind(finalDataset, tBeforeDelay1)
+      finalDataset <- rbind(finalDataset, tBeforeDelay2)
+      finalDataset <- rbind(finalDataset, tAfterDelay)
+      finalDataset <- rbind(finalDataset, unenrolledData)
+      finalDataset <- rbind(finalDataset, cCensoredData)
+
+
+
+      #Making sure the final data set is correct
+      censTime1 <- sort(finalDataset$pseudo_time)[cens_events]
+      finalDataset$status <- finalDataset$pseudo_time <= censTime1
+      finalDataset$status <- finalDataset$status*1
+      finalDataset$enrolled <- finalDataset$rec_time <= censTime1
+      finalDataset <-  finalDataset[finalDataset$enrolled==T,]
+      finalDataset$survival_time <- ifelse(finalDataset$pseudo_time>censTime1, censTime1  - finalDataset$rec_time, finalDataset$time)
+
+      #Testing for significance
+      test <- survdiff(Surv(survival_time, status)~group, data = finalDataset)
+
+      #Making sure the significance is in the correct direction
+      coxmodel <- coxph(Surv(survival_time, status)~group, data = finalDataset)
+      deltad <- as.numeric(exp(coef(coxmodel)))
+
+
+      BPPVec[j] <- (test$chisq > qchisq(0.95, 1) & deltad<1)
+
+    }
+
+    outerBPPVec[i] <- mean(BPPVec)
+
   }
 
-  data <- sim_dte(n_c, n_t, lambda_c, delay_time, post_delay_HR, dist = control_dist, gamma_c = gamma_c)
-
-  if (rec_method=="power"){
-    data <- add_recruitment_time(data, rec_method,
-                                 rec_period, rec_power)
-  }
-
-  if (rec_method == "PWC"){
-    data <- add_recruitment_time(data, rec_method,
-                                 rec_rate, rec_duration)
-  }
-
-
-  data_after_cens <- cens_data(data, cens_method = "Events", cens_events = cens_events)
-  data <- data_after_cens$data
-
-  data <- data[order(data$group), ]
-
-  #Choose the correct elicited distribution for bigT
-  if (delay_time_dist == "beta") {
-    distParambigT <- paste0("bigT2 ~ dbeta(", delay_time_SHELF$Beta[1], ", ", delay_time_SHELF$Beta[2], ")")
-  } else if (delay_time_dist == "gamma") {
-    distParambigT <- paste0("bigT2 ~ dgamma(", delay_time_SHELF$Gamma[1], ", ", delay_time_SHELF$Gamma[2], ")")
-  } else if (delay_time_dist == "lognormal") {
-    distParambigT <- paste0("bigT2 ~ dlnorm(", delay_time_SHELF$Log.normal[1], ", ", 1/delay_time_SHELF$Log.normal[2]^2, ")")
-  }
-
-  #Choose the correct elicited distribution for HR*
-  if (post_delay_HR_dist == "beta") {
-    distParamHR <- paste0("HR2 ~ dbeta(", post_delay_HR_SHELF$Beta[1], ", ", post_delay_HR_SHELF$Beta[2], ")")
-  } else if (post_delay_HR_dist == "gamma") {
-    distParamHR <- paste0("HR2 ~ dgamma(", post_delay_HR_SHELF$Gamma[1], ", ", post_delay_HR_SHELF$Gamma[2], ")")
-  } else if (post_delay_HR_dist == "lognormal") {
-    distParamHR <- paste0("HR2 ~ dlnorm(", post_delay_HR_SHELF$Log.normal[1], ", ", 1/post_delay_HR_SHELF$Log.normal[2]^2, ")")
-  } else if (post_delay_HR_dist == "student-t") {
-    distParamHR <- paste0("HR2 ~ dt(", post_delay_HR_SHELF$Student.t[1], ", ", post_delay_HR_SHELF$Student.t[2], ", ", post_delay_HR_SHELF$Student.t[3], ")")
-  } else if (post_delay_HR_dist == "normal") {
-    distParamHR <- paste0("HR2 ~ dnorm(", post_delay_HR_SHELF$Normal[1], ", ", 1/post_delay_HR_SHELF$Normal[2]^2, ")")
-  }
-
-  modelString <- paste0(
-    "data {\n",
-    "  for (j in 1:m){\n",
-    "    zeros[j] <- 0\n",
-    "  }\n",
-    "}\n",
-    "\n",
-    "model {\n",
-    "  C <- 10000\n",
-    "  for (i in 1:n){\n",
-    "    zeros[i] ~ dpois(zeros.mean[i])\n",
-    "    zeros.mean[i] <-  -l[i] + C\n",
-    "    l[i] <- ifelse(datEvent[i]==1, log(lambda_c)-(lambda_c*datTimes[i]), -(lambda_c*datTimes[i]))\n",
-    "  }\n",
-    "  for (i in (n+1):m){\n",
-    "    zeros[i] ~ dpois(zeros.mean[i])\n",
-    "    zeros.mean[i] <-  -l[i] + C\n",
-    "    l[i] <- ifelse(datEvent[i]==1, ifelse(datTimes[i]<bigT, log(lambda_c)-(lambda_c*datTimes[i]), log(lambda_t)-lambda_t*(datTimes[i]-bigT)-(bigT*lambda_c)),\n",
-    "      ifelse(datTimes[i]<bigT, -(lambda_c*datTimes[i]), -(lambda_c*bigT)-lambda_t*(datTimes[i]-bigT)))\n",
-    "  }\n",
-    " \n",
-    "    lambda_c ~ dbeta(1, 1)T(0,)\n",
-    "   \n",
-    "    mixT ~ dbern(1-P_S*P_DTE)\n",
-    "    bigT <- mixT * bigT1 + (1-mixT) * bigT2\n",
-    "    bigT1 ~ dnorm(0, 100)T(0,)\n",
-    "    ", distParambigT, "\n",
-    "   \n",
-    "    mixHR ~ dbern(1-P_S)\n",
-    "    HR <- mixHR * HR1 + (1-mixHR) * HR2\n",
-    "    HR1 ~ dnorm(1, 10000)T(0,)\n",
-    "    ", distParamHR, "\n",
-    "   \n",
-    "    lambda_t <- lambda_c*HR\n",
-    "}"
-  )
-
-  model = jags.model(textConnection(modelString), data = list(datTimes = data$survival_time,
-                                                              datEvent = data$status, n = sum(data$group=="Control"),
-                                                              m=nrow(data),
-                                                              P_S = P_S,
-                                                              P_DTE = P_DTE), quiet = T)
-
-  update(model, n.iter=50, progress.bar = "none")
-  output=coda.samples(model=model, variable.names=c("HR", "bigT", "lambda_c"), n.iter = 100, progress.bar = "none")
-
-  #The number of unenrolled patients in each group
-  cPatientsLeft <- n_c - sum(data$group=="Control")
-  tPatientsLeft <- n_t - sum(data$group=="Treatment")
-
-  #Extract realisations from the MCMC
-  HRoutput <- as.numeric(unlist(output[,1]))
-  bigToutput <- as.numeric(unlist(output[,2]))
-  lambda_coutput <- as.numeric(unlist(output[,3]))
-
-  BPPVec <- rep(NA, M)
-
-  for (j in 1:M){
-
-   #Need to sample a recuitment time for the unenrolled patients
-    #NEEDS CHANGING
-    unenrolledrec_times <- runif(cPatientsLeft+tPatientsLeft, data_after_cens$cens_time, rec_period)
-
-    #Sample values from the MCMC output
-    sampledHR <- sample(HRoutput, 1)
-    sampledbigT <- sample(bigToutput, 1)
-    sampledlambda_c <- sample(lambda_coutput, 1)
-    sampledlambda_t <- sampledlambda_c*sampledHR
-
-
-    #For the unenrolled data, we can sample the remaining data according to the updated (sampled) parameters
-    CP <- exp(-(sampledlambda_c*sampledbigT))
-    u <- runif(tPatientsLeft)
-
-    unenrolledData <- data.frame(time = c(rexp(cPatientsLeft, rate = sampledlambda_c), ifelse(u>CP, (-log(u))/sampledlambda_c, (1/sampledlambda_t)*(sampledbigT*sampledlambda_t-log(u)-sampledbigT*sampledlambda_c))), group = c(rep("Control", cPatientsLeft),
-                                                                                                                                                                                                                            rep("Treatment", tPatientsLeft)), rec_time = unenrolledrec_times)
-
-    unenrolledData$pseudo_time <- unenrolledData$time + unenrolledData$rec_time
-
-
-    #Extracting the observations that were censored at the IA
-    censoredData <- data[data$status==0,]
-
-    #Number of censored observations in each group
-    cCensored <- sum(censoredData$group=="Control")
-    tCensored <- sum(censoredData$group=="Treatment")
-
-    #Extracting the censored observations in the control group
-    cCensoredData <- censoredData %>%
-      filter(group=="Control")
-
-    #Adding a exp(sampledlambda_c) value to the censored value
-    cCensoredData$finalsurvTime <- cCensoredData$survival_time + rexp(cCensored, rate = sampledlambda_c)
-
-    #Calculating the psuedo time
-    cCensoredData$finalPsuedoTime <- cCensoredData$rec_time + cCensoredData$finalsurvTime
-
-    #Extacting the observations in the treatment group which may still be influenced by the delay (their observation time is smaller than the sampled delay time)
-    tBeforeDelay <- censoredData %>%
-      filter(group=="Treatment") %>%
-      filter(survival_time < sampledbigT)
-
-    #Extracting the observations in the treatment group which will not be influenced by the delay (their observation time is bigger than the sampled delay time)
-    tAfterDelay <- censoredData %>%
-      filter(group=="Treatment") %>%
-      filter(survival_time > sampledbigT)
-
-    #As these observations are still subject to a delay, we add on a Exp(lambda_c) (lambdac) time
-    tBeforeDelay$IASurv <- tBeforeDelay$survival_time + rexp(nrow(tBeforeDelay), rate = sampledlambda_c)
-
-    #Extracting the observations in which the survival time is smaller than the sampled delay time
-    tBeforeDelay1 <- tBeforeDelay %>%
-      filter(IASurv < sampledbigT)
-
-    #Extracting the observations in which the survival time is bigger than the sampled delay time
-    tBeforeDelay2 <- tBeforeDelay %>%
-      filter(IASurv > sampledbigT)
-
-    #For the observations in which the survival time is bigger, we sample a Exp(lambda_t) and add it to the sampled delay time
-    tBeforeDelay2$IASurv2 <- sampledbigT + rexp(nrow(tBeforeDelay2), rate = sampledlambda_t)
-
-    #For the observations not influenced by the delay, we sample a Exp(lambda_t) time and add it to the current survival time
-    tAfterDelay$IASurv <- tAfterDelay$survival_time + rexp(nrow(tAfterDelay), rate = sampledlambda_t)
-
-    #Calculate the pseudo time for all the data frames
-    tBeforeDelay1$IApsuedoTime <- tBeforeDelay1$IASurv + tBeforeDelay1$rec_time
-    tBeforeDelay2$IApsuedoTime <- tBeforeDelay2$IASurv2 + tBeforeDelay2$rec_time
-    tAfterDelay$IApsuedoTime <- tAfterDelay$IASurv + tAfterDelay$rec_time
-
-    #Only keeping the columns of interest
-    cCensoredData <- cCensoredData[,c(8, 2, 3, 9)]
-    tBeforeDelay1 <- tBeforeDelay1[,c(8, 2, 3, 9)]
-    tBeforeDelay2 <- tBeforeDelay2[,c(9, 2, 3, 10)]
-    tAfterDelay <- tAfterDelay[,c(8, 2, 3, 9)]
-
-    #Keeping the column names consistent
-    colnames(cCensoredData) <- c("time", "group", "rec_time", "pseudo_time")
-    colnames(tBeforeDelay1) <- c("time", "group", "rec_time", "pseudo_time")
-    colnames(tBeforeDelay2) <- c("time", "group", "rec_time", "pseudo_time")
-    colnames(tAfterDelay) <- c("time", "group", "rec_time", "pseudo_time")
-
-    #Only keeping observations from the censored data set which are dead
-    finalDataset <- data %>%
-      filter(status==1)
-
-    finalDataset <- finalDataset[,1:4]
-
-    #Combining all the above data sets
-    finalDataset <- rbind(finalDataset, tBeforeDelay1)
-    finalDataset <- rbind(finalDataset, tBeforeDelay2)
-    finalDataset <- rbind(finalDataset, tAfterDelay)
-    finalDataset <- rbind(finalDataset, unenrolledData)
-    finalDataset <- rbind(finalDataset, cCensoredData)
-
-    #Making sure the final data set is correct
-    censTime1 <- sort(finalDataset$pseudo_time)[cens_events]
-    finalDataset$status <- finalDataset$pseudo_time <= censTime1
-    finalDataset$status <- finalDataset$status*1
-    finalDataset$enrolled <- finalDataset$rec_time <= censTime1
-    finalDataset <-  finalDataset[finalDataset$enrolled==T,]
-    finalDataset$survival_time <- ifelse(finalDataset$pseudo_time>censTime1, censTime1  - finalDataset$rec_time, finalDataset$time)
-
-    #Testing for significance
-    test <- survdiff(Surv(survival_time, status)~group, data = finalDataset)
-
-    #kmfit <- survfit(Surv(survival_time, status)~group, data = finalDataset)
-    #plot(kmfit, col = c("blue", "red"), xlim=c(0,50))
-
-    #Making sure the significance is in the correct direction
-    coxmodel <- coxph(Surv(survival_time, status)~group, data = finalDataset)
-    deltad <- as.numeric(exp(coef(coxmodel)))
-
-
-    BPPVec[j] <- (test$chisq > qchisq(0.95, 1) & deltad<1)
-
-  }
-
-  return(mean(BPPVec))
+  return(list(outerBPPVec = outerBPPVec))
 
 }
-
-
-
-
-
-
-
-

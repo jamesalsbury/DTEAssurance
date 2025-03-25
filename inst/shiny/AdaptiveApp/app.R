@@ -415,16 +415,11 @@ ui <- fluidPage(
                  sidebarPanel = sidebarPanel(
                    numericInput("IFBayesian", "Information Fraction", value = 0.5),
                    numericInput("tEffBayesian", "Target Effect", value = 0.8),
-                   div(id = "bayesianErrorMessage", class = "error-message", textOutput("bayesianErrorMessage")),
-                   actionButton("calcBayesian", label  = "Calculate", disabled = T)
+                   actionButton("calcBayesian", label  = "Calculate")
                  ),
                  mainPanel = mainPanel(
-                   plotOutput("BayesianPlot"),
-                   plotOutput("BayesianEffPlot"),
-                   plotOutput("BayesianBPPvTE"),
-                   tableOutput("BayesianSS"),
-                   tableOutput("BayesianDuration")
-
+                   verbatimTextOutput("display_func_Bayesian"),
+                   plotOutput("BayesianPlot")
                  )
                )
       ),
@@ -1160,106 +1155,187 @@ server <- function(input, output, session) {
     })
 
 
-
   # Bayesian Logic ---------------------------------
 
-  bayesianFunc <- reactive({
-
-    # Extract required input values
-    ratioControl <- input$ratioControl
-    ratioTreatment <- input$ratioTreatment
-    numPatients <- input$numPatients
-    lambdac <- reactValues$lambdac
-    recTime <- input$recTime
-    numEvents <- input$numEvents
-    IFBayesian <- input$IFBayesian
-    tEffBayesian <- input$tEffBayesian
-    P_S <-  reactValues$treatmentSamplesDF$P_S
-    P_DTE <- reactValues$treatmentSamplesDF$P_DTE
-    elicitedDists <- reactValues$treatmentSamplesDF
-
-    treatmentSamplesDF <- SHELF::copulaSample(reactValues$treatmentSamplesDF$fit1, reactValues$treatmentSamplesDF$fit2,
-                                              cp = conc.probs, n = 1e4, d = reactValues$treatmentSamplesDF$d)
-
-    BPPVec <- foreach(i = 1:NRep, .combine = c, .export = c("SimDTEDataSet", "CensFunc", "BPPFunc"),
-                      .packages = c("survival", "rjags", "dplyr")) %dopar% {
-
-                        u <- runif(1)
-                        if (u > P_S) {
-                          HRStar <- 1
-                          bigT <- 0
-                        } else {
-                          HRStar <- sample(treatmentSamplesDF[, 2], 1)
-                          w <- runif(1)
-                          bigT <- ifelse(w > P_DTE, 0, sample(treatmentSamplesDF[, 1], 1))
-                        }
-
-                        # Simulate control and treatment data
-
-                        dataCombined <- SimDTEDataSet(round(ratioControl*numPatients/(ratioControl+ratioTreatment)),
-                                                      round(ratioTreatment*numPatients/(ratioControl+ratioTreatment)),
-                                                      lambdac, bigT, HRStar, recTime)
+    # calc_BPP_hist <- function(n_c, n_t,
+    #                           control_dist = "Exponential",
+    #                           t1 = NULL, t2 = NULL,
+    #                           t1_Beta_a = NULL, t1_Beta_b = NULL,
+    #                           diff_Beta_a = NULL, diff_Beta_b = NULL,
+    #                           delay_time_SHELF, delay_time_dist = "hist",
+    #                           post_delay_HR_SHELF, post_delay_HR_dist = "hist",
+    #                           P_S = 1, P_DTE = 0, cens_events = NULL, IF = NULL,
+    #                           rec_method, rec_period=NULL, rec_power=NULL, rec_rate=NULL, rec_duration=NULL,
+    #                           type_one_error = NULL, N = 50, M = 50)
 
 
-                        # Perform looks at different Information Fractions
-                        finalDF <- CensFunc(dataCombined, numEvents)
-
-                        test <- survdiff(Surv(survival_time, status) ~ group, data = finalDF$dataCombined)
-                        coxmodel <- coxph(Surv(survival_time, status) ~ group, data = finalDF$dataCombined)
-                        deltad <- as.numeric(exp(coef(coxmodel)))
-
-                        BPPOutcome <- BPPFunc(dataCombined, numPatients, numEvents * IFBayesian, numEvents, recTime, tEffBayesian, elicitedDists)
-
-                        Success <- (test$chisq > qchisq(0.95, 1) & deltad<1)
-
-                        return(list(BPP = BPPOutcome$BPP, Success = Success, propEffect = BPPOutcome$propEffect))
-                      }
-
-    stopCluster(cl)  # Stop the cluster
-
-    BPPVec <- data.frame(BPP = unlist(BPPVec[seq(1, length(BPPVec), by = 3)]),
-                         Success = unlist(BPPVec[seq(2, length(BPPVec), by = 3)]),
-                         propEffect = unlist(BPPVec[seq(3, length(BPPVec), by = 3)]))
+      function_call_Bayesian <- reactive({
+        n_c <- (input$numofpatients*input$ControlRatio)/(sum(input$ControlRatio+input$TreatmentRatio))
+        n_t <- (input$numofpatients*input$TreatmentRatio)/(sum(input$ControlRatio+input$TreatmentRatio))
 
 
-    return(list(BPPVec = BPPVec))
 
-  })
+        base_call <- paste0("calc_BPP_hist(n_c = ",
+                            paste(round(n_c), collapse = ", "),
+                            ", \n n_t = ",
+                            paste(round(n_t), collapse = ", "),
+                            ", \n control_dist = \"",
+                            input$ControlDist,
+                            "\"")
 
-  observeEvent(input$calcBayesian, {
+        if (input$ControlDist=="Exponential"){
+          base_call <- paste0(base_call,
+                              ", \n control_parameters = \"",
+                              input$ExpChoice,
+                              "\"")
+          if (input$ExpChoice=="Fixed"){
+            base_call <- paste0(base_call,
+                                ", \n fixed_parameters_type = \"",
+                                input$ExpRateorTime,
+                                "\"")
+            if (input$ExpRateorTime == "Parameter"){
+              base_call <-  paste0(base_call, ", \n lambda_c = ",
+                                   input$ExpRate)
+            } else if (input$ExpRateorTime == "Landmark"){
+              base_call <-  paste0(base_call, ", \n t1 = ",
+                                   input$ExpTime,
+                                   ", \n surv_t1 = ",
+                                   input$ExpSurv)
+            }
+          }
 
-    shinyjs::show("checkBayesian")
+          if (input$ExpChoice=="Distribution"){
+            base_call <-  paste0(base_call, ", \n t1 = ",
+                                 input$ExpSurvTime,
+                                 ", \n t1_Beta_a = ",
+                                 input$ExpBetaA,
+                                 ", \n t1_Beta_b = ",
+                                 input$ExpBetaB)
+          }
+        }
 
-    BPPVec <- bayesianFunc()
+        if (input$ControlDist == "Weibull"){
+          base_call <- paste0(base_call,
+                              ", \n control_parameters = \"",
+                              input$WeibullChoice,
+                              "\"")
+
+          if (input$WeibullChoice == "Fixed"){
+            base_call <- paste0(base_call,
+                                ", \n fixed_parameters_type = \"",
+                                input$WeibRateorTime,
+                                "\"")
+
+            if (input$WeibRateorTime == "Parameters"){
+              base_call <-  paste0(base_call, ", \n lambda_c = ",
+                                   input$WeibullScale,
+                                   ", \n gamma_c = ",
+                                   input$WeibullShape)
+            } else if (input$WeibRateorTime == "Landmark"){
+              base_call <-  paste0(base_call, ", \n t1 = ",
+                                   input$WeibullTime1,
+                                   ", \n t2 = ",
+                                   input$WeibullSurv1,
+                                   ", \n surv_t1 = ",
+                                   input$WeibullTime2,
+                                   ", \n surv_t2 = ",
+                                   input$WeibullSurv2)
+            }
+
+          } else if (input$WeibullChoice == "Distribution"){
+            base_call <-  paste0(base_call, ", \n t1 = ",
+                                 input$WeibullDistT1,
+                                 ", \n t2 = ",
+                                 input$WeibullDistT2,
+                                 ", \n t1_Beta_a = ",
+                                 input$WeibullDistS1BetaA,
+                                 ", \n t1_Beta_b = ",
+                                 input$WeibullDistS1BetaB,
+                                 ", \n diff_Beta_a = ",
+                                 input$WeibullDistDelta1BetaA,
+                                 ", \n diff_Beta_b = ",
+                                 input$WeibullDistDelta1BetaB)
+          }
+        }
+
+
+        base_call <- paste0(base_call,
+                            ", \n delay_time_SHELF = SHELF::fitdist(c(",
+                            input$TValues,
+                            "), probs = c(",
+                            input$TProbs,
+                            "), lower = ",
+                            strsplit(input$TLimits, ", ")[[1]][1],
+                            ", upper = ",
+                            strsplit(input$TLimits, ", ")[[1]][2],
+                            "), \n delay_time_dist = \"",
+                            input$TDist,
+                            "\", \n post_delay_HR_SHELF = SHELF::fitdist(c(",
+                            input$HRValues,
+                            "), probs = c(",
+                            input$HRProbs,
+                            "), lower = ",
+                            strsplit(input$HRLimits, ", ")[[1]][1],
+                            ", upper = ",
+                            strsplit(input$HRLimits, ", ")[[1]][2],
+                            "), \n post_delay_HR_dist = \"",
+                            input$HRDist,
+                            "\",  \n P_S = ",
+                            input$P_S,
+                            ", \n P_DTE = ",
+                            input$P_DTE,
+                            ", \n cens_events = ",
+                            input$censEvents,
+                            ", \n rec_method = \"",
+                            input$rec_method,
+                            "\"")
+
+
+        if (input$rec_method == "power"){
+          base_call <- paste0(base_call,
+                              ", \n rec_period = ",
+                              input$rec_period,
+                              ", \n rec_power = ",
+                              input$rec_power)
+        }
+        if (input$rec_method == "PWC"){
+          base_call <- paste0(base_call,
+                              ", \n rec_rate = ",
+                              input$rec_rate,
+                              ", \n rec_duration = ",
+                              input$rec_duration)
+        }
+
+
+
+
+        base_call <- paste0(base_call,
+                            ", \n nSims = ",
+                            input$nSamples,
+                            ", \n k = ",
+                            input$number_of_looks)
+
+
+
+        base_call <- paste0(base_call, ")")
+
+        return(base_call)
+
+      })
+
+    output$display_func_Bayesian <- renderText({
+      function_call_Bayesian()
+    })
+
+    calculate_Bayesian <- eventReactive(input$calcBayesian, {
+      call_string <- function_call_Bayesian()
+      result <- eval(parse(text = call_string))
+      return(result)
+    })
 
     output$BayesianPlot <- renderPlot({
-
-      # Plotting histogram colored by ColorVar
-      ggplot(BPPVec$BPPVec, aes(x = BPP, fill = Success)) +
-        geom_histogram(position = "identity", alpha = 0.5) +
-        scale_x_continuous(limits = c(0, 1)) + xlab("Bayesian Predictive Probability")
-
+      calculate_Bayesian()
     })
-
-
-    output$BayesianEffPlot <- renderPlot({
-
-      # Plotting histogram colored by ColorVar
-      ggplot(BPPVec$BPPVec, aes(x = propEffect, fill = Success)) +
-        geom_histogram(position = "identity", alpha = 0.5) +
-        scale_x_continuous(limits = c(0, 1)) + xlab("Proportion less than target effect")
-
-    })
-
-    output$BayesianBPPvTE <- renderPlot({
-
-      plot(BPPVec$BPPVec$BPP, BPPVec$BPPVec$propEffect, xlim = c(0,1), ylim = c(0,1),
-           xlab = "Bayesian Predictive Probability", ylab = "Proportion less than target effect")
-      abline(a = 0, b = 1, lty = 2)
-
-    })
-
-  })
 
 
 
