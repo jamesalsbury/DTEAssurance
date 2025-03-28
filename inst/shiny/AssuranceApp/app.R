@@ -16,7 +16,8 @@ library(shinyjs)
 library(nleqslv)
 # library(dplyr)
 library(shinyBS)
-library(DTEAssurance)
+remotes::install_github("jamesalsbury/DTEAssurance")
+
 
 ui <- fluidPage(
     withMathJax(),
@@ -1339,8 +1340,6 @@ ui <- fluidPage(
       n_c <- seq(10, (input$numofpatients*input$ControlRatio)/(sum(input$ControlRatio+input$TreatmentRatio)), length=input$nSampleSize)
       n_t <- seq(10, (input$numofpatients*input$TreatmentRatio)/(sum(input$ControlRatio+input$TreatmentRatio)), length=input$nSampleSize)
       n <- n_c+n_t
-
-      x <<- sapply(assOutput, `[[`, 2)
 
       assuranceDF <- data.frame(N = n, Ass = sapply(assOutput, `[[`, 1),
                                 LB = sapply(assOutput, `[[`, 2)[1,],
