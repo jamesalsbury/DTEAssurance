@@ -16,7 +16,7 @@ library(shinyjs)
 library(nleqslv)
 # library(dplyr)
 library(shinyBS)
-remotes::install_github("jamesalsbury/DTEAssurance")
+#remotes::install_github("jamesalsbury/DTEAssurance")
 
 
 ui <- fluidPage(
@@ -66,12 +66,15 @@ ui <- fluidPage(
                        ),
                        conditionalPanel(
                          condition = "input.ExpChoice == 'Distribution'",
-                         numericInput("ExpSurvTime", label = HTML(paste0("t",tags$sub("1"))), value = 12),
+                         selectInput("ExpDistChoice", "Choice", choices = c("Elicitation", "MCMC sample" = "MCMC"), selected = "Elicitation"),
+                         conditionalPanel(
+                           condition = "input.ExpDistChoice == 'Elicitation'",
+                        numericInput("ExpSurvTime", label = HTML(paste0("t",tags$sub("1"))), value = 12),
                          bsTooltip(id = "ExpSurvTime", title = "Time 1"),
                          fluidRow(
                            column(4,
                                   uiOutput("ExpDistText"),
-                                  bsTooltip(id = "ExpDistText", title = "The distribution of survival probability at time 1"),
+                                  bsTooltip(id = "ExpDistText", title = "The distribution of survival probability at time 1")
                            ),
                            column(8,
                                   div(style = "display: flex; align-items: center;",
@@ -86,6 +89,13 @@ ui <- fluidPage(
                          )
 
                        ),
+                       conditionalPanel(
+                         condition = "input.ExpDistChoice == 'MCMC'",
+                         fileInput("MCMC_upload", "Upload a CSV file", accept = ".csv"),
+                       )
+
+
+                     ),
                      ),
                      # Conditional UI for Weibull distribution
                      conditionalPanel(
@@ -302,7 +312,7 @@ ui <- fluidPage(
                  sidebarLayout(
                    sidebarPanel(
                      checkboxGroupInput("showfeedback", "Add to plot",
-                                        choices = c("Median survival line" = "median_line",
+                                        choices = c("Median survival probability" = "median_probability",
                                                     "95% CI for T" = "ci_t",
                                                     "CI for Treatment Curve (0.025 and 0.975)" = "ci_treatment_curve")),
                      hidden(numericInput("feedbackQuantile", "Uncertainty about the following survival quantile:", value = 0.5, min = 0, max = 1)),
@@ -311,6 +321,7 @@ ui <- fluidPage(
                    mainPanel(
                      plotOutput("plotFeedback"),
                      htmlOutput("medianSurvivalFeedback"),
+                     htmlOutput("CI_For_T_Feedback"),
                      htmlOutput("priorWorthFeedback"),
                      plotOutput("quantilePlot"),
                      htmlOutput("quantileFeedback")
@@ -377,9 +388,13 @@ ui <- fluidPage(
                      ),
                      conditionalPanel(
                        condition = "input.censType == 'Events'",
-                       numericInput("censEvents", "Number of events", value = 100)
+                       numericInput("censIF", "Information Fraction", value = 0.8)
                      ),
-                     selectInput("analysisType", label = "Analysis method", choices = c("Logrank test" = "LRT", "Fleming-Harrington test" = "FHT"), selected = "LRT"),
+                     selectInput("analysisType", label = "Analysis method",
+                                 choices = c("Logrank test" = "LRT",
+                                             "Fleming-Harrington test" = "FHT",
+                                             "Modestly-Weighted LRT" = "MW"),
+                                 selected = "LRT"),
                      conditionalPanel(
                        condition = "input.analysisType == 'FHT'",
                        fluidRow(
@@ -391,13 +406,51 @@ ui <- fluidPage(
                          )
                        )
                      ),
+                     conditionalPanel(
+                       condition = "input.analysisType == 'MW'",
+                       fluidRow(
+                         column(6,
+                                selectInput("MW_Parameter", label = "Parameter",
+                                            choices = c("T Star" = "t_star",
+                                                        "S Star" = "s_star"),
+                                            selected = "t_star")
+                         ),
+                         column(6,
+                                conditionalPanel(
+                                  condition = "input.MW_Parameter == 't_star'",
+                                  withMathJax(
+                                    numericInput("t_star", "\\( t^* \\)", value = 3, min = 0, max = 1)
+                                  )
+                                  ),
+                                conditionalPanel(
+                                  condition = "input.MW_Parameter == 's_star'",
+                                  withMathJax(
+                                    numericInput("s_star", " \\( s^* \\)", value=0.5, min=0, max = 1)
+                                  )
+                                ),
+                                ),
+                         )
+                       ),
                      radioButtons(
                        inputId = "test_type",
                        label = "Test:",
                        choices = c("One-sided" = "one.sided", "Two-sided" = "two.sided"),
                        selected = "one.sided"
                      ),
-                     numericInput("alphaLevel", "Alpha", value=0.05),
+                     numericInput("alphaLevel", paste0("Type I error (", "\u03B1", ")"), value = 0.025),
+                     fluidRow(
+                       column(6,
+                              checkboxInput("targetHRTF", "Target HR?", value = FALSE)
+                       ),
+                       column(6,
+                              conditionalPanel(
+                                condition = "input.targetHRTF == true",
+                                  numericInput("target_HR", "HR < ", value = 0.8, min = 0, max = 1)
+                              )
+                       )
+                     ),
+
+
                      numericInput("nSamples", "Number of simulations (per sample size)", value=250),
                      numericInput("nSampleSize", "Number of different sample sizes", value=10),
 
@@ -507,6 +560,12 @@ ui <- fluidPage(
 
     # Functions for the control tab ---------------------------------
 
+    MCMC_sample <- reactive({
+      req(input$MCMC_upload)  # Ensure file is uploaded
+      read.csv(input$MCMC_upload$datapath)  # Or read.csv(), depending on file type
+    })
+
+
     output$ExpDistText <- renderUI({
       HTML(paste0("S(", input$ExpSurvTime, ") ~ Beta("))
     })
@@ -540,16 +599,36 @@ ui <- fluidPage(
 
 
         } else if (input$ExpChoice == "Distribution") {
-          sampledLambda <- -log(rbeta(100, input$ExpBetaA, input$ExpBetaB)) / input$ExpSurvTime
-          controlTime <- seq(0, -log(0.05) / min(sampledLambda), length.out = 100)
 
-          survivalMatrix <- exp(-outer(sampledLambda, controlTime, "*")) # Vectorized calculation
-          medVec <- apply(survivalMatrix, 2, median)
-          UBVec <- apply(survivalMatrix, 2, quantile, 0.975)
-          LBVec <- apply(survivalMatrix, 2, quantile, 0.025)
+          if (input$ExpDistChoice == "Elicitation"){
+            sampledLambda <- -log(rbeta(100, input$ExpBetaA, input$ExpBetaB)) / input$ExpSurvTime
+            controlTime <- seq(0, -log(0.05) / min(sampledLambda), length.out = 100)
 
-          result$controlDF <- data.frame(controlTime = controlTime, medVec = medVec, UBVec = UBVec, LBVec = LBVec)
-          result$type <- "distribution"
+            survivalMatrix <- exp(-outer(sampledLambda, controlTime, "*")) # Vectorized calculation
+            medVec <- apply(survivalMatrix, 2, median)
+            UBVec <- apply(survivalMatrix, 2, quantile, 0.975)
+            LBVec <- apply(survivalMatrix, 2, quantile, 0.025)
+
+            result$controlDF <- data.frame(controlTime = controlTime, medVec = medVec, UBVec = UBVec, LBVec = LBVec)
+            result$type <- "distribution"
+
+          } else if (input$ExpDistChoice == "MCMC"){
+
+
+            sampledLambda <- sample(MCMC_sample()[,1], 500)
+            controlTime <- seq(0, -log(0.05) / quantile(sampledLambda, 0.05), length.out = 1000)
+
+            survivalMatrix <- exp(-outer(sampledLambda, controlTime, "*")) # Vectorized calculation
+            medVec <- apply(survivalMatrix, 2, median)
+            UBVec <- apply(survivalMatrix, 2, quantile, 0.975)
+            LBVec <- apply(survivalMatrix, 2, quantile, 0.025)
+
+            result$controlDF <- data.frame(controlTime = controlTime, medVec = medVec, UBVec = UBVec, LBVec = LBVec)
+            result$type <- "distribution"
+
+
+
+          }
         }
 
       } else if (input$ControlDist == "Weibull") {
@@ -727,7 +806,7 @@ ui <- fluidPage(
     treatmentSurvivalData <- reactive({
       # Initialize an empty list to hold output data
       result <- list()
-      nSamples <- 500
+      nSamples <- 2500
       # Calculate treatment survival data based on distribution type and input options
       if (input$ControlDist == "Exponential") {
         if (input$ExpChoice == "Fixed") {
@@ -953,7 +1032,7 @@ ui <- fluidPage(
 
       str1 <- ""
 
-      if ("median_line" %in% input$showfeedback){
+      if ("median_probability" %in% input$showfeedback){
 
         controlData <- controlSurvivalData()$controlDF
         treatmentData <- treatmentSurvivalData()$treatmentDF
@@ -978,9 +1057,23 @@ ui <- fluidPage(
 
     })
 
+    output$CI_For_T_Feedback <- renderUI({
+
+      str1 <- ""
+
+      if ("ci_t" %in% input$showfeedback){
+
+        str1 <- paste0("The 95% CI for T is:  (", round(treatmentSurvivalData()$lowerT,3), ",", round(treatmentSurvivalData()$upperT, 3), ")")
+
+      }
+
+      HTML(paste(str1, sep = '<br/>'))
+
+    })
+
     observe({
       # Define the common choices
-      common_choices <- c("Median survival line" = "median_line",
+      common_choices <- c("Median survival probability" = "median_probability",
                           "95% CI for T" = "ci_t",
                           "CI for Treatment Curve (0.025 and 0.975)" = "ci_treatment_curve")
 
@@ -1014,7 +1107,7 @@ ui <- fluidPage(
           ylim(0, 1) +
           xlab("Time") + ylab("Survival")
 
-       if ("median_line" %in% input$showfeedback){
+       if ("median_probability" %in% input$showfeedback){
          median_time_control <- approx(controlData$controlSurv, controlData$controlTime, xout = 0.5)$y
          median_time_treatment <- approx(treatmentData$medVec, treatmentData$controlTime, xout = 0.5)$y
          mediandf <- data.frame(x = seq(0, max(median_time_control, median_time_treatment), length=2), y = rep(0.5, 2))
@@ -1037,7 +1130,7 @@ ui <- fluidPage(
             geom_line(aes(y = LBVec), colour = "blue", linetype = "dashed")
 
 
-        if ("median_line" %in% input$showfeedback){
+        if ("median_probability" %in% input$showfeedback){
           median_time_control <- approx(controlData$medVec, controlData$controlTime, xout = 0.5)$y
           median_time_treatment <- approx(treatmentData$medVec, treatmentData$controlTime, xout = 0.5)$y
           mediandf <- data.frame(x = seq(0, max(median_time_control, median_time_treatment), length=2), y = rep(0.5, 2))
@@ -1146,8 +1239,10 @@ ui <- fluidPage(
     # Functions for the assurance tab ---------------------------------
 
     function_call <- reactive({
-      n_c <- seq(10, (input$numofpatients*input$ControlRatio)/(sum(input$ControlRatio+input$TreatmentRatio)), length=input$nSampleSize)
-      n_t <- seq(10, (input$numofpatients*input$TreatmentRatio)/(sum(input$ControlRatio+input$TreatmentRatio)), length=input$nSampleSize)
+      n <- seq(10, input$numofpatients, length = input$nSampleSize)
+      n_c <- n*(input$ControlRatio)/(sum(input$ControlRatio+input$TreatmentRatio))
+      n_t <- n*(input$TreatmentRatio)/(sum(input$ControlRatio+input$TreatmentRatio))
+
       base_call <- paste0("calc_dte_assurance(n_c = c(",
                           paste(round(n_c), collapse = ", "),
                           "), \n n_t = c(",
@@ -1178,12 +1273,25 @@ ui <- fluidPage(
         }
 
         if (input$ExpChoice=="Distribution"){
-          base_call <-  paste0(base_call, ", \n t1 = ",
-                               input$ExpSurvTime,
-                               ", \n t1_Beta_a = ",
-                               input$ExpBetaA,
-                               ", \n t1_Beta_b = ",
-                               input$ExpBetaB)
+
+
+          base_call <- paste0(base_call,
+                              ", \n control_distribution = \"",
+                              input$ExpDistChoice,
+                              "\"")
+          if (input$ExpDistChoice=="Elicitation"){
+            base_call <-  paste0(base_call, ", \n t1 = ",
+                                 input$ExpSurvTime,
+                                 ", \n t1_Beta_a = ",
+                                 input$ExpBetaA,
+                                 ", \n t1_Beta_b = ",
+                                 input$ExpBetaB)
+          } else if (input$ExpDistChoice=="MCMC"){
+            req(input$MCMC_upload)
+            base_call <-  paste0(base_call, ", \n MCMC_sample = MCMC_sample")
+
+          }
+
         }
       }
 
@@ -1269,8 +1377,8 @@ ui <- fluidPage(
 
       if (input$censType == "Events"){
         base_call <- paste0(base_call,
-                            ", \n cens_events = ",
-                            input$censEvents)
+                            ", \n cens_IF = ",
+                            input$censIF)
       }
 
       base_call <- paste0(base_call,
@@ -1307,16 +1415,40 @@ ui <- fluidPage(
 
       }
 
+      if (input$analysisType == "MW"){
+        if (input$MW_Parameter == "t_star"){
+          base_call <- paste0(base_call,
+                              ", \n t_star = ",
+                              input$t_star)
+        }
+
+        if (input$MW_Parameter == "s_star"){
+          base_call <- paste0(base_call,
+                              ", \n s_star = ",
+                              input$s_star)
+        }
+
+
+      }
+
 
       base_call <- paste0(base_call,
                           ", \n alternative = \"",
                           input$test_type,
                           "\", \n alpha = ",
-                          input$alphaLevel,
-                          ", \n nSims = ",
-                          input$nSamples)
+                          input$alphaLevel)
 
-      base_call <- paste0(base_call, ")")
+      if (input$targetHRTF){
+        base_call <- paste0(base_call,
+                            ", \n target_HR = ",
+                            input$target_HR)
+      }
+
+      base_call <- paste0(base_call,
+                          ", \n nSims = ",
+                          input$nSamples,
+                          ")")
+
 
       return(base_call)
 
@@ -1327,31 +1459,71 @@ ui <- fluidPage(
     })
 
 
-     calculateAssurance <- eventReactive(input$calcAssurance, {
-       call_string <- function_call()
-       result <- eval(parse(text = call_string))
+    calculateAssurance <- eventReactive(input$calcAssurance, {
+      call_string <- function_call()  # e.g. "assurance(MCMC_sample = MCMC_sample)"
+
+      # Create an environment with necessary objects
+      eval_env <- new.env()
+
+      if (input$ExpDistChoice=="MCMC"){
+        list2env(list(MCMC_sample = MCMC_sample()), envir = eval_env)
+      }
+
+
+      result <- tryCatch({
+        eval(parse(text = call_string), envir = eval_env)
+      }, error = function(e) {
+        showNotification(paste("Error:", e$message), type = "error")
+        NULL
+      })
+
       return(result)
-     })
+    })
+
 
     output$assurancePlot <- renderPlot({
 
       assOutput <- calculateAssurance()
 
-      n_c <- seq(10, (input$numofpatients*input$ControlRatio)/(sum(input$ControlRatio+input$TreatmentRatio)), length=input$nSampleSize)
-      n_t <- seq(10, (input$numofpatients*input$TreatmentRatio)/(sum(input$ControlRatio+input$TreatmentRatio)), length=input$nSampleSize)
-      n <- n_c+n_t
+      n <- seq(10, input$numofpatients, length = input$nSampleSize)
 
-      assuranceDF <- data.frame(N = n, Ass = sapply(assOutput, `[[`, 1),
-                                LB = sapply(assOutput, `[[`, 2)[1,],
-                                UB = sapply(assOutput, `[[`, 2)[2,])
+      if (input$targetHRTF){
+        assuranceDF <- data.frame(N = n,
+                                  Ass = sapply(assOutput, `[[`, 1),
+                                  LB = sapply(assOutput, `[[`, 2)[1,],
+                                  UB = sapply(assOutput, `[[`, 2)[2,],
+                                  Ass_Target = sapply(assOutput, `[[`, 3),
+                                  LB_Target = sapply(assOutput, `[[`, 4)[1,],
+                                  UB_Target = sapply(assOutput, `[[`, 4)[2,])
 
-      # Generate the plot using ggplot
-      ggplot(assuranceDF, aes(x = N)) +
-        geom_line(aes(y = Ass), colour = "blue")+
-        geom_line(aes(y = LB), colour = "blue", linetype = "dashed") +
-        geom_line(aes(y = UB), colour = "blue", linetype = "dashed") +
-        labs(x = "Number of Patients", y = "Assurance") +
-        ylim(0, 1.05)
+        # Generate the plot using ggplot
+        ggplot(assuranceDF, aes(x = N)) +
+          geom_line(aes(y = Ass), colour = "blue")+
+          geom_line(aes(y = LB), colour = "blue", linetype = "dashed") +
+          geom_line(aes(y = UB), colour = "blue", linetype = "dashed") +
+          geom_line(aes(y = Ass_Target), colour = "red")+
+          geom_line(aes(y = LB_Target), colour = "red", linetype = "dashed") +
+          geom_line(aes(y = UB_Target), colour = "red", linetype = "dashed") +
+          labs(x = "Number of Patients", y = "Assurance") +
+          ylim(0, 1.05)
+
+
+
+      } else {
+        assuranceDF <- data.frame(N = n,
+                                  Ass = sapply(assOutput, `[[`, 1),
+                                  LB = sapply(assOutput, `[[`, 2)[1,],
+                                  UB = sapply(assOutput, `[[`, 2)[2,])
+
+        # Generate the plot using ggplot
+        ggplot(assuranceDF, aes(x = N)) +
+          geom_line(aes(y = Ass), colour = "blue")+
+          geom_line(aes(y = LB), colour = "blue", linetype = "dashed") +
+          geom_line(aes(y = UB), colour = "blue", linetype = "dashed") +
+          labs(x = "Number of Patients", y = "Assurance") +
+          ylim(0, 1.05)
+      }
+
 
     })
 

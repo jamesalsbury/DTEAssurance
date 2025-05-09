@@ -54,16 +54,16 @@ sim_dte <- function(n_c, n_t, lambda_c, delay_time, post_delay_HR, dist = "Expon
 #'
 #' @param data An uncensored dataframe
 #' @param cens_method Method of censoring, must be either "Time" (default) or "Events"
-#' @param cens_events Number of events at which you wish to perform the censoring
+#' @param cens_IF Information Fraction at which you wish to perform the censoring
 #' @param cens_time Time at which you wish to perform the censoring
-#' @return A list: censored dataframe, cens_events, cens_time and sample size
+#' @return A list: censored dataframe, cens_IF, cens_time and sample size
 #' @export
 
-cens_data <- function(data, cens_method = "Time", cens_events = NULL, cens_time = NULL){
+cens_data <- function(data, cens_method = "Time", cens_IF = NULL, cens_time = NULL){
 
   if (cens_method=="Events"){
     data <- data[order(data$pseudo_time),]
-    cens_time <- data$pseudo_time[cens_events]
+    cens_time <- data$pseudo_time[nrow(data)*cens_IF]
   }
 
   data$status <- data$pseudo_time <= cens_time
@@ -75,7 +75,7 @@ cens_data <- function(data, cens_method = "Time", cens_events = NULL, cens_time 
                                data$time)
 
   return(list(data = data,
-              cens_events = cens_events,
+              cens_IF = cens_IF,
               cens_time = cens_time,
               sample_size = nrow(data)))
 }
@@ -87,12 +87,14 @@ cens_data <- function(data, cens_method = "Time", cens_events = NULL, cens_time 
 #' @param control_dist Distribution of control group, must be one of "Exponential" (default) or "weibull"
 #' @param control_parameters The parameters for the control group are either "Fixed" (default) or "Distribution"
 #' @param fixed_parameters_type The fixed parameters are either a "Parameters" (default) or "Landmark"
+#' @param control_distribution Control parameters will be parameterised through "Elicitation" (default) or a "MCMC_sample"
 #' @param lambda_c Control group parameter
 #' @param gamma_c Control group parameter
 #' @param t1 Time 1
 #' @param t2 Time 2
 #' @param surv_t1 Survival probability at time 1
 #' @param surv_t2 Survival probability at time 2
+#' @param MCMC_sample A MCMC sample for the control parameters
 #' @param t1_Beta_a Hyperparameter a for the Beta distribution for the survival probability at time 1
 #' @param t1_Beta_b Hyperparameter a for the Beta distribution for the survival probability at time 1
 #' @param diff_Beta_a Hyperparameter a for the Beta distribution for the difference in survival probabilities (t2-t1)
@@ -104,7 +106,7 @@ cens_data <- function(data, cens_method = "Time", cens_events = NULL, cens_time 
 #' @param P_S Probability of the survival curves separating
 #' @param P_DTE Probability of the survival curves being subject to a DTE, given they separate
 #' @param cens_method Method of censoring, must be either "Time" (default) or "Events"
-#' @param cens_events Number of events at which you wish to perform the censoring (must be less than n_c + n_t)
+#' @param cens_IF Information Fraction at which you wish to perform the censoring
 #' @param cens_time Time at which you wish to perform the censoring
 #' @param rec_method Recruitment method, must be one of "power" or "PWC" (piecewise constant)
 #' @param rec_period Parameter used to model recruitment according to power model
@@ -116,6 +118,9 @@ cens_data <- function(data, cens_method = "Time", cens_events = NULL, cens_time 
 #' @param alternative String specifying the alternative hypothesis, must be one of "one.sided" or "two-sided" (default)
 #' @param rho Rho parameter for the Fleming-Harrington weighted log-rank test
 #' @param gamma Gamma parameter for the Fleming-Harrington weighted log-rank test
+#' @param t_star Parameter t^* in the modestly weighted test
+#' @param s_star Parameter s^* in the modestly weighted test
+#' @param target_HR Only claim success if the observed HR is less than this value
 #' @param nSims Number of simulations, default is 1000
 #'
 #' @return A list: Assurance value, 95% CI for assurance, Duration
@@ -124,8 +129,9 @@ cens_data <- function(data, cens_method = "Time", cens_events = NULL, cens_time 
 
 calc_dte_assurance <- function(n_c, n_t,
                                control_dist = "Exponential", control_parameters = "Fixed",
-                               fixed_parameters_type = "Parameter",
+                               fixed_parameters_type = "Parameter", control_distribution = "Elicitation",
                                lambda_c = NULL, gamma_c = NULL,
+                               MCMC_sample = NULL,
                                t1 = NULL, t2 = NULL,
                                surv_t1 = NULL, surv_t2 = NULL,
                                t1_Beta_a = NULL, t1_Beta_b = NULL,
@@ -133,9 +139,13 @@ calc_dte_assurance <- function(n_c, n_t,
                                delay_time_SHELF, delay_time_dist = "hist",
                                post_delay_HR_SHELF, post_delay_HR_dist = "hist",
                                P_S = 1, P_DTE = 0,
-                               cens_method = "Time", cens_events = NULL, cens_time = NULL,
+                               cens_method = "Time", cens_IF = NULL, cens_time = NULL,
                                rec_method, rec_period=NULL, rec_power=NULL, rec_rate=NULL, rec_duration=NULL,
-                               analysis_method = "LRT", alpha = 0.05, alternative = "one.sided", rho = 0, gamma = 0, nSims=1e3){
+                               analysis_method = "LRT", alpha = 0.05, alternative = "one.sided",
+                               rho = 0, gamma = 0,
+                               t_star = NULL, s_star = NULL,
+                               target_HR = NULL,
+                               nSims=1e3){
 
 
   numDiffPatients <- length(n_c)
@@ -143,6 +153,9 @@ calc_dte_assurance <- function(n_c, n_t,
   for (j in 1:numDiffPatients){
 
     assurance_vec <- rep(NA, nSims)
+    if (!is.null(target_HR)) {
+      assurance_targetHR_vec <- rep(NA, nSims)
+    }
     cens_vec <- rep(NA, nSims)
     ss_vec <- rep(NA, nSims)
 
@@ -156,7 +169,13 @@ calc_dte_assurance <- function(n_c, n_t,
             lambda_c <-  -log(surv_t1)/t1
           }
         } else if (control_parameters=="Distribution"){
-          lambda_c <- -log(rbeta(1, t1_Beta_a, t1_Beta_b)) / t1
+          if (control_distribution == "Elicitation"){
+            lambda_c <- -log(rbeta(1, t1_Beta_a, t1_Beta_b)) / t1
+          } else if (control_distribution == "MCMC"){
+            #print("yes")
+            lambda_c <- sample(MCMC_sample[[1]], 1)
+            #print(lambda_c)
+          }
         }
       } else if (control_dist=="Weibull"){
         if (control_parameters=="Fixed"){
@@ -226,22 +245,44 @@ calc_dte_assurance <- function(n_c, n_t,
       }
 
 
-      data_after_cens <- cens_data(data, cens_method, cens_events, cens_time)
+      data_after_cens <- cens_data(data, cens_method, cens_IF, cens_time)
       data <- data_after_cens$data
 
       cens_vec[i] <- data_after_cens$cens_time
       ss_vec[i] <- data_after_cens$sample_size
 
-      assurance_vec[i] <- survival_test(data, analysis_method, alternative, alpha = alpha, rho, gamma)
+
+      test <- survival_test(data, analysis_method,
+                            alternative, alpha = alpha,
+                            rho, gamma,
+                            t_star, s_star)
+
+      assurance_vec[i] <- test$Signif
+
+      if (!is.null(target_HR)) {
+        assurance_targetHR_vec[i] <- test$Signif * (test$deltad < target_HR)
+      }
 
     }
 
     assurance <- mean(assurance_vec)
 
-    calc_dte_assurance_list[[j]] <- list(assurance = assurance, CI_assurance = c(assurance - 1.96*sqrt(assurance*(1-assurance)/nSims),
-                                                                                 assurance + 1.96*sqrt(assurance*(1-assurance)/nSims)), duration = mean(cens_vec),
-                                         sample_size = mean(ss_vec))
+    if (!is.null(target_HR)) {
+      assurance_targetHR <- mean(assurance_targetHR_vec)
+    }
 
+
+    if (!is.null(target_HR)) {
+      calc_dte_assurance_list[[j]] <- list(assurance = assurance, CI_assurance = c(assurance - 1.96*sqrt(assurance*(1-assurance)/nSims),
+                                                                                   assurance + 1.96*sqrt(assurance*(1-assurance)/nSims)),
+                                           assurance_targetHR = assurance_targetHR, CI_assurance_targetHR = c(assurance_targetHR - 1.96*sqrt(assurance_targetHR*(1-assurance_targetHR)/nSims),
+                                                                                                              assurance_targetHR + 1.96*sqrt(assurance_targetHR*(1-assurance_targetHR)/nSims)),
+                                           duration = mean(cens_vec), sample_size = mean(ss_vec))
+    } else {
+      calc_dte_assurance_list[[j]] <- list(assurance = assurance, CI_assurance = c(assurance - 1.96*sqrt(assurance*(1-assurance)/nSims),
+                                                                                   assurance + 1.96*sqrt(assurance*(1-assurance)/nSims)),
+                                           duration = mean(cens_vec),sample_size = mean(ss_vec))
+    }
   }
 
   return(calc_dte_assurance_list = calc_dte_assurance_list)
@@ -258,11 +299,15 @@ calc_dte_assurance <- function(n_c, n_t,
 #' @param alternative String specifying the alternative hypothesis, must be one of "one.sided" or "two-sided" (default)
 #' @param rho Rho parameter for the Fleming-Harrington weighted log-rank test
 #' @param gamma Gamma parameter for the Fleming-Harrington weighted log-rank test
+#' @param t_star Parameter t^* in the modestly weighted test
+#' @param s_star Parameter s^* in the modestly weighted test
+#' @param target_HR
 #' @return An indicator of significance
 #' @export
 
 
-survival_test <- function(data, analysis_method = "LRT", alternative = "one.sided", alpha = 0.05, rho = 0, gamma = 0){
+survival_test <- function(data, analysis_method = "LRT", alternative = "one.sided", alpha = 0.05, rho = 0, gamma = 0,
+                          t_star = NULL, s_star = NULL){
 
   coxmodel <- coxph(Surv(survival_time, status)~group, data = data)
   deltad <- as.numeric(exp(coef(coxmodel)))
@@ -274,7 +319,7 @@ survival_test <- function(data, analysis_method = "LRT", alternative = "one.side
     if (alternative=="one.sided"){
       Signif <- (test$chisq > qchisq(1-alpha, 1) & deltad<1)
     } else {
-      Signif <- test$chisq > qchisq(1-alpha, 1)
+      Signif <- test$chisq > qchisq(1-alpha/2, 1)
     }
 
   } else if (analysis_method=="WLRT"){
@@ -282,11 +327,20 @@ survival_test <- function(data, analysis_method = "LRT", alternative = "one.side
     if (alternative=="one.sided"){
       Signif <- (test$test$Chisq > qchisq(1-alpha, 1) & deltad<1)
     } else {
-      Signif <- test$test$Chisq > qchisq(1-alpha, 1)
+      Signif <- test$test$Chisq > qchisq(1-alpha/2, 1)
+    }
+  } else if (analysis_method=="MW"){
+    test <- nphRCT::wlrt(Surv(survival_time, status)~group,
+                         data = data, method = "mw",
+                         t_star = t_star, s_star = s_star)
+    if (alternative=="one.sided"){
+      Signif <- test$z < qnorm(alpha)
+    } else {
+      Signif <- test$z < qnorm(alpha/2) | test$z > qnorm(1-alpha/2)
     }
   }
 
-  return(Signif)
+  return(list(Signif = Signif, deltad = deltad))
 
 }
 
@@ -398,7 +452,7 @@ add_recruitment_time <- function(data, rec_method,
 #' @param post_delay_HR_dist Distribution of the post-delay hazard ratio, "hist" is default. See SHELF help for more details
 #' @param P_S Probability of the survival curves separating
 #' @param P_DTE Probability of the survival curves being subject to a DTE, given they separate
-#' @param cens_events Number of events at which you wish to perform the censoring (must be less than n_c + n_t)
+#' @param cens_IF Number of events at which you wish to perform the censoring (must be less than n_c + n_t)
 #' @param rec_method Recruitment method, must be one of "power" or "PWC" (piecewise constant)
 #' @param rec_period Parameter used to model recruitment according to power model
 #' @param rec_power Parameter used to model recruitment according to power model
@@ -542,10 +596,9 @@ calc_dte_assurance_interim <- function(n_c, n_t,
         unique_IF_DF$`Z-Scores`[j] <- -(coef(summary(coxmodel))[, 4])
         unique_IF_DF$SS[j] <- data_after_cens$sample_size
         unique_IF_DF$Duration[j] <- data_after_cens$cens_time
-        #   #delta <- as.numeric(exp(coef(coxmodel)))
       }
 
-      #print(unique_IF_DF)
+
 
 
       for (l in 1:length(designList)){
