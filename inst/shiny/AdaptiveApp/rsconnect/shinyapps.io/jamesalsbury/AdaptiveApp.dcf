@@ -5,7 +5,7 @@ account: jamesalsbury
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 14367760
-bundleId: 10409861
+bundleId: 10409913
 url: https://jamesalsbury.shinyapps.io/AdaptiveApp/
 version: 1
 asMultiple: FALSE
