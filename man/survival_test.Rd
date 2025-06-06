@@ -10,7 +10,9 @@ survival_test(
   alternative = "one.sided",
   alpha = 0.05,
   rho = 0,
-  gamma = 0
+  gamma = 0,
+  t_star = NULL,
+  s_star = NULL
 )
 }
 \arguments{
@@ -25,6 +27,12 @@ survival_test(
 \item{rho}{Rho parameter for the Fleming-Harrington weighted log-rank test}
 
 \item{gamma}{Gamma parameter for the Fleming-Harrington weighted log-rank test}
+
+\item{t_star}{Parameter t^* in the modestly weighted test}
+
+\item{s_star}{Parameter s^* in the modestly weighted test}
+
+\item{target_HR}{Hazard Ratio that needs to be met for success}
 }
 \value{
 An indicator of significance

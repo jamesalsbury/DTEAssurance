@@ -29,4 +29,5 @@ Imports:
   rmarkdown, 
   nleqslv,
   graphics,
-  nph
+  nph,
+  nphRCT

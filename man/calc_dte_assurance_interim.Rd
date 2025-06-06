@@ -34,7 +34,9 @@ calc_dte_assurance_interim(
   rec_duration = NULL,
   alpha_spending = NULL,
   beta_spending = NULL,
-  IF_vec = NULL,
+  IF_list = NULL,
+  k = 2,
+  type_one_error = NULL,
   nSims = 1000
 )
 }
@@ -81,8 +83,6 @@ calc_dte_assurance_interim(
 
 \item{P_DTE}{Probability of the survival curves being subject to a DTE, given they separate}
 
-\item{cens_events}{Number of events at which you wish to perform the censoring (must be less than n_c + n_t)}
-
 \item{rec_method}{Recruitment method, must be one of "power" or "PWC" (piecewise constant)}
 
 \item{rec_period}{Parameter used to model recruitment according to power model}
@@ -97,9 +97,11 @@ calc_dte_assurance_interim(
 
 \item{beta_spending}{Cumulative beta spending}
 
-\item{IF_vec}{Vector of information fraction's}
-
 \item{nSims}{Number of simulations, default is 1000}
+
+\item{cens_IF}{Number of events at which you wish to perform the censoring (must be less than n_c + n_t)}
+
+\item{IF_vec}{Vector of information fraction's}
 }
 \description{
 Simulates a Group Sequential Trial for a trial with a Delayed Treatment Effect, with elicited priors

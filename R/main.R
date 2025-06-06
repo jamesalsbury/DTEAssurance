@@ -59,11 +59,11 @@ sim_dte <- function(n_c, n_t, lambda_c, delay_time, post_delay_HR, dist = "Expon
 #' @return A list: censored dataframe, cens_IF, cens_time and sample size
 #' @export
 
-cens_data <- function(data, cens_method = "Time", cens_IF = NULL, cens_time = NULL){
+cens_data <- function(data, cens_method = "Time", cens_events = NULL, cens_time = NULL){
 
   if (cens_method=="Events"){
     data <- data[order(data$pseudo_time),]
-    cens_time <- data$pseudo_time[nrow(data)*cens_IF]
+    cens_time <- data$pseudo_time[cens_events]
   }
 
   data$status <- data$pseudo_time <= cens_time
@@ -75,7 +75,7 @@ cens_data <- function(data, cens_method = "Time", cens_IF = NULL, cens_time = NU
                                data$time)
 
   return(list(data = data,
-              cens_IF = cens_IF,
+              cens_events = cens_events,
               cens_time = cens_time,
               sample_size = nrow(data)))
 }
@@ -301,7 +301,7 @@ calc_dte_assurance <- function(n_c, n_t,
 #' @param gamma Gamma parameter for the Fleming-Harrington weighted log-rank test
 #' @param t_star Parameter t^* in the modestly weighted test
 #' @param s_star Parameter s^* in the modestly weighted test
-#' @param target_HR
+#' @param target_HR Hazard Ratio that needs to be met for success
 #' @return An indicator of significance
 #' @export
 
@@ -462,6 +462,7 @@ add_recruitment_time <- function(data, rec_method,
 #' @param beta_spending Cumulative beta spending
 #' @param IF_vec Vector of information fraction's
 #' @param nSims Number of simulations, default is 1000
+#' @export
 
 calc_dte_assurance_interim <- function(n_c, n_t,
                                        control_dist = "Exponential", control_parameters = "Fixed",

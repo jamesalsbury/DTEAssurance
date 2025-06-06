@@ -11,12 +11,12 @@ cens_data(data, cens_method = "Time", cens_events = NULL, cens_time = NULL)
 
 \item{cens_method}{Method of censoring, must be either "Time" (default) or "Events"}
 
-\item{cens_events}{Number of events at which you wish to perform the censoring}
-
 \item{cens_time}{Time at which you wish to perform the censoring}
+
+\item{cens_IF}{Information Fraction at which you wish to perform the censoring}
 }
 \value{
-A list: censored dataframe, cens_events, cens_time and sample size
+A list: censored dataframe, cens_IF, cens_time and sample size
 }
 \description{
 Censor a survival data set

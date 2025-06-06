@@ -10,8 +10,10 @@ calc_dte_assurance(
   control_dist = "Exponential",
   control_parameters = "Fixed",
   fixed_parameters_type = "Parameter",
+  control_distribution = "Elicitation",
   lambda_c = NULL,
   gamma_c = NULL,
+  MCMC_sample = NULL,
   t1 = NULL,
   t2 = NULL,
   surv_t1 = NULL,
@@ -27,7 +29,7 @@ calc_dte_assurance(
   P_S = 1,
   P_DTE = 0,
   cens_method = "Time",
-  cens_events = NULL,
+  cens_IF = NULL,
   cens_time = NULL,
   rec_method,
   rec_period = NULL,
@@ -39,6 +41,9 @@ calc_dte_assurance(
   alternative = "one.sided",
   rho = 0,
   gamma = 0,
+  t_star = NULL,
+  s_star = NULL,
+  target_HR = NULL,
   nSims = 1000
 )
 }
@@ -53,9 +58,13 @@ calc_dte_assurance(
 
 \item{fixed_parameters_type}{The fixed parameters are either a "Parameters" (default) or "Landmark"}
 
+\item{control_distribution}{Control parameters will be parameterised through "Elicitation" (default) or a "MCMC_sample"}
+
 \item{lambda_c}{Control group parameter}
 
 \item{gamma_c}{Control group parameter}
+
+\item{MCMC_sample}{A MCMC sample for the control parameters}
 
 \item{t1}{Time 1}
 
@@ -87,7 +96,7 @@ calc_dte_assurance(
 
 \item{cens_method}{Method of censoring, must be either "Time" (default) or "Events"}
 
-\item{cens_events}{Number of events at which you wish to perform the censoring (must be less than n_c + n_t)}
+\item{cens_IF}{Information Fraction at which you wish to perform the censoring}
 
 \item{cens_time}{Time at which you wish to perform the censoring}
 
@@ -110,6 +119,12 @@ calc_dte_assurance(
 \item{rho}{Rho parameter for the Fleming-Harrington weighted log-rank test}
 
 \item{gamma}{Gamma parameter for the Fleming-Harrington weighted log-rank test}
+
+\item{t_star}{Parameter t^* in the modestly weighted test}
+
+\item{s_star}{Parameter s^* in the modestly weighted test}
+
+\item{target_HR}{Only claim success if the observed HR is less than this value}
 
 \item{nSims}{Number of simulations, default is 1000}
 }
