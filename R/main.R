@@ -59,11 +59,16 @@ sim_dte <- function(n_c, n_t, lambda_c, delay_time, post_delay_HR, dist = "Expon
 #' @return A list: censored dataframe, cens_IF, cens_time and sample size
 #' @export
 
-cens_data <- function(data, cens_method = "Time", cens_events = NULL, cens_time = NULL){
+cens_data <- function(data, cens_method = "Time", cens_time = NULL, cens_IF = NULL, cens_events = NULL){
 
   if (cens_method=="Events"){
     data <- data[order(data$pseudo_time),]
     cens_time <- data$pseudo_time[cens_events]
+  }
+
+  if (cens_method=="IF"){
+    data <- data[order(data$pseudo_time),]
+    cens_time <- data$pseudo_time[nrow(data)*cens_IF]
   }
 
   data$status <- data$pseudo_time <= cens_time
@@ -105,9 +110,10 @@ cens_data <- function(data, cens_method = "Time", cens_events = NULL, cens_time 
 #' @param post_delay_HR_dist Distribution of the post-delay hazard ratio, "hist" is default. See SHELF help for more details
 #' @param P_S Probability of the survival curves separating
 #' @param P_DTE Probability of the survival curves being subject to a DTE, given they separate
-#' @param cens_method Method of censoring, must be either "Time" (default) or "Events"
-#' @param cens_IF Information Fraction at which you wish to perform the censoring
+#' @param cens_method Method of censoring, must be either "Time" (default), "Events" or "IF"
 #' @param cens_time Time at which you wish to perform the censoring
+#' @param cens_events Number of events at which you wish to perform the censoring
+#' @param cens_IF Information Fraction at which you wish to perform the censoring
 #' @param rec_method Recruitment method, must be one of "power" or "PWC" (piecewise constant)
 #' @param rec_period Parameter used to model recruitment according to power model
 #' @param rec_power Parameter used to model recruitment according to power model
@@ -139,7 +145,7 @@ calc_dte_assurance <- function(n_c, n_t,
                                delay_time_SHELF, delay_time_dist = "hist",
                                post_delay_HR_SHELF, post_delay_HR_dist = "hist",
                                P_S = 1, P_DTE = 0,
-                               cens_method = "Time", cens_IF = NULL, cens_time = NULL,
+                               cens_method = "Time", cens_time = NULL, cens_IF = NULL, cens_events = NULL,
                                rec_method, rec_period=NULL, rec_power=NULL, rec_rate=NULL, rec_duration=NULL,
                                analysis_method = "LRT", alpha = 0.05, alternative = "one.sided",
                                rho = 0, gamma = 0,
@@ -172,9 +178,7 @@ calc_dte_assurance <- function(n_c, n_t,
           if (control_distribution == "Elicitation"){
             lambda_c <- -log(rbeta(1, t1_Beta_a, t1_Beta_b)) / t1
           } else if (control_distribution == "MCMC"){
-            #print("yes")
             lambda_c <- sample(MCMC_sample[[1]], 1)
-            #print(lambda_c)
           }
         }
       } else if (control_dist=="Weibull"){
@@ -244,8 +248,7 @@ calc_dte_assurance <- function(n_c, n_t,
                                      rec_rate, rec_duration)
       }
 
-
-      data_after_cens <- cens_data(data, cens_method, cens_IF, cens_time)
+      data_after_cens <- cens_data(data, cens_method, cens_time, cens_IF, cens_events)
       data <- data_after_cens$data
 
       cens_vec[i] <- data_after_cens$cens_time
