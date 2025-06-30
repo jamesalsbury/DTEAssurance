@@ -11,7 +11,8 @@ library(dplyr)
 library(plotly)
 # library(survminer)
 library(shinyBS)
-remotes::install_github("jamesalsbury/DTEAssurance")
+#remotes::install_github("jamesalsbury/DTEAssurance")
+library(DTEAssurance)
 
 rowCallback <- c(
   "function(row, data){",
