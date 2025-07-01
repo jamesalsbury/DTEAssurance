@@ -154,9 +154,35 @@ calc_dte_assurance <- function(n_c, n_t,
                                nSims=1e3){
 
 
+
+  if (cens_method=="Events"){
+    loopVec <- (n_c+n_t) > cens_events
+  } else {
+    loopVec <- rep(T, length(n_c))
+  }
+
   numDiffPatients <- length(n_c)
   calc_dte_assurance_list <- list()
   for (j in 1:numDiffPatients){
+
+    if (loopVec[j]==F){
+      if (!is.null(target_HR)){
+        calc_dte_assurance_list[[j]] <- list(assurance = NA,
+                                             CI_assurance = NA,
+                                             assurance_targetHR = NA,
+                                             CI_assurance_targetHR = NA,
+                                             duration = NA,
+                                             sample_size = NA)
+      } else {
+        calc_dte_assurance_list[[j]] <- list(assurance = NA,
+                                             CI_assurance = NA,
+                                             duration = NA,
+                                             sample_size = NA)
+      }
+
+
+    } else {
+
 
     assurance_vec <- rep(NA, nSims)
     if (!is.null(target_HR)) {
@@ -286,9 +312,11 @@ calc_dte_assurance <- function(n_c, n_t,
                                                                                    assurance + 1.96*sqrt(assurance*(1-assurance)/nSims)),
                                            duration = mean(cens_vec),sample_size = mean(ss_vec))
     }
+    }
   }
 
   return(calc_dte_assurance_list = calc_dte_assurance_list)
+
 
 }
 

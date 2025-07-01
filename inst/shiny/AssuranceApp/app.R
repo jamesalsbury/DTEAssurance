@@ -381,14 +381,18 @@ ui <- fluidPage(
         tabPanel("Calculating assurance",
                  sidebarLayout(
                    sidebarPanel = sidebarPanel(
-                     selectInput("censType", "Type of censoring", choices = c("Time", "Events"), selected = "Time"),
+                     selectInput("censType", "Type of censoring", choices = c("Time", "Events", "Information Fraction" = "IF"), selected = "Time"),
                      conditionalPanel(
                        condition = "input.censType == 'Time'",
-                       numericInput("censTime", "Censoring time", value = 60)
+                       numericInput("cens_time", "Censoring time", value = 60)
                      ),
                      conditionalPanel(
                        condition = "input.censType == 'Events'",
-                       numericInput("censIF", "Information Fraction", value = 0.8)
+                       numericInput("cens_events", "Number of events", value = 200)
+                     ),
+                     conditionalPanel(
+                       condition = "input.censType == 'IF'",
+                       numericInput("cens_IF", "Information Fraction", value = 0.8)
                      ),
                      selectInput("analysisType", label = "Analysis method",
                                  choices = c("Logrank test" = "LRT",
@@ -484,9 +488,8 @@ ui <- fluidPage(
     });"
                      ),
                      plotOutput("assurancePlot"),
-                     plotOutput("assuranceFeedbackPlot"),
-                     htmlOutput("assuranceText"),
-                     plotOutput("eventPlot")
+                     DTOutput("OC_table"),
+
                    )
                  ),
 
@@ -1372,13 +1375,19 @@ ui <- fluidPage(
       if (input$censType == "Time"){
         base_call <- paste0(base_call,
                             ", \n cens_time = ",
-                            input$censTime)
+                            input$cens_time)
       }
 
       if (input$censType == "Events"){
         base_call <- paste0(base_call,
+                            ", \n cens_events = ",
+                            input$cens_events)
+      }
+
+      if (input$censType == "IF"){
+        base_call <- paste0(base_call,
                             ", \n cens_IF = ",
-                            input$censIF)
+                            input$cens_IF)
       }
 
       base_call <- paste0(base_call,
@@ -1485,16 +1494,20 @@ ui <- fluidPage(
 
       assOutput <- calculateAssurance()
 
+      myX <<- assOutput
+
       n <- seq(10, input$numofpatients, length = input$nSampleSize)
 
       if (input$targetHRTF){
+
         assuranceDF <- data.frame(N = n,
-                                  Ass = sapply(assOutput, `[[`, 1),
-                                  LB = sapply(assOutput, `[[`, 2)[1,],
-                                  UB = sapply(assOutput, `[[`, 2)[2,],
-                                  Ass_Target = sapply(assOutput, `[[`, 3),
-                                  LB_Target = sapply(assOutput, `[[`, 4)[1,],
-                                  UB_Target = sapply(assOutput, `[[`, 4)[2,])
+                                  Ass = sapply(assOutput, function(x) x$assurance),
+                                  LB = sapply(assOutput, function(x) if (!is.null(x$CI_assurance)) x$CI_assurance[1] else NA),
+                                  UB = sapply(assOutput, function(x) if (!is.null(x$CI_assurance)) x$CI_assurance[2] else NA),
+                                  Ass_Target = sapply(assOutput, function(x) x$assurance_targetHR),
+                                  LB_Target = sapply(assOutput, function(x) if (!is.null(x$CI_assurance_targetHR)) x$CI_assurance_targetHR[1] else NA),
+                                  UB_Target = sapply(assOutput, function(x) if (!is.null(x$CI_assurance_targetHR)) x$CI_assurance_targetHR[2] else NA))
+
 
         # Generate the plot using ggplot
         ggplot(assuranceDF, aes(x = N)) +
@@ -1511,9 +1524,10 @@ ui <- fluidPage(
 
       } else {
         assuranceDF <- data.frame(N = n,
-                                  Ass = sapply(assOutput, `[[`, 1),
-                                  LB = sapply(assOutput, `[[`, 2)[1,],
-                                  UB = sapply(assOutput, `[[`, 2)[2,])
+                                  Ass = sapply(assOutput, function(x) x$assurance),
+                                  LB = sapply(assOutput, function(x) if (!is.null(x$CI_assurance)) x$CI_assurance[1] else NA),
+                                  UB = sapply(assOutput, function(x) if (!is.null(x$CI_assurance)) x$CI_assurance[2] else NA))
+
 
         # Generate the plot using ggplot
         ggplot(assuranceDF, aes(x = N)) +
@@ -1523,6 +1537,23 @@ ui <- fluidPage(
           labs(x = "Number of Patients", y = "Assurance") +
           ylim(0, 1.05)
       }
+
+
+    })
+
+    output$OC_table <- renderDT({
+
+      assOutput <- calculateAssurance()
+
+      n <- seq(10, input$numofpatients, length = input$nSampleSize)
+
+      assuranceDF <- data.frame(Total_Sample_Size = n,
+                                Assurance = round(sapply(assOutput, function(x) x$assurance), 2),
+                                Average_Duration = round(sapply(assOutput, function(x) x$duration), 2),
+                                Average_Sample_Size = round(sapply(assOutput, function(x) x$sample_size), 2)
+      )
+
+      datatable(assuranceDF)
 
 
     })
