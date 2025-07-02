@@ -528,7 +528,7 @@ calc_dte_assurance_interim <- function(n_c, n_t,
         IF = info_rates,
         critValues = design$criticalValues,
         futBounds = design$futilityBounds,
-        power = rep(NA, nSims),
+        assurance = rep(NA, nSims),
         ss = rep(NA, nSims),
         duration = rep(NA, nSims),
         status = rep(NA, nSims)
@@ -536,6 +536,8 @@ calc_dte_assurance_interim <- function(n_c, n_t,
       )
 
     }
+
+    unique_IF <- sort(unique(unlist(lapply(strsplit(IF_list, ", "), as.numeric))))
 
     for (i in 1:nSims){
 
@@ -617,42 +619,43 @@ calc_dte_assurance_interim <- function(n_c, n_t,
       }
 
 
-      unique_IF <- sort(unique(unlist(lapply(strsplit(IF_list, ", "), as.numeric))))
-      #Need to censor the data set at all the different information fractions possible
+      unique_IF_DF <- data.frame(matrix(NA, nrow = length(unique_IF), ncol = 4))
+      unique_IF_DF[,1] <- unique_IF
+      colnames(unique_IF_DF) <- c("IF", "SS", "Duration", "Z-Score")
 
-      unique_IF_DF <- data.frame(IF = unique_IF, SS = NA, Duration = NA, `Z-Scores` = NA)
+
 
       for (j in 1:length(unique_IF)){
         data_after_cens <- cens_data(data, cens_method = "Events", cens_events = unique_IF_DF$IF[j]*cens_events)
         coxmodel <- coxph(Surv(survival_time, status) ~ group, data = data_after_cens$data)
-        unique_IF_DF$`Z-Scores`[j] <- -(coef(summary(coxmodel))[, 4])
+        unique_IF_DF$`Z-Score`[j] <- -(coef(summary(coxmodel))[, 4])
         unique_IF_DF$SS[j] <- data_after_cens$sample_size
         unique_IF_DF$Duration[j] <- data_after_cens$cens_time
       }
 
 
-
-
       for (l in 1:length(designList)){
         subset_table <- unique_IF_DF[unique_IF_DF$IF %in% designList[[l]]$IF,]
-        GSD_output <- group_sequential_decision(z_scores = subset_table$`Z-Scores` ,
+        GSD_output <- group_sequential_decision(z_scores = subset_table$`Z-Score` ,
                                                 critical_values = designList[[l]]$critValues,
                                                 futility_values = designList[[l]]$futBounds,
                                                 sample_sizes = subset_table$SS,
-                                                durations = subset_table$Duration)
+                                                durations = subset_table$Duration,
+                                                alpha_spending = alpha_spending[k])
 
 
-        designList[[l]]$power[i] <- GSD_output$successful
+        designList[[l]]$assurance[i] <- GSD_output$successful
         designList[[l]]$ss[i] <- GSD_output$sample_size
         designList[[l]]$duration[i] <- GSD_output$duration
         designList[[l]]$status[i] <- GSD_output$status
         designList[[l]]$IATimes[i] <- paste(subset_table$Duration, collapse = ", ")
+        designList[[l]]$final_success[i] <- GSD_output$final_success
       }
 
     }
 
     for (j in 1:length(designList)){
-      designList[[j]]$power_mean <- mean(designList[[j]]$power)
+      designList[[j]]$assurance_mean <- mean(designList[[j]]$assurance)
       designList[[j]]$ss_mean <- mean(designList[[j]]$ss)
       designList[[j]]$duration_mean <- mean(designList[[j]]$duration)
       designList[[j]]$eff_mean <- mean(grepl("Stopped for efficacy at IA", designList[[j]]$status))

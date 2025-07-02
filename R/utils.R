@@ -325,31 +325,33 @@ WieandRuleFunc <- function(dataCombined, numEventsRequired){
 
 }
 
-group_sequential_decision <- function(z_scores, critical_values, futility_values, sample_sizes, durations) {
+group_sequential_decision <- function(z_scores, critical_values, futility_values, sample_sizes, durations, alpha_spending) {
   num_stages <- length(z_scores)
 
   for (i in seq_len(num_stages - 1)) {  # Loop through all interim stages, not including the final one
     # Check futility if a futility boundary is provided
     if (!is.na(futility_values[i]) && z_scores[i] < futility_values[i]) {
       return(list(
-        status = paste("Stopped for futility at IA", i),
+        status = paste("Stop for Futility at IA", i),
         successful = FALSE,
         analysis = i,
         z_score = z_scores[i],
         sample_size = sample_sizes[i],
-        duration = durations[i]
+        duration = durations[i],
+        final_success = z_scores[num_stages] > qnorm(1-alpha_spending)
       ))
     }
 
     # Check efficacy if a critical value is provided
     if (!is.na(critical_values[i]) && z_scores[i] > critical_values[i]) {
       return(list(
-        status = paste("Stopped for efficacy at IA", i),
+        status = paste("Stop for Efficacy at IA", i),
         successful = TRUE,
         analysis = i,
         z_score = z_scores[i],
         sample_size = sample_sizes[i],
-        duration = durations[i]
+        duration = durations[i],
+        final_success = z_scores[num_stages] > qnorm(1-alpha_spending)
       ))
     }
   }
@@ -358,12 +360,13 @@ group_sequential_decision <- function(z_scores, critical_values, futility_values
   final_success <- z_scores[num_stages] > critical_values[num_stages]
 
   return(list(
-    status = if (final_success) "Successful at final analysis" else "Unsuccessful at final analysis",
+    status = if (final_success) "Successful at Final Analysis" else "Unsuccessful at Final Analysis",
     successful = final_success,
     analysis = num_stages,  # This is the final analysis
     z_score = z_scores[num_stages],
     sample_size = sample_sizes[num_stages],
-    duration = durations[num_stages]
+    duration = durations[num_stages],
+    final_success = z_scores[num_stages] > qnorm(1-alpha_spending)
   ))
 }
 

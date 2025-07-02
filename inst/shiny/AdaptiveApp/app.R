@@ -404,7 +404,9 @@ ui <- fluidPage(
                               hidden(selectizeInput("selected_metrics_sim_plot", "Selected Metrics",
                                                     choices = c("Assurance", "Duration", "Sample Size"), selected = c("Assurance", "Duration", "Sample Size"),
                                                     multiple = TRUE, options = list(maxItems = 2))),
-                              plotlyOutput("sim_plot")),
+                              #plotlyOutput("sim_plot"),
+                              plotOutput("first_barplot"),
+                              plotOutput("second_barplot"))
                    ),
 
                  )
@@ -1024,7 +1026,7 @@ server <- function(input, output, session) {
         sim_output_DF <- do.call(rbind, lapply(sim_output, function(x) {
           data.frame(
             `Information Fraction` = paste(x$IF, collapse = ", "),
-            Assurance = round(x$power_mean, 2),
+            Assurance = round(x$assurance_mean, 2),
             `Sample Size` = round(x$ss_mean, 1),
             Duration = round(x$duration_mean, 1),
             `Stop Early`= round(x$stop_mean, 2),
@@ -1078,7 +1080,7 @@ server <- function(input, output, session) {
         sim_output_DF <- do.call(rbind, lapply(sim_output, function(x) {
           data.frame(
             `Information Fraction` = paste(x$IF, collapse = ", "),
-            Assurance = round(x$power_mean, 2),
+            Assurance = round(x$assurance_mean, 2),
             `Sample Size` = round(x$ss_mean, 1),
             Duration = round(x$duration_mean, 1),
             `Stop Early`= round(x$stop_mean, 2),
@@ -1153,6 +1155,180 @@ server <- function(input, output, session) {
           )
 
       }
+
+    })
+
+    output$first_barplot <- renderPlot({
+      sim_output <- calculateGSDAssurance()
+
+      IF <- seq(input$IA_LB1, input$IA_UB1, by = input$IA_By1)
+      IF <- c(IF, 1)
+
+      outcomes <- c("Successful at Final Analysis", "Stop for Efficacy", "Stop for Futility", "Unsuccessful at Final Analysis")
+      outcome_colors <- setNames(c("green", "green", "red", "red"), outcomes)
+
+      IF_outcomes_mat <- data.frame(matrix(NA, ncol = length(IF), nrow = length(outcomes)))
+      colnames(IF_outcomes_mat) <- IF
+      rownames(IF_outcomes_mat) <- outcomes
+
+      for (i in 1:(length(IF)-1)) {
+        raw <- sim_output[[i]]$status
+
+        # Recode on the fly
+        cleaned <- dplyr::case_when(
+          grepl("Efficacy", raw) ~ "Stop for Efficacy",
+          grepl("Futility", raw) ~ "Stop for Futility",
+          grepl("Successful", raw) ~ "Successful at Final Analysis",
+          grepl("Unsuccessful", raw) ~ "Unsuccessful at Final Analysis",
+          TRUE ~ NA_character_
+        )
+
+        # Tabulate proportions
+        prop <- prop.table(table(factor(cleaned, levels = outcomes)))
+        IF_outcomes_mat[, i] <- prop
+      }
+
+      IF_outcomes_mat[, length(IF)] <- c(mean(sim_output[[1]]$final_success), 0, 0, 1 - mean(sim_output[[1]]$final_success))
+
+
+      # Adjust margins: c(bottom, left, top, right)
+      density_vals <- c(NA, 50, 50, NA)
+      angle_vals <- c(0, 0, 0, 0)
+      par(mar = c(5, 4, 4, 15))  # Increase right margin
+
+      barplot(as.matrix(IF_outcomes_mat),
+              beside = FALSE,
+              col = outcome_colors[outcomes],
+              density = density_vals,
+              angle = angle_vals,
+              xlab = "Information Fraction",
+              ylab = "Proportion",
+              main = "Outcomes at each IA")
+
+      legend("topright",
+             legend = outcomes,
+             fill = outcome_colors[outcomes],
+             cex = 0.6,
+             density = density_vals,
+             angle = angle_vals,
+             xpd = TRUE,  # Allows legend to plot outside plot area
+             inset = c(-0.5, 0))  # Adjust based on margin size
+
+
+    })
+
+    output$second_barplot <- renderPlot({
+      sim_output <- calculateGSDAssurance()
+
+      IF <- seq(input$IA_LB1, input$IA_UB1, by = input$IA_By1)
+      IF <- c(IF, 1)
+
+      outcomes_decisions <- c("Successful at Final Analysis", "Correctly stopped for Efficacy",
+                              "Incorrectly stopped for Efficacy", "Incorrectly stopped for Futility",
+                              "Correctly stopped for Futility", "Unsuccessful at Final Analysis")
+
+      outcome_decisions_colors <- setNames(c("green", "green", "green", "red", "red", "red"), outcomes_decisions)
+
+      IF_outcomes_mat <- data.frame(matrix(NA, ncol = length(IF), nrow = length(outcomes_decisions)))
+      colnames(IF_outcomes_mat) <- IF
+      rownames(IF_outcomes_mat) <- outcomes_decisions
+
+
+      for (i in seq_along(sim_output)) {
+        raw <- sim_output[[i]]$status
+
+        # Recode IA decision
+        decision <- dplyr::case_when(
+          grepl("Efficacy", raw) ~ "Stop for Efficacy",
+          grepl("Futility", raw) ~ "Stop for Futility",
+          grepl("Successful", raw) ~ "Successful at Final Analysis",
+          grepl("Unsuccessful", raw) ~ "Unsuccessful at Final Analysis",
+          TRUE ~ NA_character_
+        )
+
+        sim_output[[i]]$IA_Decision <- decision
+        sim_output[[i]]$IA_Correct <- decision  # Initialize
+
+        for (j in seq_along(decision)) {
+          if (decision[j] == "Stop for Efficacy") {
+            sim_output[[i]]$IA_Correct[j] <- if (sim_output[[i]]$final_success[j]) {
+              "Correctly stopped for Efficacy"
+            } else {
+              "Incorrectly stopped for Efficacy"
+            }
+          }
+          if (decision[j] == "Stop for Futility") {
+            sim_output[[i]]$IA_Correct[j] <- if (sim_output[[i]]$final_success[j]) {
+              "Incorrectly stopped for Futility"
+            } else {
+              "Correctly stopped for Futility"
+            }
+          }
+        }
+      }
+
+
+
+
+      for (i in 1:length(sim_output)){
+        IF_outcomes_mat[,i] <- prop.table(table(factor(myX[[i]]$IA_Correct, levels = outcomes_decisions)))
+      }
+
+
+      IF_outcomes_mat[, length(IF)] <- c(mean(sim_output[[1]]$final_success), 0, 0, 0, 0, 1 - mean(sim_output[[1]]$final_success))
+
+      #print("yes")
+
+      density_vals <- c(NA, 20, 50, 50, 20, NA)
+      angle_vals <- c(0, 45, -45, -45, 45, 0)
+
+      par(mar = c(5, 4, 4, 20))  # Increase right margin
+
+      # Get bar heights to determine where to draw lines
+      bar_heights <- apply(IF_outcomes_mat[1:3, ], 2, sum)
+
+
+      bar_positions <- barplot(as.matrix(IF_outcomes_mat),
+                               beside = FALSE,
+                               width = 1,  # Optional, but explicit
+                               col = outcome_decisions_colors[outcomes_decisions],
+                               density = density_vals,
+                               angle = angle_vals,
+                               xlab = "Information Fraction",
+                               ylab = "Proportion",
+                               main = "Proportion of Trial Outcomes at Different Information Fractions")
+
+
+
+      legend("topright",
+             legend = c(rev(outcomes_decisions), "Assurance"),
+             fill = c(rev(outcome_decisions_colors[outcomes_decisions]), NA),
+             border = c(rep("black", length(outcomes_decisions)), NA),
+             density = c(rev(density_vals), NA),
+             angle = c(rev(angle_vals), NA),
+             col = c(rep(NA, length(outcomes_decisions)), "black"),
+             cex = 0.6,
+             xpd = TRUE,
+             inset = c(-0.4, 0),
+             bty = "n")
+
+
+
+      # Add black separator lines between top and bottom outcome segments
+      segments(x0 = bar_positions - 0.5,  # left edge of each bar
+               x1 = bar_positions + 0.5,  # right edge
+               y0 = bar_heights,          # y position (cumulative height of top 3)
+               y1 = bar_heights,
+               col = "black",
+               lwd = 5)
+
+      # Add text labels just below the separator line
+      text(x = bar_positions,
+           y = bar_heights,  # Adjust this for spacing
+           labels = round(bar_heights, 2),
+           cex = 1,                # text size
+           pos = 1)                  # below the specified y (1 = below)
+
 
     })
 
