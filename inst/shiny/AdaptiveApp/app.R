@@ -401,11 +401,11 @@ ui <- fluidPage(
                               plotlyOutput("boundary_plot"),
                               br(), br(),
                               br(), br(),
-                              hidden(selectizeInput("selected_metrics_sim_plot", "Selected Metrics",
-                                                    choices = c("Assurance", "Duration", "Sample Size"), selected = c("Assurance", "Duration", "Sample Size"),
-                                                    multiple = TRUE, options = list(maxItems = 2))),
+                              # hidden(selectizeInput("selected_metrics_sim_plot", "Selected Metrics",
+                              #                       choices = c("Assurance", "Duration", "Sample Size"), selected = c("Assurance", "Duration", "Sample Size"),
+                              #                       multiple = TRUE, options = list(maxItems = 2))),
                               #plotlyOutput("sim_plot"),
-                              plotOutput("first_barplot"),
+                              #plotOutput("first_barplot"),
                               plotOutput("second_barplot"))
                    ),
 
@@ -968,29 +968,27 @@ server <- function(input, output, session) {
 
 
   output$error_spending_table <- renderRHandsontable({
-
     if (input$number_of_looks > 1){
-      k <- input$number_of_looks  # Set the desired number of rows
+      k <- input$number_of_looks
 
-      stage_names <- paste0("IA", 1:(k-1))
+      stage_names <- paste0("IA", 1:(k - 1))
       stage_names <- c(stage_names, "Final")
 
-
-      # Create the data frame with k rows
       initial_data <- data.frame(
         Stage = stage_names,
-        alphaspending = seq(0.01, 0.025, length.out = k),  # Example values
-        betaspending = seq(0.05, 0.1, length.out = k)      # Example values
+        alphaspending = seq(0.01, 0.025, length.out = k),
+        betaspending = seq(0.05, 0.1, length.out = k)
       )
 
       colnames(initial_data) <- c("Stage", "Alpha spending (cumulative)", "Beta spending (cumulative)")
 
-      rhandsontable(initial_data, rowHeaders = FALSE)  %>%
-        hot_col(col = "Stage", readOnly = TRUE)
+      rhandsontable(initial_data, rowHeaders = FALSE) %>%
+        hot_col("Stage", readOnly = TRUE) %>%
+        hot_col("Alpha spending (cumulative)", format = "0.0000") %>%  # 4 decimal places
+        hot_col("Beta spending (cumulative)", format = "0.0000")       # 4 decimal places
     }
-
-
   })
+
 
 
   observe({
@@ -1271,7 +1269,7 @@ server <- function(input, output, session) {
 
 
       for (i in 1:length(sim_output)){
-        IF_outcomes_mat[,i] <- prop.table(table(factor(myX[[i]]$IA_Correct, levels = outcomes_decisions)))
+        IF_outcomes_mat[,i] <- prop.table(table(factor(sim_output[[i]]$IA_Correct, levels = outcomes_decisions)))
       }
 
 
