@@ -394,19 +394,16 @@ ui <- fluidPage(
                               hidden(selectizeInput("selected_columns_sim_table", "Metrics to View",
                                                     choices = c("Assurance", "Duration", "Sample Size"), selected = c("Assurance", "Duration", "Sample Size"),
                                                     multiple = TRUE)),
-                              DTOutput("sim_table"),
-                              hidden(uiOutput("finalAssTable1LookText"))),
+                              DTOutput("sim_table")),
                      tabPanel("Plots",
-                              selectInput("BoundaryIA", "Choose the IF (to view)", choices = NULL),
+                              selectInput("Boundary_IA", "Choose the IF (to view)", choices = NULL),
                               plotlyOutput("boundary_plot"),
                               br(), br(),
-                              br(), br(),
-                              # hidden(selectizeInput("selected_metrics_sim_plot", "Selected Metrics",
-                              #                       choices = c("Assurance", "Duration", "Sample Size"), selected = c("Assurance", "Duration", "Sample Size"),
-                              #                       multiple = TRUE, options = list(maxItems = 2))),
-                              #plotlyOutput("sim_plot"),
-                              #plotOutput("first_barplot"),
-                              plotOutput("second_barplot"))
+
+                              hidden(selectizeInput("Barchart_IA", "Information Fractions to View",
+                                                    choices = NULL,
+                                                    multiple = T)),
+                              plotOutput("Prop_Barchart"))
                    ),
 
                  )
@@ -639,17 +636,15 @@ server <- function(input, output, session) {
       shinyjs::show("alpha_spending_one_look")
       shinyjs::hide("IA_inputs")
       shinyjs::hide("error_spending_table")
-      shinyjs::hide("BoundaryIA")
+      shinyjs::hide("Boundary_IA")
       shinyjs::hide("boundary_plot")
     } else {
       shinyjs::hide("alpha_spending_one_look")
       shinyjs::show("IA_inputs")
       shinyjs::show("error_spending_table")
-      shinyjs::show("BoundaryIA")
+      shinyjs::show("Boundary_IA")
       shinyjs::show("boundary_plot")
     }
-
-
 
   })
 
@@ -708,7 +703,10 @@ server <- function(input, output, session) {
 
     IF_list <- paste(IF_list, ", 1", sep = "")
 
-    updateSelectInput(session, "BoundaryIA", choices = IF_list)
+    updateSelectInput(session, "Boundary_IA", choices = IF_list)
+
+    updateSelectInput(session, "Barchart_IA", choices = IF_list)
+
   })
 
 
@@ -718,12 +716,12 @@ server <- function(input, output, session) {
     req(input$number_of_looks > 1)
 
     req(input$error_spending_table)
-    req(input$BoundaryIA)
+    req(input$Boundary_IA)
 
     values <- hot_to_r(input$error_spending_table)
 
     design <- getDesignGroupSequential(typeOfDesign = "asUser",
-                                         informationRates = as.numeric(input$BoundaryIA),
+                                         informationRates = as.numeric(input$Boundary_IA),
                                          userAlphaSpending = as.numeric(values[,2]),
                                          typeBetaSpending = "bsUser",
                                          userBetaSpending = as.numeric(values[,3]))
@@ -733,10 +731,10 @@ server <- function(input, output, session) {
     output$boundary_plot <- renderPlotly({
 
 
-         boundaryDFEff <- data.frame(IF = as.numeric(unlist(strsplit(input$BoundaryIA, ", "))),
+         boundaryDFEff <- data.frame(IF = as.numeric(unlist(strsplit(input$Boundary_IA, ", "))),
                                   zStat = design$criticalValues)
 
-        boundaryDFFut <- data.frame(IF = as.numeric(unlist(strsplit(input$BoundaryIA, ", "))),
+        boundaryDFFut <- data.frame(IF = as.numeric(unlist(strsplit(input$Boundary_IA, ", "))),
                                 zStat = c(design$futilityBounds, design$criticalValues[length(design$criticalValues)]))
 
         # Calculate dynamic y-axis limits
@@ -962,6 +960,7 @@ server <- function(input, output, session) {
     result <- eval(parse(text = call_string))
     shinyjs::show("selected_columns_sim_table")
     shinyjs::show("selected_metrics_sim_plot")
+    shinyjs::show("Barchart_IA")
     return(result)
   })
 
@@ -1156,67 +1155,11 @@ server <- function(input, output, session) {
 
     })
 
-    output$first_barplot <- renderPlot({
+
+    output$Prop_Barchart <- renderPlot({
       sim_output <- calculateGSDAssurance()
 
-      IF <- seq(input$IA_LB1, input$IA_UB1, by = input$IA_By1)
-      IF <- c(IF, 1)
-
-      outcomes <- c("Successful at Final Analysis", "Stop for Efficacy", "Stop for Futility", "Unsuccessful at Final Analysis")
-      outcome_colors <- setNames(c("green", "green", "red", "red"), outcomes)
-
-      IF_outcomes_mat <- data.frame(matrix(NA, ncol = length(IF), nrow = length(outcomes)))
-      colnames(IF_outcomes_mat) <- IF
-      rownames(IF_outcomes_mat) <- outcomes
-
-      for (i in 1:(length(IF)-1)) {
-        raw <- sim_output[[i]]$status
-
-        # Recode on the fly
-        cleaned <- dplyr::case_when(
-          grepl("Efficacy", raw) ~ "Stop for Efficacy",
-          grepl("Futility", raw) ~ "Stop for Futility",
-          grepl("Successful", raw) ~ "Successful at Final Analysis",
-          grepl("Unsuccessful", raw) ~ "Unsuccessful at Final Analysis",
-          TRUE ~ NA_character_
-        )
-
-        # Tabulate proportions
-        prop <- prop.table(table(factor(cleaned, levels = outcomes)))
-        IF_outcomes_mat[, i] <- prop
-      }
-
-      IF_outcomes_mat[, length(IF)] <- c(mean(sim_output[[1]]$final_success), 0, 0, 1 - mean(sim_output[[1]]$final_success))
-
-
-      # Adjust margins: c(bottom, left, top, right)
-      density_vals <- c(NA, 50, 50, NA)
-      angle_vals <- c(0, 0, 0, 0)
-      par(mar = c(5, 4, 4, 15))  # Increase right margin
-
-      barplot(as.matrix(IF_outcomes_mat),
-              beside = FALSE,
-              col = outcome_colors[outcomes],
-              density = density_vals,
-              angle = angle_vals,
-              xlab = "Information Fraction",
-              ylab = "Proportion",
-              main = "Outcomes at each IA")
-
-      legend("topright",
-             legend = outcomes,
-             fill = outcome_colors[outcomes],
-             cex = 0.6,
-             density = density_vals,
-             angle = angle_vals,
-             xpd = TRUE,  # Allows legend to plot outside plot area
-             inset = c(-0.5, 0))  # Adjust based on margin size
-
-
-    })
-
-    output$second_barplot <- renderPlot({
-      sim_output <- calculateGSDAssurance()
+      myX <<- sim_output
 
       IF <- seq(input$IA_LB1, input$IA_UB1, by = input$IA_By1)
       IF <- c(IF, 1)
@@ -1267,7 +1210,6 @@ server <- function(input, output, session) {
 
 
 
-
       for (i in 1:length(sim_output)){
         IF_outcomes_mat[,i] <- prop.table(table(factor(sim_output[[i]]$IA_Correct, levels = outcomes_decisions)))
       }
@@ -1275,7 +1217,6 @@ server <- function(input, output, session) {
 
       IF_outcomes_mat[, length(IF)] <- c(mean(sim_output[[1]]$final_success), 0, 0, 0, 0, 1 - mean(sim_output[[1]]$final_success))
 
-      #print("yes")
 
       density_vals <- c(NA, 20, 50, 50, 20, NA)
       angle_vals <- c(0, 45, -45, -45, 45, 0)
@@ -1285,6 +1226,7 @@ server <- function(input, output, session) {
       # Get bar heights to determine where to draw lines
       bar_heights <- apply(IF_outcomes_mat[1:3, ], 2, sum)
 
+      print(IF_outcomes_mat)
 
       bar_positions <- barplot(as.matrix(IF_outcomes_mat),
                                beside = FALSE,
@@ -1608,7 +1550,7 @@ server <- function(input, output, session) {
                     list(checkOneLookOptionsTables = input$checkOneLookOptionsTables,
                          checkOneLookOptionsPlots = input$checkOneLookOptionsPlots,
                          error_spending_table = input$error_spending_table,
-                         oneLookBoundaryIA = input$oneLookBoundaryIA,
+                         oneLookBoundary_IA = input$oneLookBoundary_IA,
                          oneLookFunc = oneLookFunc()))
 
       }
@@ -1619,7 +1561,7 @@ server <- function(input, output, session) {
                     list(checkTwoLooksOptionsTables = input$checkTwoLooksOptionsTables,
                          checkTwoLooksOptionsPlots = input$checkTwoLooksOptionsPlots,
                          spendingTwoLooks = input$spendingTwoLooks,
-                         twoLooksBoundaryIA = input$twoLooksBoundaryIA,
+                         twoLooksBoundary_IA = input$twoLooksBoundary_IA,
                          twoLooksFunc = twoLooksFunc()))
 
       }
