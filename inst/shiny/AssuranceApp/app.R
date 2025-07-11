@@ -17,6 +17,8 @@ library(nleqslv)
 # library(dplyr)
 library(shinyBS)
 #remotes::install_github("jamesalsbury/DTEAssurance")
+library(DT)
+
 
 
 ui <- fluidPage(
@@ -488,7 +490,7 @@ ui <- fluidPage(
     });"
                      ),
                      plotOutput("assurancePlot"),
-                     DTOutput("OC_table"),
+                     #DTOutput("OC_table"),
 
                    )
                  ),

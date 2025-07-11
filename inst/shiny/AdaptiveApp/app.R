@@ -705,7 +705,7 @@ server <- function(input, output, session) {
 
     updateSelectInput(session, "Boundary_IA", choices = IF_list)
 
-    updateSelectInput(session, "Barchart_IA", choices = IF_list)
+    updateSelectInput(session, "Barchart_IA", choices = IF_list, selected = IF_list)
 
   })
 
@@ -1159,10 +1159,10 @@ server <- function(input, output, session) {
     output$Prop_Barchart <- renderPlot({
       sim_output <- calculateGSDAssurance()
 
-      myX <<- sim_output
+      #myX <<- sim_output
 
-      IF <- seq(input$IA_LB1, input$IA_UB1, by = input$IA_By1)
-      IF <- c(IF, 1)
+      formatted_IF <- c(sapply(sim_output, function(x) toString(x$IF)), "1")
+
 
       outcomes_decisions <- c("Successful at Final Analysis", "Correctly stopped for Efficacy",
                               "Incorrectly stopped for Efficacy", "Incorrectly stopped for Futility",
@@ -1170,8 +1170,8 @@ server <- function(input, output, session) {
 
       outcome_decisions_colors <- setNames(c("green", "green", "green", "red", "red", "red"), outcomes_decisions)
 
-      IF_outcomes_mat <- data.frame(matrix(NA, ncol = length(IF), nrow = length(outcomes_decisions)))
-      colnames(IF_outcomes_mat) <- IF
+      IF_outcomes_mat <- data.frame(matrix(NA, ncol = length(formatted_IF), nrow = length(outcomes_decisions)))
+      colnames(IF_outcomes_mat) <- formatted_IF
       rownames(IF_outcomes_mat) <- outcomes_decisions
 
 
@@ -1215,8 +1215,9 @@ server <- function(input, output, session) {
       }
 
 
-      IF_outcomes_mat[, length(IF)] <- c(mean(sim_output[[1]]$final_success), 0, 0, 0, 0, 1 - mean(sim_output[[1]]$final_success))
+      IF_outcomes_mat[, length(formatted_IF)] <- c(mean(sim_output[[1]]$final_success), 0, 0, 0, 0, 1 - mean(sim_output[[1]]$final_success))
 
+      IF_outcomes_mat <- subset(IF_outcomes_mat, select = c(input$Barchart_IA, "1"))
 
       density_vals <- c(NA, 20, 50, 50, 20, NA)
       angle_vals <- c(0, 45, -45, -45, 45, 0)
@@ -1226,7 +1227,9 @@ server <- function(input, output, session) {
       # Get bar heights to determine where to draw lines
       bar_heights <- apply(IF_outcomes_mat[1:3, ], 2, sum)
 
-      print(IF_outcomes_mat)
+
+
+
 
       bar_positions <- barplot(as.matrix(IF_outcomes_mat),
                                beside = FALSE,
