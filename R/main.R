@@ -719,10 +719,28 @@ calc_BPP_hist <- function(n_c, n_t,
                           post_delay_HR_SHELF, post_delay_HR_dist = "hist",
                           P_S = 1, P_DTE = 0, cens_events = NULL, IF = NULL,
                           rec_method, rec_period=NULL, rec_power=NULL, rec_rate=NULL, rec_duration=NULL,
-                          type_one_error = NULL, N = 50, M = 50){
+                          alpha_spending = NULL, beta_spending = NULL, IF_list = NULL, k = 2,
+                          N = 50, M = 50){
 
 
   outerBPPVec <- rep(NA, N)
+
+  design <- getDesignGroupSequential(typeOfDesign = "asUser",
+                                     informationRates = IF_list,
+                                     userAlphaSpending = alpha_spending,
+                                     typeBetaSpending = "bsUser",
+                                     userBetaSpending = beta_spending)
+
+  #print(design)
+
+  designList <- list(
+    critValues = design$criticalValues,
+    futBounds = design$futilityBounds
+  )
+
+  print(designList)
+
+
 
   for (i in 1:N){
 
@@ -776,11 +794,25 @@ calc_BPP_hist <- function(n_c, n_t,
                                    rec_rate, rec_duration)
     }
 
+    #print(data)
 
-    data_after_cens <- cens_data(data, cens_method = "Events", cens_events = cens_events*IF)
-    data <- data_after_cens$data
+    if (IF_list[1] <= IF){
 
+      data_after_cens <- cens_data(data, cens_method = "Events", cens_events = cens_events*IF_list[1])
+      coxmodel <- coxph(Surv(survival_time, status) ~ group, data = data_after_cens$data)
+      Z_Score <- -(coef(summary(coxmodel))[, 4])
+
+      continue_Ind <- Z_Score > designList$futBounds & Z_Score < designList$critValues[1]
+
+      print(Z_Score)
+      print(continue_Ind)
+    } else {
+      print("no")
+    }
+
+    data = data_after_cens$data
     data <- data[order(data$group), ]
+
 
     #Choose the correct elicited distribution for bigT
     if (delay_time_dist == "beta") {
