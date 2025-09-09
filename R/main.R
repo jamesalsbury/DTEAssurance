@@ -6,7 +6,7 @@
 #' @param delay_time length of delay
 #' @param post_delay_HR the hazard ratio, once the treatment begins to take effect
 #' @param dist distribution of control distribution, must be one of "exponential" (default) or "weibull"
-#' @param gamma_c
+#' @param gamma_c gamma parameter in the Weibull distribution
 #'
 #' @return a DTE data set
 #' @export
@@ -14,7 +14,7 @@
 sim_dte <- function(n_c, n_t, lambda_c, delay_time, post_delay_HR, dist = "Exponential", gamma_c = NULL){
 
   #Simulate control data
-  u <- runif(n_c)
+  u <- stats::runif(n_c)
 
   if (dist == "Exponential"){
     control_times <- -log(u)/lambda_c
@@ -25,7 +25,7 @@ sim_dte <- function(n_c, n_t, lambda_c, delay_time, post_delay_HR, dist = "Expon
   }
 
   #Simulate treatment data
-  u <- runif(n_t)
+  u <- stats::runif(n_t)
   if (dist == "Exponential"){
     CP <- exp(-lambda_c*delay_time)
     treatment_times <- ifelse(u>CP,
@@ -56,6 +56,7 @@ sim_dte <- function(n_c, n_t, lambda_c, delay_time, post_delay_HR, dist = "Expon
 #' @param cens_method Method of censoring, must be either "Time" (default) or "Events"
 #' @param cens_IF Information Fraction at which you wish to perform the censoring
 #' @param cens_time Time at which you wish to perform the censoring
+#' @param cens_events Number of events at which you wish to perform the censoring
 #' @return A list: censored dataframe, cens_IF, cens_time and sample size
 #' @export
 
@@ -202,7 +203,7 @@ calc_dte_assurance <- function(n_c, n_t,
           }
         } else if (control_parameters=="Distribution"){
           if (control_distribution == "Elicitation"){
-            lambda_c <- -log(rbeta(1, t1_Beta_a, t1_Beta_b)) / t1
+            lambda_c <- -log(stats::rbeta(1, t1_Beta_a, t1_Beta_b)) / t1
           } else if (control_distribution == "MCMC"){
             lambda_c <- sample(MCMC_sample[[1]], 1)
           }
@@ -220,18 +221,18 @@ calc_dte_assurance <- function(n_c, n_t,
                 exp(-(t2*lambda)^k) - surv_t1)
             }
 
-            solution <- nleqslv(c(1, 1), fn = WeibFunc)
+            solution <- nleqslv::nleqslv(c(1, 1), fn = WeibFunc)
 
             lambda_c <- solution$x[1]
             gamma_c <- solution$x[2]
           }
         } else if (control_parameters=="Distribution"){
-          sampledS1to <- rbeta(1, t1_Beta_a, t1_Beta_b)
-          sampledDelta1 <- rbeta(1, diff_Beta_a, diff_Beta_b)
+          sampledS1to <- stats::rbeta(1, t1_Beta_a, t1_Beta_b)
+          sampledDelta1 <- stats::rbeta(1, diff_Beta_a, diff_Beta_b)
           sampledS1toPrime <- sampledS1to - sampledDelta1
 
           # Solve for lambda and gamma using sampled values
-          solution <- nleqslv(c(10, 1), function(params) {
+          solution <- nleqslv::nleqslv(c(10, 1), function(params) {
             lambda <- params[1]
             k <- params[2]
             c(exp(-(t1 / lambda)^k) - sampledS1to,
@@ -243,12 +244,12 @@ calc_dte_assurance <- function(n_c, n_t,
         }
       }
 
-      if (runif(1) > P_S){
+      if (stats::runif(1) > P_S){
         #Curves do not separate
         delay_time <- 0
         post_delay_HR <- 1
       } else {
-        if (runif(1) > P_DTE){
+        if (stats::runif(1) > P_DTE){
           #Curves separate with no delay
           delay_time <- 0
           post_delay_HR_sample <- SHELF::sampleFit(post_delay_HR_SHELF, n = 1)
@@ -332,7 +333,6 @@ calc_dte_assurance <- function(n_c, n_t,
 #' @param gamma Gamma parameter for the Fleming-Harrington weighted log-rank test
 #' @param t_star Parameter t^* in the modestly weighted test
 #' @param s_star Parameter s^* in the modestly weighted test
-#' @param target_HR Hazard Ratio that needs to be met for success
 #' @return An indicator of significance
 #' @export
 
@@ -340,34 +340,34 @@ calc_dte_assurance <- function(n_c, n_t,
 survival_test <- function(data, analysis_method = "LRT", alternative = "one.sided", alpha = 0.05, rho = 0, gamma = 0,
                           t_star = NULL, s_star = NULL){
 
-  coxmodel <- coxph(Surv(survival_time, status)~group, data = data)
-  deltad <- as.numeric(exp(coef(coxmodel)))
+  coxmodel <- survival::coxph(Surv(survival_time, status)~group, data = data)
+  deltad <- as.numeric(exp(stats::coef(coxmodel)))
 
   Signif <- 0
 
   if (analysis_method=="LRT"){
-    test <- survdiff(Surv(survival_time, status)~group, data = data)
+    test <- survival::survdiff(Surv(survival_time, status)~group, data = data)
     if (alternative=="one.sided"){
-      Signif <- (test$chisq > qchisq(1-alpha, 1) & deltad<1)
+      Signif <- (test$chisq > stats::qchisq(1-alpha, 1) & deltad<1)
     } else {
-      Signif <- test$chisq > qchisq(1-alpha/2, 1)
+      Signif <- test$chisq > stats::qchisq(1-alpha/2, 1)
     }
 
   } else if (analysis_method=="WLRT"){
     test <- nph::logrank.test(data$survival_time, data$status, data$group, rho = rho, gamma = gamma)
     if (alternative=="one.sided"){
-      Signif <- (test$test$Chisq > qchisq(1-alpha, 1) & deltad<1)
+      Signif <- (test$test$Chisq > stats::qchisq(1-alpha, 1) & deltad<1)
     } else {
-      Signif <- test$test$Chisq > qchisq(1-alpha/2, 1)
+      Signif <- test$test$Chisq > stats::qchisq(1-alpha/2, 1)
     }
   } else if (analysis_method=="MW"){
     test <- nphRCT::wlrt(Surv(survival_time, status)~group,
                          data = data, method = "mw",
                          t_star = t_star, s_star = s_star)
     if (alternative=="one.sided"){
-      Signif <- test$z < qnorm(alpha)
+      Signif <- test$z < stats::qnorm(alpha)
     } else {
-      Signif <- test$z < qnorm(alpha/2) | test$z > qnorm(1-alpha/2)
+      Signif <- test$z < stats::qnorm(alpha/2) | test$z > stats::qnorm(1-alpha/2)
     }
   }
 
@@ -483,7 +483,7 @@ add_recruitment_time <- function(data, rec_method,
 #' @param post_delay_HR_dist Distribution of the post-delay hazard ratio, "hist" is default. See SHELF help for more details
 #' @param P_S Probability of the survival curves separating
 #' @param P_DTE Probability of the survival curves being subject to a DTE, given they separate
-#' @param cens_IF Number of events at which you wish to perform the censoring (must be less than n_c + n_t)
+#' @param cens_events Number of events at which you wish to perform the censoring (must be less than n_c + n_t)
 #' @param rec_method Recruitment method, must be one of "power" or "PWC" (piecewise constant)
 #' @param rec_period Parameter used to model recruitment according to power model
 #' @param rec_power Parameter used to model recruitment according to power model
@@ -491,7 +491,9 @@ add_recruitment_time <- function(data, rec_method,
 #' @param rec_duration Parameter used to model recruitment according to piecewise constant model
 #' @param alpha_spending Cumulative alpha spending
 #' @param beta_spending Cumulative beta spending
-#' @param IF_vec Vector of information fraction's
+#' @param IF_list Vector of information fractions - must be in the format: `c("0.25, 1", "0.5, 1", "0.75, 1")'
+#' @param k Number of stages
+#' @param type_one_error Alpha (if k = 1)
 #' @param nSims Number of simulations, default is 1000
 #' @export
 
@@ -518,11 +520,11 @@ calc_dte_assurance_interim <- function(n_c, n_t,
 
       info_rates <- as.numeric(strsplit(IF_list[j], ", ")[[1]])
 
-      design <- getDesignGroupSequential(typeOfDesign = "asUser",
+      design <- rpact::getDesignGroupSequential(typeOfDesign = "asUser",
                                          informationRates = info_rates,
                                          userAlphaSpending = alpha_spending,
                                          typeBetaSpending = "bsUser",
-                                         userBetaSpending = beta_spending)
+                                         userbetaSpending = beta_spending)
 
       designList[[j]] <- list(
         IF = info_rates,
@@ -549,7 +551,7 @@ calc_dte_assurance_interim <- function(n_c, n_t,
             lambda_c <-  -log(surv_t1)/t1
           }
         } else if (control_parameters=="Distribution"){
-          lambda_c <- -log(rbeta(1, t1_Beta_a, t1_Beta_b)) / t1
+          lambda_c <- -log(stats::rbeta(1, t1_Beta_a, t1_Beta_b)) / t1
         }
       } else if (control_dist=="Weibull"){
         if (control_parameters=="Fixed"){
@@ -564,18 +566,18 @@ calc_dte_assurance_interim <- function(n_c, n_t,
                 exp(-(t2*lambda)^k) - surv_t1)
             }
 
-            solution <- nleqslv(c(1, 1), fn = WeibFunc)
+            solution <- nleqslv::nleqslv(c(1, 1), fn = WeibFunc)
 
             lambda_c <- solution$x[1]
             gamma_c <- solution$x[2]
           }
         } else if (control_parameters=="Distribution"){
-          sampledS1to <- rbeta(1, t1_Beta_a, t1_Beta_b)
-          sampledDelta1 <- rbeta(1, diff_Beta_a, diff_Beta_b)
+          sampledS1to <- stats::rbeta(1, t1_Beta_a, t1_Beta_b)
+          sampledDelta1 <- stats::rbeta(1, diff_Beta_a, diff_Beta_b)
           sampledS1toPrime <- sampledS1to - sampledDelta1
 
           # Solve for lambda and gamma using sampled values
-          solution <- nleqslv(c(10, 1), function(params) {
+          solution <- nleqslv::nleqslv(c(10, 1), function(params) {
             lambda <- params[1]
             k <- params[2]
             c(exp(-(t1 / lambda)^k) - sampledS1to,
@@ -587,12 +589,12 @@ calc_dte_assurance_interim <- function(n_c, n_t,
         }
       }
 
-      if (runif(1) > P_S){
+      if (stats::runif(1) > P_S){
         #Curves do not separate
         delay_time <- 0
         post_delay_HR <- 1
       } else {
-        if (runif(1) > P_DTE){
+        if (stats::runif(1) > P_DTE){
           #Curves separate with no delay
           delay_time <- 0
           post_delay_HR_sample <- SHELF::sampleFit(post_delay_HR_SHELF, n = 1)
@@ -627,8 +629,8 @@ calc_dte_assurance_interim <- function(n_c, n_t,
 
       for (j in 1:length(unique_IF)){
         data_after_cens <- cens_data(data, cens_method = "Events", cens_events = unique_IF_DF$IF[j]*cens_events)
-        coxmodel <- coxph(Surv(survival_time, status) ~ group, data = data_after_cens$data)
-        unique_IF_DF$`Z-Score`[j] <- -(coef(summary(coxmodel))[, 4])
+        coxmodel <- survival::coxph(Surv(survival_time, status) ~ group, data = data_after_cens$data)
+        unique_IF_DF$`Z-Score`[j] <- -(stats::coef(summary(coxmodel))[, 4])
         unique_IF_DF$SS[j] <- data_after_cens$sample_size
         unique_IF_DF$Duration[j] <- data_after_cens$cens_time
       }
@@ -709,6 +711,40 @@ calc_dte_assurance_interim <- function(n_c, n_t,
 
 }
 
+#'  Calculates the Bayesian Predictive Probability for a trial with a Delayed Treatment Effect
+#'
+#' @param n_c Number of patients in the control group
+#' @param n_t Number of patients in the treatment group
+#' @param control_dist Distribution of control group, must be one of "Exponential" (default) or "weibull"
+#' @param t1 Time 1
+#' @param t2 Time 2
+#' @param t1_Beta_a Hyperparameter a for the Beta distribution for the survival probability at time 1
+#' @param t1_Beta_b Hyperparameter a for the Beta distribution for the survival probability at time 1
+#' @param diff_Beta_a Hyperparameter a for the Beta distribution for the difference in survival probabilities (t2-t1)
+#' @param diff_Beta_b Hyperparameter b for the Beta distribution for the difference in survival probabilities (t2-t1)
+#' @param delay_time_SHELF A SHELF object, beliefs about the delay time
+#' @param delay_time_dist Distribution of the delay time, "hist" is default. See SHELF help for more details
+#' @param post_delay_HR_SHELF A SHELF object, beliefs about the post-delay hazard ratio
+#' @param post_delay_HR_dist Distribution of the post-delay hazard ratio, "hist" is default. See SHELF help for more details
+#' @param P_S Probability of the survival curves separating
+#' @param P_DTE Probability of the survival curves being subject to a DTE, given they separate
+#' @param cens_events Number of events at which you wish to perform the censoring (must be less than n_c + n_t)
+#' @param IF Information fraction at which BPP is calculated
+#' @param rec_method Recruitment method, must be one of "power" or "PWC" (piecewise constant)
+#' @param rec_period Parameter used to model recruitment according to power model
+#' @param rec_power Parameter used to model recruitment according to power model
+#' @param rec_rate Parameter used to model recruitment according to piecewise constant model
+#' @param rec_duration Parameter used to model recruitment according to piecewise constant model
+#' @param alpha_spending Cumulative alpha spending
+#' @param beta_spending Cumulative beta spending
+#' @param IF_list Vector of information fractions - must be in the format: `c("0.25, 1", "0.5, 1", "0.75, 1")'
+#' @param k Number of stages
+#' @param N Number of trials simulated (default is 50)
+#' @param M Number of samples from the posterior (default is 50)
+#'
+
+#' @export
+
 
 calc_BPP_hist <- function(n_c, n_t,
                           control_dist = "Exponential",
@@ -725,11 +761,11 @@ calc_BPP_hist <- function(n_c, n_t,
 
   outerBPPVec <- rep(NA, N)
 
-  design <- getDesignGroupSequential(typeOfDesign = "asUser",
+  design <- rpact::getDesignGroupSequential(typeOfDesign = "asUser",
                                      informationRates = IF_list,
                                      userAlphaSpending = alpha_spending,
                                      typeBetaSpending = "bsUser",
-                                     userBetaSpending = beta_spending)
+                                     userbetaSpending = beta_spending)
 
 
   designList <- list(
@@ -741,14 +777,14 @@ calc_BPP_hist <- function(n_c, n_t,
   for (i in 1:N){
 
     if (control_dist=="Exponential"){
-      lambda_c <- -log(rbeta(1, t1_Beta_a, t1_Beta_b)) / t1
+      lambda_c <- -log(stats::rbeta(1, t1_Beta_a, t1_Beta_b)) / t1
     } else if (control_dist=="Weibull"){
-      sampledS1to <- rbeta(1, t1_Beta_a, t1_Beta_b)
-      sampledDelta1 <- rbeta(1, diff_Beta_a, diff_Beta_b)
+      sampledS1to <- stats::rbeta(1, t1_Beta_a, t1_Beta_b)
+      sampledDelta1 <- stats::rbeta(1, diff_Beta_a, diff_Beta_b)
       sampledS1toPrime <- sampledS1to - sampledDelta1
 
       # Solve for lambda and gamma using sampled values
-      solution <- nleqslv(c(10, 1), function(params) {
+      solution <- nleqslv::nleqslv(c(10, 1), function(params) {
         lambda <- params[1]
         k <- params[2]
         c(exp(-(t1 / lambda)^k) - sampledS1to,
@@ -759,12 +795,12 @@ calc_BPP_hist <- function(n_c, n_t,
       gamma_c <- solution$x[2]
     }
 
-    if (runif(1) > P_S){
+    if (stats::runif(1) > P_S){
       #Curves do not separate
       delay_time <- 0
       post_delay_HR <- 1
     } else {
-      if (runif(1) > P_DTE){
+      if (stats::runif(1) > P_DTE){
         #Curves separate with no delay
         delay_time <- 0
         post_delay_HR_sample <- SHELF::sampleFit(post_delay_HR_SHELF, n = 1)
@@ -797,8 +833,8 @@ calc_BPP_hist <- function(n_c, n_t,
     if (IF_list[1] <= IF){
 
       data_after_cens <- cens_data(data, cens_method = "Events", cens_events = cens_events*IF_list[1])
-      coxmodel <- coxph(Surv(survival_time, status) ~ group, data = data_after_cens$data)
-      Z_Score <- -(coef(summary(coxmodel))[, 4])
+      coxmodel <- survival::coxph(Surv(survival_time, status) ~ group, data = data_after_cens$data)
+      Z_Score <- -(stats::coef(summary(coxmodel))[, 4])
 
       stopEff <- Z_Score > designList$critValues[1]
       stopFut <- Z_Score < designList$futBounds
@@ -882,14 +918,14 @@ calc_BPP_hist <- function(n_c, n_t,
         "}"
       )
 
-      model = jags.model(textConnection(modelString), data = list(datTimes = data$survival_time,
+      model = rjags::jags.model(textConnection(modelString), data = list(datTimes = data$survival_time,
                                                                   datEvent = data$status, n = sum(data$group=="Control"),
                                                                   m=nrow(data),
                                                                   P_S = P_S,
                                                                   P_DTE = P_DTE), quiet = T)
 
-      update(model, n.iter=50, progress.bar = "none")
-      output=coda.samples(model=model, variable.names=c("HR", "bigT", "lambda_c"), n.iter = 100, progress.bar = "none")
+      stats::update(model, n.iter=50, progress.bar = "none")
+      output=coda::coda.samples(model=model, variable.names=c("HR", "bigT", "lambda_c"), n.iter = 100, progress.bar = "none")
 
       #The number of unenrolled patients in each group
       cPatientsLeft <- n_c - sum(data$group=="Control")
@@ -905,7 +941,7 @@ calc_BPP_hist <- function(n_c, n_t,
       for (j in 1:M){
 
         #Need to sample a recuitment time for the unenrolled patients
-        unenrolledrec_times <- runif(cPatientsLeft+tPatientsLeft, data_after_cens$cens_time, rec_period)
+        unenrolledrec_times <- stats::runif(cPatientsLeft+tPatientsLeft, data_after_cens$cens_time, rec_period)
 
         #Sample values from the MCMC output
         sampledHR <- sample(HRoutput, 1)
@@ -916,9 +952,9 @@ calc_BPP_hist <- function(n_c, n_t,
 
         #For the unenrolled data, we can sample the remaining data according to the updated (sampled) parameters
         CP <- exp(-(sampledlambda_c*sampledbigT))
-        u <- runif(tPatientsLeft)
+        u <- stats::runif(tPatientsLeft)
 
-        unenrolledData <- data.frame(time = c(rexp(cPatientsLeft, rate = sampledlambda_c), ifelse(u>CP, (-log(u))/sampledlambda_c, (1/sampledlambda_t)*(sampledbigT*sampledlambda_t-log(u)-sampledbigT*sampledlambda_c))), group = c(rep("Control", cPatientsLeft),
+        unenrolledData <- data.frame(time = c(stats::rexp(cPatientsLeft, rate = sampledlambda_c), ifelse(u>CP, (-log(u))/sampledlambda_c, (1/sampledlambda_t)*(sampledbigT*sampledlambda_t-log(u)-sampledbigT*sampledlambda_c))), group = c(rep("Control", cPatientsLeft),
                                                                                                                                                                                                                                      rep("Treatment", tPatientsLeft)), rec_time = unenrolledrec_times)
 
         unenrolledData$pseudo_time <- unenrolledData$time + unenrolledData$rec_time
@@ -933,10 +969,10 @@ calc_BPP_hist <- function(n_c, n_t,
 
         #Extracting the censored observations in the control group
         cCensoredData <- censoredData %>%
-          filter(group=="Control")
+          dplyr::filter(group=="Control")
 
         #Adding a exp(sampledlambda_c) value to the censored value
-        cCensoredData$finalsurvTime <- cCensoredData$survival_time + rexp(cCensored, rate = sampledlambda_c)
+        cCensoredData$finalsurvTime <- cCensoredData$survival_time + stats::rexp(cCensored, rate = sampledlambda_c)
 
         #Calculating the psuedo time
         cCensoredData$finalPsuedoTime <- cCensoredData$rec_time + cCensoredData$finalsurvTime
@@ -945,30 +981,31 @@ calc_BPP_hist <- function(n_c, n_t,
 
         #Extacting the observations in the treatment group which may still be influenced by the delay (their observation time is smaller than the sampled delay time)
         tBeforeDelay <- censoredData %>%
-          filter(group=="Treatment") %>%
-          filter(survival_time < sampledbigT)
+          dplyr::filter(group=="Treatment") %>%
+          dplyr::filter(survival_time < sampledbigT)
 
         #Extracting the observations in the treatment group which will not be influenced by the delay (their observation time is bigger than the sampled delay time)
         tAfterDelay <- censoredData %>%
-          filter(group=="Treatment") %>%
-          filter(survival_time > sampledbigT)
+          dplyr::filter(group=="Treatment") %>%
+          dplyr::filter(survival_time > sampledbigT)
 
         #As these observations are still subject to a delay, we add on a Exp(lambda_c) (lambdac) time
-        tBeforeDelay$IASurv <- tBeforeDelay$survival_time + rexp(nrow(tBeforeDelay), rate = sampledlambda_c)
+        tBeforeDelay$IASurv <- tBeforeDelay$survival_time + stats::rexp(nrow(tBeforeDelay), rate = sampledlambda_c)
 
         #Extracting the observations in which the survival time is smaller than the sampled delay time
         tBeforeDelay1 <- tBeforeDelay %>%
-          filter(IASurv < sampledbigT)
+          dplyr::filter(.data$IASurv < sampledbigT)
+
 
         #Extracting the observations in which the survival time is bigger than the sampled delay time
         tBeforeDelay2 <- tBeforeDelay %>%
-          filter(IASurv > sampledbigT)
+          dplyr::filter(.data$IASurv > sampledbigT)
 
         #For the observations in which the survival time is bigger, we sample a Exp(lambda_t) and add it to the sampled delay time
-        tBeforeDelay2$IASurv2 <- sampledbigT + rexp(nrow(tBeforeDelay2), rate = sampledlambda_t)
+        tBeforeDelay2$IASurv2 <- sampledbigT + stats::rexp(nrow(tBeforeDelay2), rate = sampledlambda_t)
 
         #For the observations not influenced by the delay, we sample a Exp(lambda_t) time and add it to the current survival time
-        tAfterDelay$IASurv <- tAfterDelay$survival_time + rexp(nrow(tAfterDelay), rate = sampledlambda_t)
+        tAfterDelay$IASurv <- tAfterDelay$survival_time + stats::rexp(nrow(tAfterDelay), rate = sampledlambda_t)
 
         #Calculate the pseudo time for all the data frames
         tBeforeDelay1$IApsuedoTime <- tBeforeDelay1$IASurv + tBeforeDelay1$rec_time
@@ -991,7 +1028,7 @@ calc_BPP_hist <- function(n_c, n_t,
 
         #Only keeping observations from the censored data set which are dead
         finalDataset <- data %>%
-          filter(status==1)
+          dplyr::filter(status==1)
 
         finalDataset <- finalDataset[,1:4]
 
@@ -1013,8 +1050,8 @@ calc_BPP_hist <- function(n_c, n_t,
         finalDataset$survival_time <- ifelse(finalDataset$pseudo_time>censTime1, censTime1  - finalDataset$rec_time, finalDataset$time)
 
         #Testing for final significance
-        coxmodel <- coxph(Surv(survival_time, status) ~ group, data = finalDataset)
-        Z_Score <- -(coef(summary(coxmodel))[, 4])
+        coxmodel <- survival::coxph(Surv(survival_time, status) ~ group, data = finalDataset)
+        Z_Score <- -(stats::coef(summary(coxmodel))[, 4])
 
 
         BPPVec[j] <- Z_Score > designList$critValues[2]

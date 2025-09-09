@@ -1,33 +1,46 @@
 Package: DTEAssurance
-Title: Implements an Assurance Method for Clinical Trials with Delayed Treatment Effects
-Version: 0.0.0.9000
+Type: Package
+Title: Assurance Methods for Clinical Trials with a Delayed Treatment Effect
+Version: 1.0.0
 Authors@R: 
-    person("James", "Salsbury", , "jsalsbury1@sheffield.ac.uk", role = c("aut", "cre"),
-           comment = c(ORCID = "YOUR-ORCID-ID"))
-Description: A shiny app for implemeneting an assurance method for a clinical trial
-              that is likely to be subject to a delayed treatment effect.
+    person("James", "Salsbury", email = "jsalsbury1@sheffield.ac.uk", 
+           role = c("aut", "cre"),
+           comment = c(ORCID = "0000-0002-2584-3640"))
+Description: Provides functions for planning clinical trials
+    subject to a delayed treatment effect using assurance-based methods.
+    Includes two Shiny applications that use these functions for
+    interactive exploration, simulation, and visualization of trial designs
+    and outcomes.
 License: MIT + file LICENSE
 Encoding: UTF-8
+LazyData: true
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.2
-Suggests: 
+Imports: 
+    SHELF,
+    ggplot2,
+    pbapply,
+    readxl,
+    shiny,
+    shinydashboard,
+    shinyjs,
+    stats,
+    survMisc,
+    survival,
+    plyr,
+    rmarkdown,
+    nleqslv,
+    graphics,
+    nph,
+    nphRCT,
+    coda,
+    dplyr,
+    rjags,
+    rpact,
+    magrittr
+Suggests:
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
-LazyData: true
-Imports: 
-  SHELF,
-  ggplot2,
-  pbapply,
-  readxl,
-  shiny,
-  shinydashboard,
-  shinyjs,
-  stats,
-  survMisc,
-  survival,
-  plyr,
-  rmarkdown, 
-  nleqslv,
-  graphics,
-  nph,
-  nphRCT
+Depends: 
+    R (>= 4.0)
+

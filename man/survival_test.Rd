@@ -31,8 +31,6 @@ survival_test(
 \item{t_star}{Parameter t^* in the modestly weighted test}
 
 \item{s_star}{Parameter s^* in the modestly weighted test}
-
-\item{target_HR}{Hazard Ratio that needs to be met for success}
 }
 \value{
 An indicator of significance

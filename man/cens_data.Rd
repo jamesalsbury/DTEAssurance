@@ -4,7 +4,13 @@
 \alias{cens_data}
 \title{Censor a survival data set}
 \usage{
-cens_data(data, cens_method = "Time", cens_events = NULL, cens_time = NULL)
+cens_data(
+  data,
+  cens_method = "Time",
+  cens_time = NULL,
+  cens_IF = NULL,
+  cens_events = NULL
+)
 }
 \arguments{
 \item{data}{An uncensored dataframe}
@@ -14,6 +20,8 @@ cens_data(data, cens_method = "Time", cens_events = NULL, cens_time = NULL)
 \item{cens_time}{Time at which you wish to perform the censoring}
 
 \item{cens_IF}{Information Fraction at which you wish to perform the censoring}
+
+\item{cens_events}{Number of events at which you wish to perform the censoring}
 }
 \value{
 A list: censored dataframe, cens_IF, cens_time and sample size

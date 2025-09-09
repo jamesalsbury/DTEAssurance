@@ -29,8 +29,9 @@ calc_dte_assurance(
   P_S = 1,
   P_DTE = 0,
   cens_method = "Time",
-  cens_IF = NULL,
   cens_time = NULL,
+  cens_IF = NULL,
+  cens_events = NULL,
   rec_method,
   rec_period = NULL,
   rec_power = NULL,
@@ -94,11 +95,13 @@ calc_dte_assurance(
 
 \item{P_DTE}{Probability of the survival curves being subject to a DTE, given they separate}
 
-\item{cens_method}{Method of censoring, must be either "Time" (default) or "Events"}
+\item{cens_method}{Method of censoring, must be either "Time" (default), "Events" or "IF"}
+
+\item{cens_time}{Time at which you wish to perform the censoring}
 
 \item{cens_IF}{Information Fraction at which you wish to perform the censoring}
 
-\item{cens_time}{Time at which you wish to perform the censoring}
+\item{cens_events}{Number of events at which you wish to perform the censoring}
 
 \item{rec_method}{Recruitment method, must be one of "power" or "PWC" (piecewise constant)}
 

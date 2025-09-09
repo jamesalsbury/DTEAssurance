@@ -206,7 +206,7 @@
 #     deltad <- as.numeric(exp(coef(coxmodel)))
 #
 #
-#     BPPVec[j] <- (test$chisq > qchisq(0.95, 1) & deltad<1)
+#     BPPVec[j] <- (test$chisq > stats::qchisq(0.95, 1) & deltad<1)
 #
 #   }
 #
@@ -214,116 +214,116 @@
 #
 # }
 
-proposedRuleFunc <- function(dataCombined, numEventsRequired, monthsDelay, propEvents){
-
-  # Sorting the pseudoTime
-  sortedPseudoTimes <- sort(dataCombined$pseudoTime)
-
-  # Initialize the proportion vector
-  propVec <- numeric(numEventsRequired)
-
-  # Calculate cutoff index
-  cutoff_index <- ceiling(numEventsRequired / 2)
-
-  # Loop through from cutoff_index to numEventsRequired
-  for (k in cutoff_index:numEventsRequired) {
-    censTime <- sortedPseudoTimes[k]
-
-    # Calculate the status for the entire dataset
-    status <- as.integer(dataCombined$pseudoTime <= censTime)
-
-    # Filter data based on recTime <= censTime
-    filteredData <- dataCombined[dataCombined$recTime <= censTime, ]
-
-    # Ensure status and filteredData are appropriately handled
-    survival_time <- ifelse(status == 1, filteredData$time, censTime - filteredData$recTime)
-
-    # Ensure that survival_time is calculated correctly
-    propVec[k] <- mean(survival_time[status == 1] > monthsDelay)
-  }
-
-  # Determine Stop1 and Stop2
-  if (sum(propVec > propEvents) == 0) {
-    Stop1 <- numEventsRequired
-    Stop2 <- numEventsRequired
-  } else {
-    firstTrueIndex <- which(propVec > propEvents)[1]
-    Stop1 <- max(ceiling(numEventsRequired * 0.5), firstTrueIndex)
-    Stop2 <- max(ceiling(numEventsRequired * 0.75), firstTrueIndex)
-  }
-
-
-  Prop1Outcome <- 1
-  Prop1Cens <- CensFunc(dataCombined, Stop1)
-  Prop1 <- Prop1Cens$dataCombined
-  Prop1censTime <- Prop1Cens$censTime
-  Prop1SS <- Prop1Cens$SS
-  coxmodel <- coxph(Surv(survival_time, status) ~ group, data = Prop1)
-  deltad <- as.numeric(exp(coef(coxmodel)))
-  if (deltad > 1) Prop1Outcome <- 0
-
-  Prop2Outcome <- 1
-  Prop2Cens <- CensFunc(dataCombined, Stop2)
-  Prop2 <- Prop2Cens$dataCombined
-  Prop2censTime <- Prop2Cens$censTime
-  Prop2SS <- Prop2Cens$SS
-  coxmodel <- coxph(Surv(survival_time, status) ~ group, data = Prop2)
-  deltad <- as.numeric(exp(coef(coxmodel)))
-  if (deltad > 1) Prop2Outcome <- 0
-
-  PropFinalOutcome <- 0
-  PropFinalCens <- CensFunc(dataCombined, numEventsRequired)
-  PropFinal <- PropFinalCens$dataCombined
-  PropFinalcensTime <- PropFinalCens$censTime
-  PropFinalSS <- PropFinalCens$SS
-  coxmodel <- coxph(Surv(survival_time, status) ~ group, data = PropFinal)
-  deltad <- as.numeric(exp(coef(coxmodel)))
-  PropLRT <- survdiff(Surv(time, status) ~ group, data = PropFinal)
-  if (PropLRT$chisq > qchisq(0.95, 1) & deltad < 1) PropFinalOutcome <- 1
-
-  return(list(Prop1Outcome = Prop1Outcome, Prop2Outcome = Prop2Outcome, PropFinalOutcome = PropFinalOutcome,
-              Prop1SS = Prop1SS, Prop2SS = Prop2SS, PropFinalSS = PropFinalSS,
-              Prop1censTime = Prop1censTime, Prop2censTime = Prop2censTime, PropFinalcensTime = PropFinalcensTime))
-
-
-}
-
-WieandRuleFunc <- function(dataCombined, numEventsRequired){
-
-  Wieand1Outcome <- 1
-  Wieand1Cens <- CensFunc(dataCombined, numEventsRequired*0.5)
-  Wieand1 <- Wieand1Cens$dataCombined
-  Wieand1censTime <- Wieand1Cens$censTime
-  Wieand1SS <- Wieand1Cens$SS
-  coxmodel <- coxph(Surv(survival_time, status) ~ group, data = Wieand1)
-  deltad <- as.numeric(exp(coef(coxmodel)))
-  if (deltad > 1) Wieand1Outcome <- 0
-
-  Wieand2Outcome <- 1
-  Wieand2Cens <- CensFunc(dataCombined, numEventsRequired*0.75)
-  Wieand2 <- Wieand2Cens$dataCombined
-  Wieand2censTime <- Wieand2Cens$censTime
-  Wieand2SS <- Wieand2Cens$SS
-  coxmodel <- coxph(Surv(survival_time, status) ~ group, data = Wieand2)
-  deltad <- as.numeric(exp(coef(coxmodel)))
-  if (deltad > 1) Wieand2Outcome <- 0
-
-  WieandFinalOutcome <- 0
-  WieandFinalCens <- CensFunc(dataCombined, numEventsRequired)
-  WieandFinal <- WieandFinalCens$dataCombined
-  WieandFinalcensTime <- WieandFinalCens$censTime
-  WieandFinalSS <- WieandFinalCens$SS
-  coxmodel <- coxph(Surv(survival_time, status) ~ group, data = WieandFinal)
-  deltad <- as.numeric(exp(coef(coxmodel)))
-  WieandLRT <- survdiff(Surv(time, status) ~ group, data = WieandFinal)
-  if (WieandLRT$chisq > qchisq(0.95, 1) & deltad < 1) WieandFinalOutcome <- 1
-
-  return(list(Wieand1Outcome = Wieand1Outcome, Wieand2Outcome = Wieand2Outcome, WieandFinalOutcome = WieandFinalOutcome,
-              Wieand1SS = Wieand1SS, Wieand2SS = Wieand2SS, WieandFinalSS = WieandFinalSS,
-              Wieand1censTime = Wieand1censTime, Wieand2censTime = Wieand2censTime, WieandFinalcensTime = WieandFinalcensTime))
-
-
-}
+# proposedRuleFunc <- function(dataCombined, numEventsRequired, monthsDelay, propEvents){
+#
+#   # Sorting the pseudoTime
+#   sortedPseudoTimes <- sort(dataCombined$pseudoTime)
+#
+#   # Initialize the proportion vector
+#   propVec <- numeric(numEventsRequired)
+#
+#   # Calculate cutoff index
+#   cutoff_index <- ceiling(numEventsRequired / 2)
+#
+#   # Loop through from cutoff_index to numEventsRequired
+#   for (k in cutoff_index:numEventsRequired) {
+#     censTime <- sortedPseudoTimes[k]
+#
+#     # Calculate the status for the entire dataset
+#     status <- as.integer(dataCombined$pseudoTime <= censTime)
+#
+#     # Filter data based on recTime <= censTime
+#     filteredData <- dataCombined[dataCombined$recTime <= censTime, ]
+#
+#     # Ensure status and filteredData are appropriately handled
+#     survival_time <- ifelse(status == 1, filteredData$time, censTime - filteredData$recTime)
+#
+#     # Ensure that survival_time is calculated correctly
+#     propVec[k] <- mean(survival_time[status == 1] > monthsDelay)
+#   }
+#
+#   # Determine Stop1 and Stop2
+#   if (sum(propVec > propEvents) == 0) {
+#     Stop1 <- numEventsRequired
+#     Stop2 <- numEventsRequired
+#   } else {
+#     firstTrueIndex <- which(propVec > propEvents)[1]
+#     Stop1 <- max(ceiling(numEventsRequired * 0.5), firstTrueIndex)
+#     Stop2 <- max(ceiling(numEventsRequired * 0.75), firstTrueIndex)
+#   }
+#
+#
+#   Prop1Outcome <- 1
+#   Prop1Cens <- CensFunc(dataCombined, Stop1)
+#   Prop1 <- Prop1Cens$dataCombined
+#   Prop1censTime <- Prop1Cens$censTime
+#   Prop1SS <- Prop1Cens$SS
+#   coxmodel <- coxph(Surv(survival_time, status) ~ group, data = Prop1)
+#   deltad <- as.numeric(exp(coef(coxmodel)))
+#   if (deltad > 1) Prop1Outcome <- 0
+#
+#   Prop2Outcome <- 1
+#   Prop2Cens <- CensFunc(dataCombined, Stop2)
+#   Prop2 <- Prop2Cens$dataCombined
+#   Prop2censTime <- Prop2Cens$censTime
+#   Prop2SS <- Prop2Cens$SS
+#   coxmodel <- coxph(Surv(survival_time, status) ~ group, data = Prop2)
+#   deltad <- as.numeric(exp(coef(coxmodel)))
+#   if (deltad > 1) Prop2Outcome <- 0
+#
+#   PropFinalOutcome <- 0
+#   PropFinalCens <- CensFunc(dataCombined, numEventsRequired)
+#   PropFinal <- PropFinalCens$dataCombined
+#   PropFinalcensTime <- PropFinalCens$censTime
+#   PropFinalSS <- PropFinalCens$SS
+#   coxmodel <- coxph(Surv(survival_time, status) ~ group, data = PropFinal)
+#   deltad <- as.numeric(exp(coef(coxmodel)))
+#   PropLRT <- survdiff(Surv(time, status) ~ group, data = PropFinal)
+#   if (PropLRT$chisq > stats::qchisq(0.95, 1) & deltad < 1) PropFinalOutcome <- 1
+#
+#   return(list(Prop1Outcome = Prop1Outcome, Prop2Outcome = Prop2Outcome, PropFinalOutcome = PropFinalOutcome,
+#               Prop1SS = Prop1SS, Prop2SS = Prop2SS, PropFinalSS = PropFinalSS,
+#               Prop1censTime = Prop1censTime, Prop2censTime = Prop2censTime, PropFinalcensTime = PropFinalcensTime))
+#
+#
+# }
+#
+# WieandRuleFunc <- function(dataCombined, numEventsRequired){
+#
+#   Wieand1Outcome <- 1
+#   Wieand1Cens <- CensFunc(dataCombined, numEventsRequired*0.5)
+#   Wieand1 <- Wieand1Cens$dataCombined
+#   Wieand1censTime <- Wieand1Cens$censTime
+#   Wieand1SS <- Wieand1Cens$SS
+#   coxmodel <- coxph(Surv(survival_time, status) ~ group, data = Wieand1)
+#   deltad <- as.numeric(exp(coef(coxmodel)))
+#   if (deltad > 1) Wieand1Outcome <- 0
+#
+#   Wieand2Outcome <- 1
+#   Wieand2Cens <- CensFunc(dataCombined, numEventsRequired*0.75)
+#   Wieand2 <- Wieand2Cens$dataCombined
+#   Wieand2censTime <- Wieand2Cens$censTime
+#   Wieand2SS <- Wieand2Cens$SS
+#   coxmodel <- coxph(Surv(survival_time, status) ~ group, data = Wieand2)
+#   deltad <- as.numeric(exp(coef(coxmodel)))
+#   if (deltad > 1) Wieand2Outcome <- 0
+#
+#   WieandFinalOutcome <- 0
+#   WieandFinalCens <- CensFunc(dataCombined, numEventsRequired)
+#   WieandFinal <- WieandFinalCens$dataCombined
+#   WieandFinalcensTime <- WieandFinalCens$censTime
+#   WieandFinalSS <- WieandFinalCens$SS
+#   coxmodel <- coxph(Surv(survival_time, status) ~ group, data = WieandFinal)
+#   deltad <- as.numeric(exp(coef(coxmodel)))
+#   WieandLRT <- survdiff(Surv(time, status) ~ group, data = WieandFinal)
+#   if (WieandLRT$chisq > stats::qchisq(0.95, 1) & deltad < 1) WieandFinalOutcome <- 1
+#
+#   return(list(Wieand1Outcome = Wieand1Outcome, Wieand2Outcome = Wieand2Outcome, WieandFinalOutcome = WieandFinalOutcome,
+#               Wieand1SS = Wieand1SS, Wieand2SS = Wieand2SS, WieandFinalSS = WieandFinalSS,
+#               Wieand1censTime = Wieand1censTime, Wieand2censTime = Wieand2censTime, WieandFinalcensTime = WieandFinalcensTime))
+#
+#
+# }
 
 group_sequential_decision <- function(z_scores, critical_values, futility_values, sample_sizes, durations, alpha_spending) {
   num_stages <- length(z_scores)
@@ -338,7 +338,7 @@ group_sequential_decision <- function(z_scores, critical_values, futility_values
         z_score = z_scores[i],
         sample_size = sample_sizes[i],
         duration = durations[i],
-        final_success = z_scores[num_stages] > qnorm(1-alpha_spending)
+        final_success = z_scores[num_stages] > stats::qnorm(1-alpha_spending)
       ))
     }
 
@@ -351,7 +351,7 @@ group_sequential_decision <- function(z_scores, critical_values, futility_values
         z_score = z_scores[i],
         sample_size = sample_sizes[i],
         duration = durations[i],
-        final_success = z_scores[num_stages] > qnorm(1-alpha_spending)
+        final_success = z_scores[num_stages] > stats::qnorm(1-alpha_spending)
       ))
     }
   }
@@ -366,7 +366,7 @@ group_sequential_decision <- function(z_scores, critical_values, futility_values
     z_score = z_scores[num_stages],
     sample_size = sample_sizes[num_stages],
     duration = durations[num_stages],
-    final_success = z_scores[num_stages] > qnorm(1-alpha_spending)
+    final_success = z_scores[num_stages] > stats::qnorm(1-alpha_spending)
   ))
 }
 

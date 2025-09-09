@@ -27,7 +27,7 @@ sim_dte(
 
 \item{dist}{distribution of control distribution, must be one of "exponential" (default) or "weibull"}
 
-\item{gamma_c}{}
+\item{gamma_c}{gamma parameter in the Weibull distribution}
 }
 \value{
 a DTE data set
