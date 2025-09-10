@@ -12,3 +12,12 @@
 #' @param rhs A function call using the magrittr semantics.
 #' @return The result of calling `rhs(lhs)`.
 NULL
+
+
+#' Package imports
+#'
+#' @name utils-pipe
+#' @keywords internal
+#'
+#' @importFrom rlang .data
+NULL
