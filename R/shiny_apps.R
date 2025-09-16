@@ -1,14 +1,20 @@
-#' Shiny app which calculates assurance for trials with DTE
+#' Launch the 'shiny' Assurance app
 #'
-#' Launches a shiny app to use for elicitation for when delayed treatment effects are
-#' likely to be present in the clinical trial you are designing: takes these elicited distributions
-#' and calculates assurance.
+#' Launches a 'shiny' application to calculate assurance for clinical trials
+#' where delayed treatment effects (DTE) may be present. The app allows
+#' elicitation of prior distributions and calculates assurance metrics.
 #'
-#' You should run the function with no arguments.
-#
+#' @return No return value, called for side effects (invisibly returns NULL).
+#'         The function launches an interactive 'shiny' application.
+#'
+#' @examples
+#' \dontrun{
+#' # Launch the interactive app in an R session
+#' assurance_shiny_app()
+#' }
+#'
+#'
 #' @export
-#'
-
 assurance_shiny_app <- function() {
   app_dir <- system.file("shiny/AssuranceApp/app.R", package = "DTEAssurance")
   if (app_dir == "") {
@@ -19,13 +25,24 @@ assurance_shiny_app <- function() {
 }
 
 
-#' Shiny app which simulates group sequential trials with DTE, using elicited distributions
-#'
-#' You should run the function with no arguments.
-#
-#' @export
-#'
 
+#' Launch the 'shiny' GSD Assurance app
+#'
+#' Launches a 'shiny' application to simulate group sequential trials with
+#' delayed treatment effects (DTE) using elicited prior distributions. The app
+#' allows interactive exploration of trial designs and assurance calculations.
+#'
+#' @return No return value, called for side effects (invisibly returns NULL).
+#'         The function launches an interactive 'shiny' application.
+#'
+#' @examples
+#' \dontrun{
+#' # Launch the interactive app in an R session
+#' assurance_GSD_shiny_app()
+#' }
+#'
+#'
+#' @export
 assurance_GSD_shiny_app <- function() {
   app_dir <- system.file("shiny/AdaptiveApp/app.R", package = "DTEAssurance")
   if (app_dir == "") {
@@ -34,4 +51,5 @@ assurance_GSD_shiny_app <- function() {
 
   shiny::runApp(app_dir, display.mode = "normal")
 }
+
 

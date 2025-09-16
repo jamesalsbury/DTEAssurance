@@ -84,7 +84,7 @@ calc_BPP_hist(
 
 \item{beta_spending}{Cumulative beta spending}
 
-\item{IF_list}{Vector of information fractions - must be in the format: `c("0.25, 1", "0.5, 1", "0.75, 1")'}
+\item{IF_list}{Vector of information fractions - must be in the format: `c("0.5, 1")'}
 
 \item{k}{Number of stages}
 
@@ -92,6 +92,37 @@ calc_BPP_hist(
 
 \item{M}{Number of samples from the posterior (default is 50)}
 }
+\value{
+Numeric vector of length \code{N} containing the simulated Bayesian Predictive Probabilities.
+}
 \description{
 Calculates the Bayesian Predictive Probability for a trial with a Delayed Treatment Effect
+}
+\examples{
+set.seed(123)
+# Minimal example for CRAN: small n_sim for fast execution
+res <- calc_BPP_hist(n_c = 300,
+                     n_t = 300,
+                     control_dist = "Exponential",
+                     t1 = 12,
+                     t1_Beta_a = 20,
+                     t1_Beta_b = 32,
+                     delay_time_SHELF = SHELF::fitdist(c(5.5, 6, 6.5), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 12),
+                     delay_time_dist = "gamma",
+                     post_delay_HR_SHELF = SHELF::fitdist(c(0.5, 0.6, 0.7), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 1),
+                     post_delay_HR_dist = "gamma",
+                     P_S = 1,
+                     P_DTE = 0,
+                     cens_events = 300,
+                     rec_method = "power",
+                     rec_period = 12,
+                     rec_power = 1,
+                     alpha_spending = c(0.01, 0.025),
+                     beta_spending = c(0.05, 0.1),
+                     IF_list = c("0.5, 1"),
+                     k = 2,
+                     M = 5,
+                     N = 5)
+str(res)
+
 }

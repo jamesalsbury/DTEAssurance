@@ -1,20 +1,8 @@
 library(SHELF)
-# library(survMisc)
 library(ggplot2)
-# library(pbapply)
-# library(readxl)
-# library(shiny)
-# library(shinydashboard)
 library(survival)
-# library(plyr)
-# library(rmarkdown)
-# library(stats)
-# library(nleqslv)
-# library(graphics)
 library(shinyjs)
-# library(utils)
 library(nleqslv)
-# library(dplyr)
 library(shinyBS)
 #remotes::install_github("jamesalsbury/DTEAssurance")
 library(DT)
@@ -1495,8 +1483,6 @@ ui <- fluidPage(
     output$assurancePlot <- renderPlot({
 
       assOutput <- calculateAssurance()
-
-      myX <<- assOutput
 
       n <- seq(10, input$numofpatients, length = input$nSampleSize)
 

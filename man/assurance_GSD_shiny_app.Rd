@@ -2,10 +2,24 @@
 % Please edit documentation in R/shiny_apps.R
 \name{assurance_GSD_shiny_app}
 \alias{assurance_GSD_shiny_app}
-\title{Shiny app which simulates group sequential trials with DTE, using elicited distributions}
+\title{Launch the 'shiny' GSD Assurance app}
 \usage{
 assurance_GSD_shiny_app()
 }
+\value{
+No return value, called for side effects (invisibly returns NULL).
+The function launches an interactive 'shiny' application.
+}
 \description{
-You should run the function with no arguments.
+Launches a 'shiny' application to simulate group sequential trials with
+delayed treatment effects (DTE) using elicited prior distributions. The app
+allows interactive exploration of trial designs and assurance calculations.
+}
+\examples{
+\dontrun{
+# Launch the interactive app in an R session
+assurance_GSD_shiny_app()
+}
+
+
 }

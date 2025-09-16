@@ -2,7 +2,7 @@
 % Please edit documentation in R/main.R
 \name{cens_data}
 \alias{cens_data}
-\title{Censor a survival data set}
+\title{Censor a survival dataset}
 \usage{
 cens_data(
   data,
@@ -13,19 +13,25 @@ cens_data(
 )
 }
 \arguments{
-\item{data}{An uncensored dataframe}
+\item{data}{A dataframe containing uncensored survival data with columns: pseudo_time, rec_time, and time}
 
-\item{cens_method}{Method of censoring, must be either "Time" (default) or "Events"}
+\item{cens_method}{Censoring method: "Time" (default), "Events", or "IF"}
 
-\item{cens_time}{Time at which you wish to perform the censoring}
+\item{cens_time}{Time point for censoring (required if cens_method = "Time")}
 
-\item{cens_IF}{Information Fraction at which you wish to perform the censoring}
+\item{cens_IF}{Information fraction for censoring (required if cens_method = "IF")}
 
-\item{cens_events}{Number of events at which you wish to perform the censoring}
+\item{cens_events}{Number of events for censoring (required if cens_method = "Events")}
 }
 \value{
-A list: censored dataframe, cens_IF, cens_time and sample size
+A list containing:
+\describe{
+\item{data}{Censored dataframe}
+\item{cens_events}{Number of events used for censoring (if applicable)}
+\item{cens_time}{Time point used for censoring}
+\item{sample_size}{Number of subjects remaining after censoring}
+}
 }
 \description{
-Censor a survival data set
+Censor a survival dataset
 }

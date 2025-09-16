@@ -50,41 +50,77 @@ sim_dte <- function(n_c, n_t, lambda_c, delay_time, post_delay_HR, dist = "Expon
 }
 
 
-#' Censor a survival data set
+#' Censor a survival dataset
 #'
-#' @param data An uncensored dataframe
-#' @param cens_method Method of censoring, must be either "Time" (default) or "Events"
-#' @param cens_IF Information Fraction at which you wish to perform the censoring
-#' @param cens_time Time at which you wish to perform the censoring
-#' @param cens_events Number of events at which you wish to perform the censoring
-#' @return A list: censored dataframe, cens_IF, cens_time and sample size
+#' @param data A dataframe containing uncensored survival data with columns: pseudo_time, rec_time, and time
+#' @param cens_method Censoring method: "Time" (default), "Events", or "IF"
+#' @param cens_time Time point for censoring (required if cens_method = "Time")
+#' @param cens_IF Information fraction for censoring (required if cens_method = "IF")
+#' @param cens_events Number of events for censoring (required if cens_method = "Events")
+#'
+#' @return A list containing:
+#' \describe{
+#'   \item{data}{Censored dataframe}
+#'   \item{cens_events}{Number of events used for censoring (if applicable)}
+#'   \item{cens_time}{Time point used for censoring}
+#'   \item{sample_size}{Number of subjects remaining after censoring}
+#' }
 #' @export
+cens_data <- function(data,
+                      cens_method = "Time",
+                      cens_time = NULL,
+                      cens_IF = NULL,
+                      cens_events = NULL) {
 
-cens_data <- function(data, cens_method = "Time", cens_time = NULL, cens_IF = NULL, cens_events = NULL){
+  # Validate censoring method
+  valid_methods <- c("Time", "Events", "IF")
+  if (!cens_method %in% valid_methods) {
+    stop("cens_method must be one of 'Time', 'Events', or 'IF'")
+  }
 
-  if (cens_method=="Events"){
-    data <- data[order(data$pseudo_time),]
+  # Determine censoring time based on method
+  data <- data[order(data$pseudo_time), ]
+
+  if (cens_method == "Events") {
+    if (is.null(cens_events)) stop("Please specify 'cens_events' for method 'Events'")
+    if (cens_events > nrow(data)) stop("'cens_events' exceeds number of observations")
     cens_time <- data$pseudo_time[cens_events]
   }
 
-  if (cens_method=="IF"){
-    data <- data[order(data$pseudo_time),]
-    cens_time <- data$pseudo_time[nrow(data)*cens_IF]
+  if (cens_method == "IF") {
+    if (is.null(cens_IF)) stop("Please specify 'cens_IF' for method 'IF'")
+    index <- floor(nrow(data) * cens_IF)
+    if (index < 1 || index > nrow(data)) stop("Invalid 'cens_IF' value")
+    cens_time <- data$pseudo_time[index]
   }
 
-  data$status <- data$pseudo_time <= cens_time
-  data$status <- data$status * 1
+  if (cens_method == "Time" && is.null(cens_time)) {
+    stop("Please specify 'cens_time' for method 'Time'")
+  }
+
+  # Apply censoring
+  data$status <- as.integer(data$pseudo_time <= cens_time)
   data$enrolled <- data$rec_time < cens_time
-  data <- data[data$enrolled, ]
+  data <- subset(data, enrolled)
+
+  # Ensure survival time is defined
+  if (!"time" %in% names(data)) {
+    data$time <- data$pseudo_time - data$rec_time
+  }
+
   data$survival_time <- ifelse(data$pseudo_time > cens_time,
                                cens_time - data$rec_time,
                                data$time)
 
-  return(list(data = data,
-              cens_events = cens_events,
-              cens_time = cens_time,
-              sample_size = nrow(data)))
+  # Return results
+  return(list(
+    data = data,
+    cens_events = cens_events,
+    cens_time = cens_time,
+    sample_size = nrow(data)
+  ))
 }
+
 
 #' Calculate Assurance for a trial with a Delayed Treatment Effect
 #'
@@ -133,7 +169,6 @@ cens_data <- function(data, cens_method = "Time", cens_time = NULL, cens_IF = NU
 #' @return A list: Assurance value, 95% CI for assurance, Duration
 #' @export
 #'
-
 calc_dte_assurance <- function(n_c, n_t,
                                control_dist = "Exponential", control_parameters = "Fixed",
                                fixed_parameters_type = "Parameter", control_distribution = "Elicitation",
@@ -147,179 +182,95 @@ calc_dte_assurance <- function(n_c, n_t,
                                post_delay_HR_SHELF, post_delay_HR_dist = "hist",
                                P_S = 1, P_DTE = 0,
                                cens_method = "Time", cens_time = NULL, cens_IF = NULL, cens_events = NULL,
-                               rec_method, rec_period=NULL, rec_power=NULL, rec_rate=NULL, rec_duration=NULL,
+                               rec_method, rec_period = NULL, rec_power = NULL, rec_rate = NULL, rec_duration = NULL,
                                analysis_method = "LRT", alpha = 0.05, alternative = "one.sided",
                                rho = 0, gamma = 0,
                                t_star = NULL, s_star = NULL,
                                target_HR = NULL,
-                               nSims=1e3){
+                               nSims = 1e3) {
 
+  loopVec <- if (cens_method == "Events") (n_c + n_t) > cens_events else rep(TRUE, length(n_c))
+  calc_dte_assurance_list <- vector("list", length(n_c))
 
-
-  if (cens_method=="Events"){
-    loopVec <- (n_c+n_t) > cens_events
-  } else {
-    loopVec <- rep(T, length(n_c))
-  }
-
-  numDiffPatients <- length(n_c)
-  calc_dte_assurance_list <- list()
-  for (j in 1:numDiffPatients){
-
-    if (loopVec[j]==F){
-      if (!is.null(target_HR)){
-        calc_dte_assurance_list[[j]] <- list(assurance = NA,
-                                             CI_assurance = NA,
-                                             assurance_targetHR = NA,
-                                             CI_assurance_targetHR = NA,
-                                             duration = NA,
-                                             sample_size = NA)
+  for (j in seq_along(n_c)) {
+    if (!loopVec[j]) {
+      calc_dte_assurance_list[[j]] <- if (!is.null(target_HR)) {
+        list(assurance = NA, CI_assurance = NA,
+             assurance_targetHR = NA, CI_assurance_targetHR = NA,
+             duration = NA, sample_size = NA)
       } else {
-        calc_dte_assurance_list[[j]] <- list(assurance = NA,
-                                             CI_assurance = NA,
-                                             duration = NA,
-                                             sample_size = NA)
+        list(assurance = NA, CI_assurance = NA,
+             duration = NA, sample_size = NA)
       }
-
-
-    } else {
-
-
-    assurance_vec <- rep(NA, nSims)
-    if (!is.null(target_HR)) {
-      assurance_targetHR_vec <- rep(NA, nSims)
+      next
     }
-    cens_vec <- rep(NA, nSims)
-    ss_vec <- rep(NA, nSims)
 
-    for (i in 1:nSims){
+    delay_time_samples <- SHELF::sampleFit(delay_time_SHELF, n = nSims)[, delay_time_dist]
+    post_delay_HR_samples <- SHELF::sampleFit(post_delay_HR_SHELF, n = nSims)[, post_delay_HR_dist]
 
-      if (control_dist=="Exponential"){
-        if (control_parameters=="Fixed"){
-          if (fixed_parameters_type=="Parameter"){
-            lambda_c <- lambda_c
-          } else if (fixed_parameters_type=="Landmark") {
-            lambda_c <-  -log(surv_t1)/t1
-          }
-        } else if (control_parameters=="Distribution"){
-          if (control_distribution == "Elicitation"){
-            lambda_c <- -log(stats::rbeta(1, t1_Beta_a, t1_Beta_b)) / t1
-          } else if (control_distribution == "MCMC"){
-            lambda_c <- sample(MCMC_sample[[1]], 1)
-          }
-        }
-      } else if (control_dist=="Weibull"){
-        if (control_parameters=="Fixed"){
-          if (fixed_parameters_type=="Parameter"){
-            lambda_c <- lambda_c
-            gamma_c <- gamma_c
-          } else if (fixed_parameters_type=="Landmark"){
-            WeibFunc <- function(params) {
-              lambda <- params[1]
-              k <- params[2]
-              c(exp(-(t1*lambda)^k) - surv_t1,
-                exp(-(t2*lambda)^k) - surv_t1)
-            }
+    sim_results <- future_lapply(seq_len(nSims), simulate_one_trial, future.seed = TRUE,
+                                 j = j,
+                                 n_c = n_c, n_t = n_t,
+                                 control_dist = control_dist,
+                                 control_parameters = control_parameters,
+                                 fixed_parameters_type = fixed_parameters_type,
+                                 control_distribution = control_distribution,
+                                 lambda_c = lambda_c, gamma_c = gamma_c,
+                                 MCMC_sample = MCMC_sample,
+                                 t1 = t1, t2 = t2,
+                                 surv_t1 = surv_t1, surv_t2 = surv_t2,
+                                 t1_Beta_a = t1_Beta_a, t1_Beta_b = t1_Beta_b,
+                                 diff_Beta_a = diff_Beta_a, diff_Beta_b = diff_Beta_b,
+                                 delay_time_samples = delay_time_samples,
+                                 post_delay_HR_samples = post_delay_HR_samples,
+                                 P_S = P_S, P_DTE = P_DTE,
+                                 cens_method = cens_method, cens_time = cens_time,
+                                 cens_IF = cens_IF, cens_events = cens_events,
+                                 rec_method = rec_method, rec_period = rec_period,
+                                 rec_power = rec_power, rec_rate = rec_rate,
+                                 rec_duration = rec_duration,
+                                 analysis_method = analysis_method,
+                                 alpha = alpha, alternative = alternative,
+                                 rho = rho, gamma = gamma,
+                                 t_star = t_star, s_star = s_star,
+                                 target_HR = target_HR)
 
-            solution <- nleqslv::nleqslv(c(1, 1), fn = WeibFunc)
+    assurance_vec <- sapply(sim_results, `[[`, "Signif")
+    cens_vec <- sapply(sim_results, `[[`, "cens_time")
+    ss_vec <- sapply(sim_results, `[[`, "sample_size")
 
-            lambda_c <- solution$x[1]
-            gamma_c <- solution$x[2]
-          }
-        } else if (control_parameters=="Distribution"){
-          sampledS1to <- stats::rbeta(1, t1_Beta_a, t1_Beta_b)
-          sampledDelta1 <- stats::rbeta(1, diff_Beta_a, diff_Beta_b)
-          sampledS1toPrime <- sampledS1to - sampledDelta1
-
-          # Solve for lambda and gamma using sampled values
-          solution <- nleqslv::nleqslv(c(10, 1), function(params) {
-            lambda <- params[1]
-            k <- params[2]
-            c(exp(-(t1 / lambda)^k) - sampledS1to,
-              exp(-(t2 / lambda)^k) - sampledS1toPrime)
-          })
-
-          lambda_c <- 1 / solution$x[1]
-          gamma_c <- solution$x[2]
-        }
-      }
-
-      if (stats::runif(1) > P_S){
-        #Curves do not separate
-        delay_time <- 0
-        post_delay_HR <- 1
-      } else {
-        if (stats::runif(1) > P_DTE){
-          #Curves separate with no delay
-          delay_time <- 0
-          post_delay_HR_sample <- SHELF::sampleFit(post_delay_HR_SHELF, n = 1)
-          post_delay_HR <- post_delay_HR_sample[,post_delay_HR_dist]
-        } else{
-          #Curves separate with a delay
-          delay_time_sample <- SHELF::sampleFit(delay_time_SHELF, n = 1)
-          post_delay_HR_sample <- SHELF::sampleFit(post_delay_HR_SHELF, n = 1)
-          delay_time <- delay_time_sample[,delay_time_dist]
-          post_delay_HR <- post_delay_HR_sample[,post_delay_HR_dist]
-        }
-      }
-
-      data <- sim_dte(n_c[j], n_t[j], lambda_c, delay_time, post_delay_HR, dist = control_dist, gamma_c = gamma_c)
-
-      if (rec_method=="power"){
-        data <- add_recruitment_time(data, rec_method,
-                                     rec_period, rec_power)
-      }
-
-      if (rec_method == "PWC"){
-        data <- add_recruitment_time(data, rec_method,
-                                     rec_rate, rec_duration)
-      }
-
-      data_after_cens <- cens_data(data, cens_method, cens_time, cens_IF, cens_events)
-      data <- data_after_cens$data
-
-      cens_vec[i] <- data_after_cens$cens_time
-      ss_vec[i] <- data_after_cens$sample_size
-
-
-      test <- survival_test(data, analysis_method,
-                            alternative, alpha = alpha,
-                            rho, gamma,
-                            t_star, s_star)
-
-      assurance_vec[i] <- test$Signif
-
-      if (!is.null(target_HR)) {
-        assurance_targetHR_vec[i] <- test$Signif * (test$deltad < target_HR)
-      }
-
+    if (!is.null(target_HR)) {
+      deltad_vec <- sapply(sim_results, `[[`, "deltad")
+      assurance_targetHR_vec <- assurance_vec * (deltad_vec < target_HR)
     }
 
     assurance <- mean(assurance_vec)
+    CI_assurance <- stats::binom.test(sum(assurance_vec), nSims)$conf.int
 
     if (!is.null(target_HR)) {
       assurance_targetHR <- mean(assurance_targetHR_vec)
-    }
-
-
-    if (!is.null(target_HR)) {
-      calc_dte_assurance_list[[j]] <- list(assurance = assurance, CI_assurance = c(assurance - 1.96*sqrt(assurance*(1-assurance)/nSims),
-                                                                                   assurance + 1.96*sqrt(assurance*(1-assurance)/nSims)),
-                                           assurance_targetHR = assurance_targetHR, CI_assurance_targetHR = c(assurance_targetHR - 1.96*sqrt(assurance_targetHR*(1-assurance_targetHR)/nSims),
-                                                                                                              assurance_targetHR + 1.96*sqrt(assurance_targetHR*(1-assurance_targetHR)/nSims)),
-                                           duration = mean(cens_vec), sample_size = mean(ss_vec))
+      CI_targetHR <- stats::binom.test(sum(assurance_targetHR_vec), nSims)$conf.int
+      calc_dte_assurance_list[[j]] <- list(
+        assurance = assurance,
+        CI_assurance = CI_assurance,
+        assurance_targetHR = assurance_targetHR,
+        CI_assurance_targetHR = CI_targetHR,
+        duration = mean(cens_vec),
+        sample_size = mean(ss_vec)
+      )
     } else {
-      calc_dte_assurance_list[[j]] <- list(assurance = assurance, CI_assurance = c(assurance - 1.96*sqrt(assurance*(1-assurance)/nSims),
-                                                                                   assurance + 1.96*sqrt(assurance*(1-assurance)/nSims)),
-                                           duration = mean(cens_vec),sample_size = mean(ss_vec))
-    }
+      calc_dte_assurance_list[[j]] <- list(
+        assurance = assurance,
+        CI_assurance = CI_assurance,
+        duration = mean(cens_vec),
+        sample_size = mean(ss_vec)
+      )
     }
   }
 
-  return(calc_dte_assurance_list = calc_dte_assurance_list)
-
-
+  return(calc_dte_assurance_list)
 }
+
 
 #' Calculate statistical significance on a survival data set
 #'
@@ -333,7 +284,11 @@ calc_dte_assurance <- function(n_c, n_t,
 #' @param gamma Gamma parameter for the Fleming-Harrington weighted log-rank test
 #' @param t_star Parameter t^* in the modestly weighted test
 #' @param s_star Parameter s^* in the modestly weighted test
-#' @return An indicator of significance
+#' @return A list with:
+#' \describe{
+#'   \item{Signif}{Logical indicator of statistical significance}
+#'   \item{deltad}{Estimated hazard ratio from Cox model}
+#' }
 #' @export
 
 
@@ -375,88 +330,82 @@ survival_test <- function(data, analysis_method = "LRT", alternative = "one.side
 
 }
 
-#' Add a recruitment time to a survival data
+#' Add recruitment time to a survival dataset
 #'
-#' @param data A survival dataframe
-#' @param rec_method Recruitment method, must be one of "power" or "PWC" (piecewise constant)
-#' @param rec_period Parameter used to model recruitment according to power model
-#' @param rec_power Parameter used to model recruitment according to power model
-#' @param rec_rate Parameter used to model recruitment according to piecewise constant model
-#' @param rec_duration Parameter used to model recruitment according to piecewise constant model
+#' @param data A survival dataframe with columns: time, status, group
+#' @param rec_method Recruitment method: "power" or "PWC" (piecewise constant)
+#' @param rec_period Period length for power model
+#' @param rec_power Power parameter for power model
+#' @param rec_rate Comma-separated string of rates for PWC model
+#' @param rec_duration Comma-separated string of durations for PWC model
 #'
-#' @return a DTE data set
+#' @return A dataframe with added columns: rec_time and pseudo_time
 #' @export
-#'
 
 add_recruitment_time <- function(data, rec_method,
-                                 rec_period=NULL, rec_power=NULL, rec_rate=NULL, rec_duration=NULL){
+                                 rec_period = NULL, rec_power = NULL,
+                                 rec_rate = NULL, rec_duration = NULL) {
+
+  # --- Input validation ---
+  if (!rec_method %in% c("power", "PWC")) {
+    stop("rec_method must be either 'power' or 'PWC'")
+  }
+
+  if (!is.data.frame(data)) stop("Input 'data' must be a dataframe")
 
   n_patients <- nrow(data)
 
-  if (rec_method=="power"){
-
-    data$rec_time <- rec_period * stats::runif(n_patients)^(1/rec_power)
-
+  # --- Power model recruitment ---
+  if (rec_method == "power") {
+    if (is.null(rec_period) || is.null(rec_power)) {
+      stop("rec_period and rec_power must be specified for power recruitment")
+    }
+    data$rec_time <- rec_period * stats::runif(n_patients)^(1 / rec_power)
   }
 
+  # --- Piecewise constant recruitment ---
   if (rec_method == "PWC") {
-    # Parse recruitment rate and duration inputs
+    if (is.null(rec_rate) || is.null(rec_duration)) {
+      stop("rec_rate and rec_duration must be specified for PWC recruitment")
+    }
+
     rec_rate <- as.numeric(unlist(strsplit(rec_rate, ",")))
     rec_duration <- as.numeric(unlist(strsplit(rec_duration, ",")))
 
-    # Ensure valid inputs
-    if (any(rec_rate < 0)) stop("rec_rate should be non-negative")
-    if (length(rec_rate) != length(rec_duration)) stop("Lengths of rec_rate and rec_duration should match")
-
-    n_periods <- length(rec_duration)
-
-    if (length(rec_rate) == 1) { # Simple case with only one rate
-      rec <- cumsum(stats::rexp(n = n_patients, rate = rec_rate))
-    } else { # Piecewise recruitment
-      # Create a data frame for the piecewise periods
-      df <- data.frame(
-        rate = rec_rate,
-        duration = rec_duration,
-        period = 1:n_periods,
-        finish = cumsum(rec_duration),
-        lambda = rec_duration * rec_rate,
-        origin = c(0, cumsum(rec_duration)[-n_periods])
-      )
-
-      # Generate the number of recruits in each period using Poisson distribution
-      df$N <- sapply(df$lambda, function(x) stats::rpois(n = 1, lambda = x))
-
-      # Check if any recruits were generated
-      if (sum(df$N) == 0) {
-        if (df$rate[n_periods] == 0) stop("Please specify positive rec_rate for the last period; otherwise, enrollment cannot finish.")
-        rec <- cumsum(stats::rexp(n = n_patients, rate = df$rate[n_periods])) + df$finish[n_periods]
-      } else {
-        # Generate recruitment times for each period
-        rec <- unlist(apply(df, 1, function(x) {
-          sort(stats::runif(n = x[["N"]], min = x[["origin"]], max = x[["finish"]]))
-        }))
-
-        # Check if we have enough recruits
-        if (length(rec) >= n_patients) {
-          rec <- rec[1:n_patients]
-        } else {
-          # Ensure enrollment completion if needed
-          if (df$rate[n_periods] == 0) stop("Please specify positive rec_rate for the last period; otherwise, enrollment cannot finish.")
-
-          # Generate additional recruitment times if needed
-          rec <- c(rec, cumsum(stats::rexp(n_patients - length(rec), rate = df$rate[n_periods])) + df$finish[n_periods])
-        }
-      }
+    if (any(rec_rate < 0)) stop("rec_rate values must be non-negative")
+    if (length(rec_rate) != length(rec_duration)) {
+      stop("rec_rate and rec_duration must have the same length")
     }
 
-    # Assign recruitment times to the data frame
-    data$rec_time <- rec
+    df <- data.frame(
+      rate = rec_rate,
+      duration = rec_duration,
+      origin = c(0, cumsum(rec_duration)[-length(rec_duration)]),
+      finish = cumsum(rec_duration)
+    )
+    df$lambda <- df$rate * df$duration
+    df$N <- sapply(df$lambda, function(x) stats::rpois(1, lambda = x))
+
+    rec <- unlist(mapply(function(N, origin, finish) {
+      if (N > 0) sort(stats::runif(N, min = origin, max = finish)) else numeric(0)
+    }, df$N, df$origin, df$finish))
+
+    if (length(rec) < n_patients) {
+      final_rate <- tail(df$rate, 1)
+      final_time <- tail(df$finish, 1)
+      if (final_rate == 0) stop("Final recruitment rate must be positive to complete enrollment")
+      extra <- cumsum(stats::rexp(n_patients - length(rec), rate = final_rate)) + final_time
+      rec <- c(rec, extra)
+    }
+
+    data$rec_time <- rec[1:n_patients]
   }
 
+  # --- Add pseudo time ---
   data$pseudo_time <- data$time + data$rec_time
+  attr(data, "recruitment_model") <- rec_method
 
   return(data)
-
 }
 
 
@@ -737,10 +686,39 @@ calc_dte_assurance_interim <- function(n_c, n_t,
 #' @param rec_duration Parameter used to model recruitment according to piecewise constant model
 #' @param alpha_spending Cumulative alpha spending
 #' @param beta_spending Cumulative beta spending
-#' @param IF_list Vector of information fractions - must be in the format: `c("0.25, 1", "0.5, 1", "0.75, 1")'
+#' @param IF_list Vector of information fractions - must be in the format: `c("0.5, 1")'
 #' @param k Number of stages
 #' @param N Number of trials simulated (default is 50)
 #' @param M Number of samples from the posterior (default is 50)
+#'
+#' @return Numeric vector of length `N` containing the simulated Bayesian Predictive Probabilities.
+#'
+#' @examples
+#' set.seed(123)
+#' # Minimal example for CRAN: small n_sim for fast execution
+#' res <- calc_BPP_hist(n_c = 300,
+#'                      n_t = 300,
+#'                      control_dist = "Exponential",
+#'                      t1 = 12,
+#'                      t1_Beta_a = 20,
+#'                      t1_Beta_b = 32,
+#'                      delay_time_SHELF = SHELF::fitdist(c(5.5, 6, 6.5), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 12),
+#'                      delay_time_dist = "gamma",
+#'                      post_delay_HR_SHELF = SHELF::fitdist(c(0.5, 0.6, 0.7), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 1),
+#'                      post_delay_HR_dist = "gamma",
+#'                      P_S = 1,
+#'                      P_DTE = 0,
+#'                      cens_events = 300,
+#'                      rec_method = "power",
+#'                      rec_period = 12,
+#'                      rec_power = 1,
+#'                      alpha_spending = c(0.01, 0.025),
+#'                      beta_spending = c(0.05, 0.1),
+#'                      IF_list = c("0.5, 1"),
+#'                      k = 2,
+#'                      M = 5,
+#'                      N = 5)
+#' str(res)
 #'
 
 #' @export
