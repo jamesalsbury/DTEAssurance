@@ -122,153 +122,144 @@ cens_data <- function(data,
 }
 
 
-#' Calculate Assurance for a trial with a Delayed Treatment Effect
+#' Calculate Assurance for a Trial with a Delayed Treatment Effect
 #'
-#' @param n_c Number of patients in the control group
-#' @param n_t Number of patients in the treatment group
-#' @param control_dist Distribution of control group, must be one of "Exponential" (default) or "weibull"
-#' @param control_parameters The parameters for the control group are either "Fixed" (default) or "Distribution"
-#' @param fixed_parameters_type The fixed parameters are either a "Parameters" (default) or "Landmark"
-#' @param control_distribution Control parameters will be parameterised through "Elicitation" (default) or a "MCMC_sample"
-#' @param lambda_c Control group parameter
-#' @param gamma_c Control group parameter
-#' @param t1 Time 1
-#' @param t2 Time 2
-#' @param surv_t1 Survival probability at time 1
-#' @param surv_t2 Survival probability at time 2
-#' @param MCMC_sample A MCMC sample for the control parameters
-#' @param t1_Beta_a Hyperparameter a for the Beta distribution for the survival probability at time 1
-#' @param t1_Beta_b Hyperparameter a for the Beta distribution for the survival probability at time 1
-#' @param diff_Beta_a Hyperparameter a for the Beta distribution for the difference in survival probabilities (t2-t1)
-#' @param diff_Beta_b Hyperparameter b for the Beta distribution for the difference in survival probabilities (t2-t1)
-#' @param delay_time_SHELF A SHELF object, beliefs about the delay time
-#' @param delay_time_dist Distribution of the delay time, "hist" is default. See SHELF help for more details
-#' @param post_delay_HR_SHELF A SHELF object, beliefs about the post-delay hazard ratio
-#' @param post_delay_HR_dist Distribution of the post-delay hazard ratio, "hist" is default. See SHELF help for more details
-#' @param P_S Probability of the survival curves separating
-#' @param P_DTE Probability of the survival curves being subject to a DTE, given they separate
-#' @param cens_method Method of censoring, must be either "Time" (default), "Events" or "IF"
-#' @param cens_time Time at which you wish to perform the censoring
-#' @param cens_events Number of events at which you wish to perform the censoring
-#' @param cens_IF Information Fraction at which you wish to perform the censoring
-#' @param rec_method Recruitment method, must be one of "power" or "PWC" (piecewise constant)
-#' @param rec_period Parameter used to model recruitment according to power model
-#' @param rec_power Parameter used to model recruitment according to power model
-#' @param rec_rate Parameter used to model recruitment according to piecewise constant model
-#' @param rec_duration Parameter used to model recruitment according to piecewise constant model
-#' @param analysis_method Method of analysis, "LRT" (default) for standard log-rank test, or "WLRT" for weighted log-rank test
-#' @param alpha Type I error
-#' @param alternative String specifying the alternative hypothesis, must be one of "one.sided" or "two-sided" (default)
-#' @param rho Rho parameter for the Fleming-Harrington weighted log-rank test
-#' @param gamma Gamma parameter for the Fleming-Harrington weighted log-rank test
-#' @param t_star Parameter t^* in the modestly weighted test
-#' @param s_star Parameter s^* in the modestly weighted test
-#' @param target_HR Only claim success if the observed HR is less than this value
-#' @param nSims Number of simulations, default is 1000
+#' @param n_c Vector of control group sample sizes
+#' @param n_t Vector of treatment group sample sizes
+#' @param control_model A named list specifying the control arm survival distribution:
+#'   - `dist`: Distribution type ("Exponential" or "Weibull")
+#'   - `parameter_mode`: Either "Fixed" or "Distribution"
+#'   - `fixed_type`: If "Fixed", specify as "Parameters" or "Landmark"
+#'   - `lambda`: Scale parameter (for Exponential or Weibull)
+#'   - `gamma`: Shape parameter (Weibull only)
+#'   - `t1`, `t2`: Landmark times (used if `fixed_type = "Landmark"`)
+#'   - `surv_t1`, `surv_t2`: Survival probabilities at `t1` and `t2`
+#'   - `t1_Beta_a`, `t1_Beta_b`: Beta prior parameters for survival at `t1`
+#'   - `diff_Beta_a`, `diff_Beta_b`: Beta prior parameters for survival difference between `t1` and `t2`
 #'
-#' @return A list: Assurance value, 95% CI for assurance, Duration
+#' @param effect_model A named list specifying beliefs about the treatment effect:
+#'   - `delay_SHELF`: SHELF object encoding beliefs about delay time
+#'   - `delay_dist`: Distribution type for delay ("hist" by default)
+#'   - `HR_SHELF`: SHELF object encoding beliefs about post-delay hazard ratio
+#'   - `HR_dist`: Distribution type for hazard ratio ("hist" by default)
+#'   - `P_S`: Probability that survival curves separate
+#'   - `P_DTE`: Probability of delayed separation, conditional on separation
+#'
+#' @param censoring_model A named list specifying the censoring mechanism:
+#'   - `method`: One of "Time", "Events", or "IF"
+#'   - `time`: Fixed follow-up time (used if `method = "Time"`)
+#'   - `events`: Number of events to censor at (used if `method = "Events"`)
+#'   - `IF`: Information fraction for censoring (used if `method = "IF"`)
+#'
+#' @param recruitment_model A named list specifying the recruitment process:
+#'   - `method`: "power" or "PWC" (piecewise constant)
+#'   - `period`: Recruitment period (used for power model)
+#'   - `power`: Accrual shape parameter (used for power model)
+#'   - `rate`: Comma-separated rates (used for PWC model)
+#'   - `duration`: Comma-separated durations (used for PWC model)
+#'
+#' @param analysis_model A named list specifying the statistical test and decision rule:
+#'   - `method`: "LRT" (default), "WLRT", or "MW"
+#'   - `alpha`: Type I error rate (default = 0.025)
+#'   - `alternative_hypothesis`: "one.sided" or "two.sided"
+#'   - `rho`, `gamma`: Fleming-Harrington parameters (WLRT)
+#'   - `t_star`, `s_star`: Modestly weighted test parameters (MW)
+#'   - `success_threshold_HR`: Optional threshold for declaring success (e.g., HR < 0.8)
+#'
+#' @param n_sims Number of simulations to run (default = 1000)
+#'
+#' @return A named list containing operating characteristics:
+#'   - `assurance`: Estimated assurance (probability of success under prior uncertainty)
+#'   - `CI`: 95% confidence interval for assurance
+#'   - `duration`: Mean trial duration
+#'   - `sample_size`: Mean sample size
+#'   - Additional diagnostics if `success_threshold_HR` is specified
+#'
 #' @export
-#'
-calc_dte_assurance <- function(n_c, n_t,
-                               control_dist = "Exponential", control_parameters = "Fixed",
-                               fixed_parameters_type = "Parameter", control_distribution = "Elicitation",
-                               lambda_c = NULL, gamma_c = NULL,
-                               MCMC_sample = NULL,
-                               t1 = NULL, t2 = NULL,
-                               surv_t1 = NULL, surv_t2 = NULL,
-                               t1_Beta_a = NULL, t1_Beta_b = NULL,
-                               diff_Beta_a = NULL, diff_Beta_b = NULL,
-                               delay_time_SHELF, delay_time_dist = "hist",
-                               post_delay_HR_SHELF, post_delay_HR_dist = "hist",
-                               P_S = 1, P_DTE = 0,
-                               cens_method = "Time", cens_time = NULL, cens_IF = NULL, cens_events = NULL,
-                               rec_method, rec_period = NULL, rec_power = NULL, rec_rate = NULL, rec_duration = NULL,
-                               analysis_method = "LRT", alpha = 0.05, alternative = "one.sided",
-                               rho = 0, gamma = 0,
-                               t_star = NULL, s_star = NULL,
-                               target_HR = NULL,
-                               nSims = 1e3) {
+calc_dte_assurance <- function(n_c,
+                               n_t,
+                               control_model,
+                               effect_model,
+                               censoring_model,
+                               recruitment_model,
+                               analysis_model,
+                               n_sims = 1000) {
 
-  loopVec <- if (cens_method == "Events") (n_c + n_t) > cens_events else rep(TRUE, length(n_c))
-  calc_dte_assurance_list <- vector("list", length(n_c))
+  loopVec <- if (censoring_model$method == "Events") {
+    (n_c + n_t) > censoring_model$events
+  } else {
+    rep(TRUE, length(n_c))
+  }
+
+  # Preallocate output containers
+  assurance_vec <- numeric(length(n_c))
+  CI_mat <- matrix(NA, nrow = length(n_c), ncol = 2)
+  duration_vec <- numeric(length(n_c))
+  sample_size_vec <- numeric(length(n_c))
+
+  if (!is.null(analysis_model$success_threshold_HR)) {
+    assurance_targetHR_vec <- numeric(length(n_c))
+    CI_targetHR_mat <- matrix(NA, nrow = length(n_c), ncol = 2)
+  }
 
   for (j in seq_along(n_c)) {
     if (!loopVec[j]) {
-      calc_dte_assurance_list[[j]] <- if (!is.null(target_HR)) {
-        list(assurance = NA, CI_assurance = NA,
-             assurance_targetHR = NA, CI_assurance_targetHR = NA,
-             duration = NA, sample_size = NA)
-      } else {
-        list(assurance = NA, CI_assurance = NA,
-             duration = NA, sample_size = NA)
+      assurance_vec[j] <- NA
+      CI_mat[j, ] <- NA
+      duration_vec[j] <- NA
+      sample_size_vec[j] <- NA
+      if (!is.null(analysis_model$success_threshold_HR)) {
+        assurance_targetHR_vec[j] <- NA
+        CI_targetHR_mat[j, ] <- NA
       }
       next
     }
 
-    delay_time_samples <- SHELF::sampleFit(delay_time_SHELF, n = nSims)[, delay_time_dist]
-    post_delay_HR_samples <- SHELF::sampleFit(post_delay_HR_SHELF, n = nSims)[, post_delay_HR_dist]
+    delay_time_samples <- SHELF::sampleFit(effect_model$delay_SHELF, n = n_sims)[, effect_model$delay_dist]
+    post_delay_HR_samples <- SHELF::sampleFit(effect_model$HR_SHELF, n = n_sims)[, effect_model$HR_dist]
 
-    sim_results <- future_lapply(seq_len(nSims), simulate_one_trial, future.seed = TRUE,
+    sim_results <- future_lapply(seq_len(n_sims), simulate_one_trial, future.seed = TRUE,
                                  j = j,
                                  n_c = n_c, n_t = n_t,
-                                 control_dist = control_dist,
-                                 control_parameters = control_parameters,
-                                 fixed_parameters_type = fixed_parameters_type,
-                                 control_distribution = control_distribution,
-                                 lambda_c = lambda_c, gamma_c = gamma_c,
-                                 MCMC_sample = MCMC_sample,
-                                 t1 = t1, t2 = t2,
-                                 surv_t1 = surv_t1, surv_t2 = surv_t2,
-                                 t1_Beta_a = t1_Beta_a, t1_Beta_b = t1_Beta_b,
-                                 diff_Beta_a = diff_Beta_a, diff_Beta_b = diff_Beta_b,
+                                 control_model = control_model,
+                                 effect_model = effect_model,
+                                 censoring_model = censoring_model,
+                                 recruitment_model = recruitment_model,
+                                 analysis_model = analysis_model,
                                  delay_time_samples = delay_time_samples,
-                                 post_delay_HR_samples = post_delay_HR_samples,
-                                 P_S = P_S, P_DTE = P_DTE,
-                                 cens_method = cens_method, cens_time = cens_time,
-                                 cens_IF = cens_IF, cens_events = cens_events,
-                                 rec_method = rec_method, rec_period = rec_period,
-                                 rec_power = rec_power, rec_rate = rec_rate,
-                                 rec_duration = rec_duration,
-                                 analysis_method = analysis_method,
-                                 alpha = alpha, alternative = alternative,
-                                 rho = rho, gamma = gamma,
-                                 t_star = t_star, s_star = s_star,
-                                 target_HR = target_HR)
+                                 post_delay_HR_samples = post_delay_HR_samples)
 
-    assurance_vec <- sapply(sim_results, `[[`, "Signif")
+    assurance_flags <- sapply(sim_results, `[[`, "Signif")
     cens_vec <- sapply(sim_results, `[[`, "cens_time")
     ss_vec <- sapply(sim_results, `[[`, "sample_size")
 
-    if (!is.null(target_HR)) {
+    assurance_vec[j] <- mean(assurance_flags)
+    CI_mat[j, ] <- stats::binom.test(sum(assurance_flags), n_sims)$conf.int
+    duration_vec[j] <- mean(cens_vec)
+    sample_size_vec[j] <- mean(ss_vec)
+
+    if (!is.null(analysis_model$success_threshold_HR)) {
       deltad_vec <- sapply(sim_results, `[[`, "deltad")
-      assurance_targetHR_vec <- assurance_vec * (deltad_vec < target_HR)
-    }
-
-    assurance <- mean(assurance_vec)
-    CI_assurance <- stats::binom.test(sum(assurance_vec), nSims)$conf.int
-
-    if (!is.null(target_HR)) {
-      assurance_targetHR <- mean(assurance_targetHR_vec)
-      CI_targetHR <- stats::binom.test(sum(assurance_targetHR_vec), nSims)$conf.int
-      calc_dte_assurance_list[[j]] <- list(
-        assurance = assurance,
-        CI_assurance = CI_assurance,
-        assurance_targetHR = assurance_targetHR,
-        CI_assurance_targetHR = CI_targetHR,
-        duration = mean(cens_vec),
-        sample_size = mean(ss_vec)
-      )
-    } else {
-      calc_dte_assurance_list[[j]] <- list(
-        assurance = assurance,
-        CI_assurance = CI_assurance,
-        duration = mean(cens_vec),
-        sample_size = mean(ss_vec)
-      )
+      assurance_targetHR_flags <- assurance_flags * (deltad_vec < analysis_model$success_threshold_HR)
+      assurance_targetHR_vec[j] <- mean(assurance_targetHR_flags)
+      CI_targetHR_mat[j, ] <- stats::binom.test(sum(assurance_targetHR_flags), n_sims)$conf.int
     }
   }
 
-  return(calc_dte_assurance_list)
+  # Assemble structured output
+  output <- list(
+    assurance = assurance_vec,
+    CI = CI_mat,
+    duration = duration_vec,
+    sample_size = sample_size_vec
+  )
+
+  if (!is.null(analysis_model$success_threshold_HR)) {
+    output$assurance_targetHR <- assurance_targetHR_vec
+    output$CI_targetHR <- CI_targetHR_mat
+  }
+
+  return(output)
 }
 
 
@@ -411,254 +402,119 @@ add_recruitment_time <- function(data, rec_method,
 
 #' Simulates a Group Sequential Trial for a trial with a Delayed Treatment Effect, with elicited priors
 #'
-#' @param n_c Number of patients in the control group
-#' @param n_t Number of patients in the treatment group
-#' @param control_dist Distribution of control group, must be one of "Exponential" (default) or "weibull"
-#' @param control_parameters The parameters for the control group are either "Fixed" (default) or "Distribution"
-#' @param fixed_parameters_type The fixed parameters are either a "Parameters" (default) or "Landmark"
-#' @param lambda_c Control group parameter
-#' @param gamma_c Control group parameter
-#' @param t1 Time 1
-#' @param t2 Time 2
-#' @param surv_t1 Survival probability at time 1
-#' @param surv_t2 Survival probability at time 2
-#' @param t1_Beta_a Hyperparameter a for the Beta distribution for the survival probability at time 1
-#' @param t1_Beta_b Hyperparameter a for the Beta distribution for the survival probability at time 1
-#' @param diff_Beta_a Hyperparameter a for the Beta distribution for the difference in survival probabilities (t2-t1)
-#' @param diff_Beta_b Hyperparameter b for the Beta distribution for the difference in survival probabilities (t2-t1)
-#' @param delay_time_SHELF A SHELF object, beliefs about the delay time
-#' @param delay_time_dist Distribution of the delay time, "hist" is default. See SHELF help for more details
-#' @param post_delay_HR_SHELF A SHELF object, beliefs about the post-delay hazard ratio
-#' @param post_delay_HR_dist Distribution of the post-delay hazard ratio, "hist" is default. See SHELF help for more details
-#' @param P_S Probability of the survival curves separating
-#' @param P_DTE Probability of the survival curves being subject to a DTE, given they separate
-#' @param cens_events Number of events at which you wish to perform the censoring (must be less than n_c + n_t)
-#' @param rec_method Recruitment method, must be one of "power" or "PWC" (piecewise constant)
-#' @param rec_period Parameter used to model recruitment according to power model
-#' @param rec_power Parameter used to model recruitment according to power model
-#' @param rec_rate Parameter used to model recruitment according to piecewise constant model
-#' @param rec_duration Parameter used to model recruitment according to piecewise constant model
-#' @param alpha_spending Cumulative alpha spending
-#' @param beta_spending Cumulative beta spending
-#' @param IF_list Vector of information fractions - must be in the format: `c("0.25, 1", "0.5, 1", "0.75, 1")'
-#' @param k Number of stages
-#' @param type_one_error Alpha (if k = 1)
+#' @param n_c Control group sample size
+#' @param n_t Treatment group sample size
+#' @param control_model A named list specifying the control arm survival distribution:
+#'   - `dist`: Distribution type ("Exponential" or "Weibull")
+#'   - `parameter_mode`: Either "Fixed" or "Distribution"
+#'   - `fixed_type`: If "Fixed", specify as "Parameters" or "Landmark"
+#'   - `lambda`: Scale parameter (for Exponential or Weibull)
+#'   - `gamma`: Shape parameter (Weibull only)
+#'   - `t1`, `t2`: Landmark times (used if `fixed_type = "Landmark"`)
+#'   - `surv_t1`, `surv_t2`: Survival probabilities at `t1` and `t2`
+#'   - `t1_Beta_a`, `t1_Beta_b`: Beta prior parameters for survival at `t1`
+#'   - `diff_Beta_a`, `diff_Beta_b`: Beta prior parameters for survival difference between `t1` and `t2`
+#'
+#' @param effect_model A named list specifying beliefs about the treatment effect:
+#'   - `delay_SHELF`: SHELF object encoding beliefs about delay time
+#'   - `delay_dist`: Distribution type for delay ("hist" by default)
+#'   - `HR_SHELF`: SHELF object encoding beliefs about post-delay hazard ratio
+#'   - `HR_dist`: Distribution type for hazard ratio ("hist" by default)
+#'   - `P_S`: Probability that survival curves separate
+#'   - `P_DTE`: Probability of delayed separation, conditional on separation
+#'
+#' @param recruitment_model A named list specifying the recruitment process:
+#'   - `method`: "power" or "PWC" (piecewise constant)
+#'   - `period`: Recruitment period (used for power model)
+#'   - `power`: Accrual shape parameter (used for power model)
+#'   - `rate`: Comma-separated rates (used for PWC model)
+#'   - `duration`: Comma-separated durations (used for PWC model)
+#'
+#' @param GSD_model A named list specifying the GSD process:
+#'   - `events` Number of events
+#'   - `alpha_spending` Cumulative alpha spending
+#'   - `beta_spending` Cumulative beta spending
+#'   - `IF_vec` Vector of information fractions
 #' @param nSims Number of simulations, default is 1000
 #' @export
 
 calc_dte_assurance_interim <- function(n_c, n_t,
-                                       control_dist = "Exponential", control_parameters = "Fixed",
-                                       fixed_parameters_type = "Parameter",
-                                       lambda_c = NULL, gamma_c = NULL,
-                                       t1 = NULL, t2 = NULL,
-                                       surv_t1 = NULL, surv_t2 = NULL,
-                                       t1_Beta_a = NULL, t1_Beta_b = NULL,
-                                       diff_Beta_a = NULL, diff_Beta_b = NULL,
-                                       delay_time_SHELF, delay_time_dist = "hist",
-                                       post_delay_HR_SHELF, post_delay_HR_dist = "hist",
-                                       P_S = 1, P_DTE = 0, cens_events = NULL,
-                                       rec_method, rec_period=NULL, rec_power=NULL, rec_rate=NULL, rec_duration=NULL,
-                                       alpha_spending = NULL, beta_spending = NULL, IF_list = NULL, k = 2,
-                                       type_one_error = NULL,  nSims=1e3){
+                                       control_model,
+                                       effect_model,
+                                       recruitment_model,
+                                       GSD_model,
+                                       nSims = 1000) {
 
-  if (k > 1 ){
+  # --- Initialize design list ---
+  designList <- lapply(IF_list, function(IF_str) {
+    info_rates <- as.numeric(strsplit(IF_str, ", ")[[1]])
 
-    designList <- vector("list", length(IF_list))
+    design <- rpact::getDesignGroupSequential(typeOfDesign = "asUser",
+                                              informationRates = info_rates,
+                                              userAlphaSpending = alpha_spending,
+                                              typeBetaSpending = "bsUser",
+                                              userBetaSpending = beta_spending)
 
-    for (j in 1:length(IF_list)){
+    list(
+      IF = info_rates,
+      critValues = design$criticalValues,
+      futBounds = design$futilityBounds,
+      assurance_vec = numeric(nSims),
+      ss_vec = numeric(nSims),
+      duration_vec = numeric(nSims),
+      status_vec = character(nSims),
+      IATimes_vec = character(nSims),
+      final_success_vec = logical(nSims)
+    )
+  })
 
-      info_rates <- as.numeric(strsplit(IF_list[j], ", ")[[1]])
+  # --- Run simulations ---
+  results_list <- lapply(seq_len(nSims), simulate_one_gsd_trial,
+                         n_c = n_c, n_t = n_t,
+                         control_dist = control_dist, control_parameters = control_parameters,
+                         fixed_parameters_type = fixed_parameters_type,
+                         lambda_c = lambda_c, gamma_c = gamma_c,
+                         t1 = t1, t2 = t2,
+                         surv_t1 = surv_t1, surv_t2 = surv_t2,
+                         t1_Beta_a = t1_Beta_a, t1_Beta_b = t1_Beta_b,
+                         diff_Beta_a = diff_Beta_a, diff_Beta_b = diff_Beta_b,
+                         delay_time_SHELF = delay_time_SHELF, delay_time_dist = delay_time_dist,
+                         post_delay_HR_SHELF = post_delay_HR_SHELF, post_delay_HR_dist = post_delay_HR_dist,
+                         P_S = P_S, P_DTE = P_DTE, cens_events = cens_events,
+                         rec_method = rec_method, rec_period = rec_period, rec_power = rec_power,
+                         rec_rate = rec_rate, rec_duration = rec_duration,
+                         alpha_spending = alpha_spending, beta_spending = beta_spending,
+                         IF_list = IF_list, k = k)
 
-      design <- rpact::getDesignGroupSequential(typeOfDesign = "asUser",
-                                         informationRates = info_rates,
-                                         userAlphaSpending = alpha_spending,
-                                         typeBetaSpending = "bsUser",
-                                         userbetaSpending = beta_spending)
-
-      designList[[j]] <- list(
-        IF = info_rates,
-        critValues = design$criticalValues,
-        futBounds = design$futilityBounds,
-        assurance = rep(NA, nSims),
-        ss = rep(NA, nSims),
-        duration = rep(NA, nSims),
-        status = rep(NA, nSims)
-
-      )
-
+  # --- Aggregate results ---
+  for (i in seq_len(nSims)) {
+    for (j in seq_along(designList)) {
+      designList[[j]]$assurance_vec[i]     <- results_list[[i]][[j]]$assurance
+      designList[[j]]$ss_vec[i]            <- results_list[[i]][[j]]$ss
+      designList[[j]]$duration_vec[i]      <- results_list[[i]][[j]]$duration
+      designList[[j]]$status_vec[i]        <- results_list[[i]][[j]]$status
+      designList[[j]]$IATimes_vec[i]       <- results_list[[i]][[j]]$IATimes
+      designList[[j]]$final_success_vec[i] <- results_list[[i]][[j]]$final_success
     }
-
-    unique_IF <- sort(unique(unlist(lapply(strsplit(IF_list, ", "), as.numeric))))
-
-    for (i in 1:nSims){
-
-      if (control_dist=="Exponential"){
-        if (control_parameters=="Fixed"){
-          if (fixed_parameters_type=="Parameter"){
-            lambda_c <- lambda_c
-          } else if (fixed_parameters_type=="Landmark") {
-            lambda_c <-  -log(surv_t1)/t1
-          }
-        } else if (control_parameters=="Distribution"){
-          lambda_c <- -log(stats::rbeta(1, t1_Beta_a, t1_Beta_b)) / t1
-        }
-      } else if (control_dist=="Weibull"){
-        if (control_parameters=="Fixed"){
-          if (fixed_parameters_type=="Parameter"){
-            lambda_c <- lambda_c
-            gamma_c <- gamma_c
-          } else if (fixed_parameters_type=="Landmark"){
-            WeibFunc <- function(params) {
-              lambda <- params[1]
-              k <- params[2]
-              c(exp(-(t1*lambda)^k) - surv_t1,
-                exp(-(t2*lambda)^k) - surv_t1)
-            }
-
-            solution <- nleqslv::nleqslv(c(1, 1), fn = WeibFunc)
-
-            lambda_c <- solution$x[1]
-            gamma_c <- solution$x[2]
-          }
-        } else if (control_parameters=="Distribution"){
-          sampledS1to <- stats::rbeta(1, t1_Beta_a, t1_Beta_b)
-          sampledDelta1 <- stats::rbeta(1, diff_Beta_a, diff_Beta_b)
-          sampledS1toPrime <- sampledS1to - sampledDelta1
-
-          # Solve for lambda and gamma using sampled values
-          solution <- nleqslv::nleqslv(c(10, 1), function(params) {
-            lambda <- params[1]
-            k <- params[2]
-            c(exp(-(t1 / lambda)^k) - sampledS1to,
-              exp(-(t2 / lambda)^k) - sampledS1toPrime)
-          })
-
-          lambda_c <- 1 / solution$x[1]
-          gamma_c <- solution$x[2]
-        }
-      }
-
-      if (stats::runif(1) > P_S){
-        #Curves do not separate
-        delay_time <- 0
-        post_delay_HR <- 1
-      } else {
-        if (stats::runif(1) > P_DTE){
-          #Curves separate with no delay
-          delay_time <- 0
-          post_delay_HR_sample <- SHELF::sampleFit(post_delay_HR_SHELF, n = 1)
-          post_delay_HR <- post_delay_HR_sample[,post_delay_HR_dist]
-        } else{
-          #Curves separate with a delay
-          delay_time_sample <- SHELF::sampleFit(delay_time_SHELF, n = 1)
-          post_delay_HR_sample <- SHELF::sampleFit(post_delay_HR_SHELF, n = 1)
-          delay_time <- delay_time_sample[,delay_time_dist]
-          post_delay_HR <- post_delay_HR_sample[,post_delay_HR_dist]
-        }
-      }
-
-      data <- sim_dte(n_c, n_t, lambda_c, delay_time, post_delay_HR, dist = control_dist, gamma_c = gamma_c)
-
-      if (rec_method=="power"){
-        data <- add_recruitment_time(data, rec_method,
-                                     rec_period, rec_power)
-      }
-
-      if (rec_method == "PWC"){
-        data <- add_recruitment_time(data, rec_method,
-                                     rec_rate, rec_duration)
-      }
-
-
-      unique_IF_DF <- data.frame(matrix(NA, nrow = length(unique_IF), ncol = 4))
-      unique_IF_DF[,1] <- unique_IF
-      colnames(unique_IF_DF) <- c("IF", "SS", "Duration", "Z-Score")
-
-
-
-      for (j in 1:length(unique_IF)){
-        data_after_cens <- cens_data(data, cens_method = "Events", cens_events = unique_IF_DF$IF[j]*cens_events)
-        coxmodel <- survival::coxph(Surv(survival_time, status) ~ group, data = data_after_cens$data)
-        unique_IF_DF$`Z-Score`[j] <- -(stats::coef(summary(coxmodel))[, 4])
-        unique_IF_DF$SS[j] <- data_after_cens$sample_size
-        unique_IF_DF$Duration[j] <- data_after_cens$cens_time
-      }
-
-
-      for (l in 1:length(designList)){
-        subset_table <- unique_IF_DF[unique_IF_DF$IF %in% designList[[l]]$IF,]
-        GSD_output <- group_sequential_decision(z_scores = subset_table$`Z-Score` ,
-                                                critical_values = designList[[l]]$critValues,
-                                                futility_values = designList[[l]]$futBounds,
-                                                sample_sizes = subset_table$SS,
-                                                durations = subset_table$Duration,
-                                                alpha_spending = alpha_spending[k])
-
-
-        designList[[l]]$assurance[i] <- GSD_output$successful
-        designList[[l]]$ss[i] <- GSD_output$sample_size
-        designList[[l]]$duration[i] <- GSD_output$duration
-        designList[[l]]$status[i] <- GSD_output$status
-        designList[[l]]$IATimes[i] <- paste(subset_table$Duration, collapse = ", ")
-        designList[[l]]$final_success[i] <- GSD_output$final_success
-      }
-
-    }
-
-    for (j in 1:length(designList)){
-      designList[[j]]$assurance_mean <- mean(designList[[j]]$assurance)
-      designList[[j]]$ss_mean <- mean(designList[[j]]$ss)
-      designList[[j]]$duration_mean <- mean(designList[[j]]$duration)
-      designList[[j]]$eff_mean <- mean(grepl("Stopped for efficacy at IA", designList[[j]]$status))
-      designList[[j]]$fut_mean <- mean(grepl("Stopped for futility at IA", designList[[j]]$status))
-    }
-
-    for (j in 1:length(designList)){
-      designList[[j]]$stop_mean <- designList[[j]]$eff_mean + designList[[j]]$fut_mean
-
-    }
-
-    return(designList)
-  } else {
-
-
-    outcome <- calc_dte_assurance(n_c = n_c,
-                                  n_t = n_t,
-                                  control_dist = control_dist,
-                                  control_parameters = control_parameters,
-                                  fixed_parameters_type = fixed_parameters_type,
-                                  lambda_c = lambda_c,
-                                  gamma_c = gamma_c,
-                                  t1 = t1,
-                                  t2 = t2,
-                                  surv_t1 = surv_t1,
-                                  surv_t2 = surv_t2,
-                                  t1_Beta_a = t1_Beta_a,
-                                  t1_Beta_b = t1_Beta_b,
-                                  diff_Beta_a = diff_Beta_a,
-                                  diff_Beta_b = diff_Beta_b,
-                                  delay_time_SHELF = delay_time_SHELF,
-                                  delay_time_dist = delay_time_dist,
-                                  post_delay_HR_SHELF = post_delay_HR_SHELF,
-                                  post_delay_HR_dist = post_delay_HR_dist,
-                                  P_S = P_S,
-                                  P_DTE = P_DTE,
-                                  cens_method = "Events",
-                                  cens_events = cens_events,
-                                  rec_method = rec_method,
-                                  rec_period=rec_period,
-                                  rec_power=rec_power,
-                                  rec_rate=rec_rate,
-                                  rec_duration=rec_duration,
-                                  analysis_method = "LRT",
-                                  alpha = type_one_error,
-                                  nSims=nSims)
-
-    return(outcome)
-
   }
 
+  # --- Summarize ---
+  for (j in seq_along(designList)) {
+    designList[[j]]$assurance_mean <- mean(designList[[j]]$assurance_vec)
+    designList[[j]]$ss_mean        <- mean(designList[[j]]$ss_vec)
+    designList[[j]]$duration_mean  <- mean(designList[[j]]$duration_vec)
+    designList[[j]]$eff_mean       <- mean(grepl("Stopped for efficacy at IA", designList[[j]]$status_vec))
+    designList[[j]]$fut_mean       <- mean(grepl("Stopped for futility at IA", designList[[j]]$status_vec))
+    designList[[j]]$stop_mean      <- designList[[j]]$eff_mean + designList[[j]]$fut_mean
+  }
+
+  attr(designList, "nSims") <- nSims
+  attr(designList, "design_type") <- "group_sequential"
+  return(designList)
 }
+
+
+
 
 #'  Calculates the Bayesian Predictive Probability for a trial with a Delayed Treatment Effect
 #'

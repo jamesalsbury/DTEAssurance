@@ -33,7 +33,11 @@ survival_test(
 \item{s_star}{Parameter s^* in the modestly weighted test}
 }
 \value{
-An indicator of significance
+A list with:
+\describe{
+\item{Signif}{Logical indicator of statistical significance}
+\item{deltad}{Estimated hazard ratio from Cox model}
+}
 }
 \description{
 Calculate statistical significance on a survival data set

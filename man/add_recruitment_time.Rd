@@ -2,7 +2,7 @@
 % Please edit documentation in R/main.R
 \name{add_recruitment_time}
 \alias{add_recruitment_time}
-\title{Add a recruitment time to a survival data}
+\title{Add recruitment time to a survival dataset}
 \usage{
 add_recruitment_time(
   data,
@@ -14,21 +14,21 @@ add_recruitment_time(
 )
 }
 \arguments{
-\item{data}{A survival dataframe}
+\item{data}{A survival dataframe with columns: time, status, group}
 
-\item{rec_method}{Recruitment method, must be one of "power" or "PWC" (piecewise constant)}
+\item{rec_method}{Recruitment method: "power" or "PWC" (piecewise constant)}
 
-\item{rec_period}{Parameter used to model recruitment according to power model}
+\item{rec_period}{Period length for power model}
 
-\item{rec_power}{Parameter used to model recruitment according to power model}
+\item{rec_power}{Power parameter for power model}
 
-\item{rec_rate}{Parameter used to model recruitment according to piecewise constant model}
+\item{rec_rate}{Comma-separated string of rates for PWC model}
 
-\item{rec_duration}{Parameter used to model recruitment according to piecewise constant model}
+\item{rec_duration}{Comma-separated string of durations for PWC model}
 }
 \value{
-a DTE data set
+A dataframe with added columns: rec_time and pseudo_time
 }
 \description{
-Add a recruitment time to a survival data
+Add recruitment time to a survival dataset
 }

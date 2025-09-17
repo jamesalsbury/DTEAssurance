@@ -2,138 +2,86 @@
 % Please edit documentation in R/main.R
 \name{calc_dte_assurance}
 \alias{calc_dte_assurance}
-\title{Calculate Assurance for a trial with a Delayed Treatment Effect}
+\title{Calculate Assurance for a Trial with a Delayed Treatment Effect}
 \usage{
 calc_dte_assurance(
   n_c,
   n_t,
-  control_dist = "Exponential",
-  control_parameters = "Fixed",
-  fixed_parameters_type = "Parameter",
-  control_distribution = "Elicitation",
-  lambda_c = NULL,
-  gamma_c = NULL,
-  MCMC_sample = NULL,
-  t1 = NULL,
-  t2 = NULL,
-  surv_t1 = NULL,
-  surv_t2 = NULL,
-  t1_Beta_a = NULL,
-  t1_Beta_b = NULL,
-  diff_Beta_a = NULL,
-  diff_Beta_b = NULL,
-  delay_time_SHELF,
-  delay_time_dist = "hist",
-  post_delay_HR_SHELF,
-  post_delay_HR_dist = "hist",
-  P_S = 1,
-  P_DTE = 0,
-  cens_method = "Time",
-  cens_time = NULL,
-  cens_IF = NULL,
-  cens_events = NULL,
-  rec_method,
-  rec_period = NULL,
-  rec_power = NULL,
-  rec_rate = NULL,
-  rec_duration = NULL,
-  analysis_method = "LRT",
-  alpha = 0.05,
-  alternative = "one.sided",
-  rho = 0,
-  gamma = 0,
-  t_star = NULL,
-  s_star = NULL,
-  target_HR = NULL,
-  nSims = 1000
+  control_model,
+  effect_model,
+  censoring_model,
+  recruitment_model,
+  analysis_model,
+  n_sims = 1000
 )
 }
 \arguments{
-\item{n_c}{Number of patients in the control group}
+\item{n_c}{Vector of control group sample sizes}
 
-\item{n_t}{Number of patients in the treatment group}
+\item{n_t}{Vector of treatment group sample sizes}
 
-\item{control_dist}{Distribution of control group, must be one of "Exponential" (default) or "weibull"}
+\item{control_model}{A named list specifying the control arm survival distribution:
+\itemize{
+\item \code{dist}: Distribution type ("Exponential" or "Weibull")
+\item \code{parameter_mode}: Either "Fixed" or "Distribution"
+\item \code{fixed_type}: If "Fixed", specify as "Parameters" or "Landmark"
+\item \code{lambda}: Scale parameter (for Exponential or Weibull)
+\item \code{gamma}: Shape parameter (Weibull only)
+\item \code{t1}, \code{t2}: Landmark times (used if \code{fixed_type = "Landmark"})
+\item \code{surv_t1}, \code{surv_t2}: Survival probabilities at \code{t1} and \code{t2}
+\item \code{t1_Beta_a}, \code{t1_Beta_b}: Beta prior parameters for survival at \code{t1}
+\item \code{diff_Beta_a}, \code{diff_Beta_b}: Beta prior parameters for survival difference between \code{t1} and \code{t2}
+}}
 
-\item{control_parameters}{The parameters for the control group are either "Fixed" (default) or "Distribution"}
+\item{effect_model}{A named list specifying beliefs about the treatment effect:
+\itemize{
+\item \code{delay_SHELF}: SHELF object encoding beliefs about delay time
+\item \code{delay_dist}: Distribution type for delay ("hist" by default)
+\item \code{HR_SHELF}: SHELF object encoding beliefs about post-delay hazard ratio
+\item \code{HR_dist}: Distribution type for hazard ratio ("hist" by default)
+\item \code{P_S}: Probability that survival curves separate
+\item \code{P_DTE}: Probability of delayed separation, conditional on separation
+}}
 
-\item{fixed_parameters_type}{The fixed parameters are either a "Parameters" (default) or "Landmark"}
+\item{censoring_model}{A named list specifying the censoring mechanism:
+\itemize{
+\item \code{method}: One of "Time", "Events", or "IF"
+\item \code{time}: Fixed follow-up time (used if \code{method = "Time"})
+\item \code{events}: Number of events to censor at (used if \code{method = "Events"})
+\item \code{IF}: Information fraction for censoring (used if \code{method = "IF"})
+}}
 
-\item{control_distribution}{Control parameters will be parameterised through "Elicitation" (default) or a "MCMC_sample"}
+\item{recruitment_model}{A named list specifying the recruitment process:
+\itemize{
+\item \code{method}: "power" or "PWC" (piecewise constant)
+\item \code{period}: Recruitment period (used for power model)
+\item \code{power}: Accrual shape parameter (used for power model)
+\item \code{rate}: Comma-separated rates (used for PWC model)
+\item \code{duration}: Comma-separated durations (used for PWC model)
+}}
 
-\item{lambda_c}{Control group parameter}
+\item{analysis_model}{A named list specifying the statistical test and decision rule:
+\itemize{
+\item \code{method}: "LRT" (default), "WLRT", or "MW"
+\item \code{alpha}: Type I error rate (default = 0.025)
+\item \code{alternative_hypothesis}: "one.sided" or "two.sided"
+\item \code{rho}, \code{gamma}: Fleming-Harrington parameters (WLRT)
+\item \code{t_star}, \code{s_star}: Modestly weighted test parameters (MW)
+\item \code{success_threshold_HR}: Optional threshold for declaring success (e.g., HR < 0.8)
+}}
 
-\item{gamma_c}{Control group parameter}
-
-\item{MCMC_sample}{A MCMC sample for the control parameters}
-
-\item{t1}{Time 1}
-
-\item{t2}{Time 2}
-
-\item{surv_t1}{Survival probability at time 1}
-
-\item{surv_t2}{Survival probability at time 2}
-
-\item{t1_Beta_a}{Hyperparameter a for the Beta distribution for the survival probability at time 1}
-
-\item{t1_Beta_b}{Hyperparameter a for the Beta distribution for the survival probability at time 1}
-
-\item{diff_Beta_a}{Hyperparameter a for the Beta distribution for the difference in survival probabilities (t2-t1)}
-
-\item{diff_Beta_b}{Hyperparameter b for the Beta distribution for the difference in survival probabilities (t2-t1)}
-
-\item{delay_time_SHELF}{A SHELF object, beliefs about the delay time}
-
-\item{delay_time_dist}{Distribution of the delay time, "hist" is default. See SHELF help for more details}
-
-\item{post_delay_HR_SHELF}{A SHELF object, beliefs about the post-delay hazard ratio}
-
-\item{post_delay_HR_dist}{Distribution of the post-delay hazard ratio, "hist" is default. See SHELF help for more details}
-
-\item{P_S}{Probability of the survival curves separating}
-
-\item{P_DTE}{Probability of the survival curves being subject to a DTE, given they separate}
-
-\item{cens_method}{Method of censoring, must be either "Time" (default), "Events" or "IF"}
-
-\item{cens_time}{Time at which you wish to perform the censoring}
-
-\item{cens_IF}{Information Fraction at which you wish to perform the censoring}
-
-\item{cens_events}{Number of events at which you wish to perform the censoring}
-
-\item{rec_method}{Recruitment method, must be one of "power" or "PWC" (piecewise constant)}
-
-\item{rec_period}{Parameter used to model recruitment according to power model}
-
-\item{rec_power}{Parameter used to model recruitment according to power model}
-
-\item{rec_rate}{Parameter used to model recruitment according to piecewise constant model}
-
-\item{rec_duration}{Parameter used to model recruitment according to piecewise constant model}
-
-\item{analysis_method}{Method of analysis, "LRT" (default) for standard log-rank test, or "WLRT" for weighted log-rank test}
-
-\item{alpha}{Type I error}
-
-\item{alternative}{String specifying the alternative hypothesis, must be one of "one.sided" or "two-sided" (default)}
-
-\item{rho}{Rho parameter for the Fleming-Harrington weighted log-rank test}
-
-\item{gamma}{Gamma parameter for the Fleming-Harrington weighted log-rank test}
-
-\item{t_star}{Parameter t^* in the modestly weighted test}
-
-\item{s_star}{Parameter s^* in the modestly weighted test}
-
-\item{target_HR}{Only claim success if the observed HR is less than this value}
-
-\item{nSims}{Number of simulations, default is 1000}
+\item{n_sims}{Number of simulations to run (default = 1000)}
 }
 \value{
-A list: Assurance value, 95\% CI for assurance, Duration
+A named list containing operating characteristics:
+\itemize{
+\item \code{assurance}: Estimated assurance (probability of success under prior uncertainty)
+\item \code{CI}: 95\% confidence interval for assurance
+\item \code{duration}: Mean trial duration
+\item \code{sample_size}: Mean sample size
+\item Additional diagnostics if \code{success_threshold_HR} is specified
+}
 }
 \description{
-Calculate Assurance for a trial with a Delayed Treatment Effect
+Calculate Assurance for a Trial with a Delayed Treatment Effect
 }

@@ -7,103 +7,57 @@
 calc_dte_assurance_interim(
   n_c,
   n_t,
-  control_dist = "Exponential",
-  control_parameters = "Fixed",
-  fixed_parameters_type = "Parameter",
-  lambda_c = NULL,
-  gamma_c = NULL,
-  t1 = NULL,
-  t2 = NULL,
-  surv_t1 = NULL,
-  surv_t2 = NULL,
-  t1_Beta_a = NULL,
-  t1_Beta_b = NULL,
-  diff_Beta_a = NULL,
-  diff_Beta_b = NULL,
-  delay_time_SHELF,
-  delay_time_dist = "hist",
-  post_delay_HR_SHELF,
-  post_delay_HR_dist = "hist",
-  P_S = 1,
-  P_DTE = 0,
-  cens_events = NULL,
-  rec_method,
-  rec_period = NULL,
-  rec_power = NULL,
-  rec_rate = NULL,
-  rec_duration = NULL,
-  alpha_spending = NULL,
-  beta_spending = NULL,
-  IF_list = NULL,
-  k = 2,
-  type_one_error = NULL,
+  control_model,
+  effect_model,
+  recruitment_model,
+  GSD_model,
   nSims = 1000
 )
 }
 \arguments{
-\item{n_c}{Number of patients in the control group}
+\item{n_c}{Control group sample size}
 
-\item{n_t}{Number of patients in the treatment group}
+\item{n_t}{Treatment group sample size}
 
-\item{control_dist}{Distribution of control group, must be one of "Exponential" (default) or "weibull"}
+\item{control_model}{A named list specifying the control arm survival distribution:
+\itemize{
+\item \code{dist}: Distribution type ("Exponential" or "Weibull")
+\item \code{parameter_mode}: Either "Fixed" or "Distribution"
+\item \code{fixed_type}: If "Fixed", specify as "Parameters" or "Landmark"
+\item \code{lambda}: Scale parameter (for Exponential or Weibull)
+\item \code{gamma}: Shape parameter (Weibull only)
+\item \code{t1}, \code{t2}: Landmark times (used if \code{fixed_type = "Landmark"})
+\item \code{surv_t1}, \code{surv_t2}: Survival probabilities at \code{t1} and \code{t2}
+\item \code{t1_Beta_a}, \code{t1_Beta_b}: Beta prior parameters for survival at \code{t1}
+\item \code{diff_Beta_a}, \code{diff_Beta_b}: Beta prior parameters for survival difference between \code{t1} and \code{t2}
+}}
 
-\item{control_parameters}{The parameters for the control group are either "Fixed" (default) or "Distribution"}
+\item{effect_model}{A named list specifying beliefs about the treatment effect:
+\itemize{
+\item \code{delay_SHELF}: SHELF object encoding beliefs about delay time
+\item \code{delay_dist}: Distribution type for delay ("hist" by default)
+\item \code{HR_SHELF}: SHELF object encoding beliefs about post-delay hazard ratio
+\item \code{HR_dist}: Distribution type for hazard ratio ("hist" by default)
+\item \code{P_S}: Probability that survival curves separate
+\item \code{P_DTE}: Probability of delayed separation, conditional on separation
+}}
 
-\item{fixed_parameters_type}{The fixed parameters are either a "Parameters" (default) or "Landmark"}
+\item{recruitment_model}{A named list specifying the recruitment process:
+\itemize{
+\item \code{method}: "power" or "PWC" (piecewise constant)
+\item \code{period}: Recruitment period (used for power model)
+\item \code{power}: Accrual shape parameter (used for power model)
+\item \code{rate}: Comma-separated rates (used for PWC model)
+\item \code{duration}: Comma-separated durations (used for PWC model)
+}}
 
-\item{lambda_c}{Control group parameter}
-
-\item{gamma_c}{Control group parameter}
-
-\item{t1}{Time 1}
-
-\item{t2}{Time 2}
-
-\item{surv_t1}{Survival probability at time 1}
-
-\item{surv_t2}{Survival probability at time 2}
-
-\item{t1_Beta_a}{Hyperparameter a for the Beta distribution for the survival probability at time 1}
-
-\item{t1_Beta_b}{Hyperparameter a for the Beta distribution for the survival probability at time 1}
-
-\item{diff_Beta_a}{Hyperparameter a for the Beta distribution for the difference in survival probabilities (t2-t1)}
-
-\item{diff_Beta_b}{Hyperparameter b for the Beta distribution for the difference in survival probabilities (t2-t1)}
-
-\item{delay_time_SHELF}{A SHELF object, beliefs about the delay time}
-
-\item{delay_time_dist}{Distribution of the delay time, "hist" is default. See SHELF help for more details}
-
-\item{post_delay_HR_SHELF}{A SHELF object, beliefs about the post-delay hazard ratio}
-
-\item{post_delay_HR_dist}{Distribution of the post-delay hazard ratio, "hist" is default. See SHELF help for more details}
-
-\item{P_S}{Probability of the survival curves separating}
-
-\item{P_DTE}{Probability of the survival curves being subject to a DTE, given they separate}
-
-\item{cens_events}{Number of events at which you wish to perform the censoring (must be less than n_c + n_t)}
-
-\item{rec_method}{Recruitment method, must be one of "power" or "PWC" (piecewise constant)}
-
-\item{rec_period}{Parameter used to model recruitment according to power model}
-
-\item{rec_power}{Parameter used to model recruitment according to power model}
-
-\item{rec_rate}{Parameter used to model recruitment according to piecewise constant model}
-
-\item{rec_duration}{Parameter used to model recruitment according to piecewise constant model}
-
-\item{alpha_spending}{Cumulative alpha spending}
-
-\item{beta_spending}{Cumulative beta spending}
-
-\item{IF_list}{Vector of information fractions - must be in the format: `c("0.25, 1", "0.5, 1", "0.75, 1")'}
-
-\item{k}{Number of stages}
-
-\item{type_one_error}{Alpha (if k = 1)}
+\item{GSD_model}{A named list specifying the GSD process:
+\itemize{
+\item \code{events} Number of events
+\item \code{alpha_spending} Cumulative alpha spending
+\item \code{beta_spending} Cumulative beta spending
+\item \code{IF_vec} Vector of information fractions
+}}
 
 \item{nSims}{Number of simulations, default is 1000}
 }
