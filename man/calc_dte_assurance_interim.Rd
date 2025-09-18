@@ -2,7 +2,7 @@
 % Please edit documentation in R/main.R
 \name{calc_dte_assurance_interim}
 \alias{calc_dte_assurance_interim}
-\title{Simulates a Group Sequential Trial for a trial with a Delayed Treatment Effect, with elicited priors}
+\title{Calculates operating characteristics for a Group Sequential Trial for a trial with a Delayed Treatment Effect, with elicited priors}
 \usage{
 calc_dte_assurance_interim(
   n_c,
@@ -62,5 +62,5 @@ calc_dte_assurance_interim(
 \item{nSims}{Number of simulations, default is 1000}
 }
 \description{
-Simulates a Group Sequential Trial for a trial with a Delayed Treatment Effect, with elicited priors
+Calculates operating characteristics for a Group Sequential Trial for a trial with a Delayed Treatment Effect, with elicited priors
 }

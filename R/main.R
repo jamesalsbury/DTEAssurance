@@ -239,8 +239,8 @@ calc_dte_assurance <- function(n_c,
     sample_size_vec[j] <- mean(ss_vec)
 
     if (!is.null(analysis_model$success_threshold_HR)) {
-      deltad_vec <- sapply(sim_results, `[[`, "deltad")
-      assurance_targetHR_flags <- assurance_flags * (deltad_vec < analysis_model$success_threshold_HR)
+      observed_HR_vec <- sapply(sim_results, `[[`, "observed_HR")
+      assurance_targetHR_flags <- assurance_flags * (observed_HR_vec < analysis_model$success_threshold_HR)
       assurance_targetHR_vec[j] <- mean(assurance_targetHR_flags)
       CI_targetHR_mat[j, ] <- stats::binom.test(sum(assurance_targetHR_flags), n_sims)$conf.int
     }
@@ -278,7 +278,7 @@ calc_dte_assurance <- function(n_c,
 #' @return A list with:
 #' \describe{
 #'   \item{Signif}{Logical indicator of statistical significance}
-#'   \item{deltad}{Estimated hazard ratio from Cox model}
+#'   \item{observed_HR}{Estimated hazard ratio from Cox model}
 #' }
 #' @export
 
@@ -287,22 +287,23 @@ survival_test <- function(data, analysis_method = "LRT", alternative = "one.side
                           t_star = NULL, s_star = NULL){
 
   coxmodel <- survival::coxph(Surv(survival_time, status)~group, data = data)
-  deltad <- as.numeric(exp(stats::coef(coxmodel)))
+  observed_HR <- as.numeric(exp(stats::coef(coxmodel)))
 
   Signif <- 0
 
   if (analysis_method=="LRT"){
-    test <- survival::survdiff(Surv(survival_time, status)~group, data = data)
+    test_result <- survdiff(Surv(survival_time, status) ~ group, data = data)
+    Z <- (test_result$exp[2] - test_result$obs[2]) / sqrt(test_result$var[2, 2])
     if (alternative=="one.sided"){
-      Signif <- (test$chisq > stats::qchisq(1-alpha, 1) & deltad<1)
+      Signif <- Z > qnorm(1-alpha)
     } else {
-      Signif <- test$chisq > stats::qchisq(1-alpha/2, 1)
+      Signif <- abs(Z) > qnorm(1-alpha/2)
     }
 
   } else if (analysis_method=="WLRT"){
     test <- nph::logrank.test(data$survival_time, data$status, data$group, rho = rho, gamma = gamma)
     if (alternative=="one.sided"){
-      Signif <- (test$test$Chisq > stats::qchisq(1-alpha, 1) & deltad<1)
+      Signif <- (test$test$Chisq > stats::qchisq(1-alpha, 1) & observed_HR<1)
     } else {
       Signif <- test$test$Chisq > stats::qchisq(1-alpha/2, 1)
     }
@@ -311,13 +312,13 @@ survival_test <- function(data, analysis_method = "LRT", alternative = "one.side
                          data = data, method = "mw",
                          t_star = t_star, s_star = s_star)
     if (alternative=="one.sided"){
-      Signif <- test$z < stats::qnorm(alpha)
+      Signif <- test$z > qnorm(1-alpha)
     } else {
-      Signif <- test$z < stats::qnorm(alpha/2) | test$z > stats::qnorm(1-alpha/2)
+      Signif <- abs(test$z) > qnorm(1-alpha/2)
     }
   }
 
-  return(list(Signif = Signif, deltad = deltad))
+  return(list(Signif = Signif, observed_HR = observed_HR))
 
 }
 
@@ -400,7 +401,7 @@ add_recruitment_time <- function(data, rec_method,
 }
 
 
-#' Simulates a Group Sequential Trial for a trial with a Delayed Treatment Effect, with elicited priors
+#' Calculates operating characteristics for a Group Sequential Trial for a trial with a Delayed Treatment Effect, using elicited priors
 #'
 #' @param n_c Control group sample size
 #' @param n_t Treatment group sample size
@@ -435,7 +436,7 @@ add_recruitment_time <- function(data, rec_method,
 #'   - `alpha_spending` Cumulative alpha spending
 #'   - `beta_spending` Cumulative beta spending
 #'   - `IF_vec` Vector of information fractions
-#' @param nSims Number of simulations, default is 1000
+#' @param n_sims Number of simulations, default is 1000
 #' @export
 
 calc_dte_assurance_interim <- function(n_c, n_t,
@@ -443,75 +444,54 @@ calc_dte_assurance_interim <- function(n_c, n_t,
                                        effect_model,
                                        recruitment_model,
                                        GSD_model,
-                                       nSims = 1000) {
+                                       n_sims = 1000) {
+  # Parse IF vectors
+  IF_list <- lapply(GSD_model$IF_vec, function(x) as.numeric(strsplit(x, ",\\s*")[[1]]))
 
-  # --- Initialize design list ---
-  designList <- lapply(IF_list, function(IF_str) {
-    info_rates <- as.numeric(strsplit(IF_str, ", ")[[1]])
+  # Simulate full trial datasets
+  trials <- replicate(n_sims, simulate_full_trial(n_c, n_t, control_model, effect_model, recruitment_model), simplify = FALSE)
 
-    design <- rpact::getDesignGroupSequential(typeOfDesign = "asUser",
-                                              informationRates = info_rates,
-                                              userAlphaSpending = alpha_spending,
-                                              typeBetaSpending = "bsUser",
-                                              userBetaSpending = beta_spending)
+
+
+  # Apply GSD logic across IF scenarios
+  scenario_results <- lapply(seq_along(IF_list), function(i) {
+    IF <- IF_list[[i]]
+    IF_label <- GSD_model$IF_vec[i]
+
+    # Create rpact design
+    # design <- rpact::getDesignGroupSequential(
+    #   typeOfDesign = "asUser",
+    #   informationRates = IF,
+    #   userAlphaSpending = GSD_model$alpha_spending,
+    #   typeBetaSpending = "bsUser",
+    #   userBetaSpending = GSD_model$beta_spending
+    # )
+
+    design <- rpact::getDesignGroupSequential(
+      typeOfDesign = "asUser",
+      informationRates = c(1/3, 2/3, 1),
+      userAlphaSpending = c(0, 0, 0.025)
+    )
+
+
+    # Apply GSD to each trial
+    gsd_outcomes <- lapply(trials, function(trial) {
+      apply_GSD_to_trial(trial, design, GSD_model$events)
+    })
+
+    # Summarize results
+    summary <- summarize_gsd_results(gsd_outcomes)
 
     list(
-      IF = info_rates,
-      critValues = design$criticalValues,
-      futBounds = design$futilityBounds,
-      assurance_vec = numeric(nSims),
-      ss_vec = numeric(nSims),
-      duration_vec = numeric(nSims),
-      status_vec = character(nSims),
-      IATimes_vec = character(nSims),
-      final_success_vec = logical(nSims)
+      IF_label = IF_label,
+      design = design,
+      summary = summary
     )
   })
 
-  # --- Run simulations ---
-  results_list <- lapply(seq_len(nSims), simulate_one_gsd_trial,
-                         n_c = n_c, n_t = n_t,
-                         control_dist = control_dist, control_parameters = control_parameters,
-                         fixed_parameters_type = fixed_parameters_type,
-                         lambda_c = lambda_c, gamma_c = gamma_c,
-                         t1 = t1, t2 = t2,
-                         surv_t1 = surv_t1, surv_t2 = surv_t2,
-                         t1_Beta_a = t1_Beta_a, t1_Beta_b = t1_Beta_b,
-                         diff_Beta_a = diff_Beta_a, diff_Beta_b = diff_Beta_b,
-                         delay_time_SHELF = delay_time_SHELF, delay_time_dist = delay_time_dist,
-                         post_delay_HR_SHELF = post_delay_HR_SHELF, post_delay_HR_dist = post_delay_HR_dist,
-                         P_S = P_S, P_DTE = P_DTE, cens_events = cens_events,
-                         rec_method = rec_method, rec_period = rec_period, rec_power = rec_power,
-                         rec_rate = rec_rate, rec_duration = rec_duration,
-                         alpha_spending = alpha_spending, beta_spending = beta_spending,
-                         IF_list = IF_list, k = k)
-
-  # --- Aggregate results ---
-  for (i in seq_len(nSims)) {
-    for (j in seq_along(designList)) {
-      designList[[j]]$assurance_vec[i]     <- results_list[[i]][[j]]$assurance
-      designList[[j]]$ss_vec[i]            <- results_list[[i]][[j]]$ss
-      designList[[j]]$duration_vec[i]      <- results_list[[i]][[j]]$duration
-      designList[[j]]$status_vec[i]        <- results_list[[i]][[j]]$status
-      designList[[j]]$IATimes_vec[i]       <- results_list[[i]][[j]]$IATimes
-      designList[[j]]$final_success_vec[i] <- results_list[[i]][[j]]$final_success
-    }
-  }
-
-  # --- Summarize ---
-  for (j in seq_along(designList)) {
-    designList[[j]]$assurance_mean <- mean(designList[[j]]$assurance_vec)
-    designList[[j]]$ss_mean        <- mean(designList[[j]]$ss_vec)
-    designList[[j]]$duration_mean  <- mean(designList[[j]]$duration_vec)
-    designList[[j]]$eff_mean       <- mean(grepl("Stopped for efficacy at IA", designList[[j]]$status_vec))
-    designList[[j]]$fut_mean       <- mean(grepl("Stopped for futility at IA", designList[[j]]$status_vec))
-    designList[[j]]$stop_mean      <- designList[[j]]$eff_mean + designList[[j]]$fut_mean
-  }
-
-  attr(designList, "nSims") <- nSims
-  attr(designList, "design_type") <- "group_sequential"
-  return(designList)
+  return(scenario_results)
 }
+
 
 
 

@@ -161,7 +161,7 @@ simulate_one_trial <- function(i, j,
   # --- Return results ---
   return(list(
     Signif = test_result$Signif,
-    deltad = test_result$deltad,
+    observed_HR = test_result$observed_HR,
     sample_size = censored$sample_size,
     cens_time = censored$cens_time
   ))
@@ -172,186 +172,231 @@ simulate_full_trial <- function(n_c, n_t,
                                 control_model,
                                 effect_model,
                                 recruitment_model) {
-  #--- Sample DTE parameters
-  delay_time <- SHELF::sampleFit(effect_model$delay_SHELF, n = 1)[, effect_model$delay_dist]
-  post_delay_HR <- SHELF::sampleFit(effect_model$HR_SHELF, n = 1)[, effect_model$HR_dist]
-
-  #--- Sample control parameters (Exponential or Weibull)
+  # --- Sample control parameters ---
   lambda_c_i <- NA
   gamma_c_i <- NA
 
   if (control_model$dist == "Exponential") {
     if (control_model$parameter_mode == "Fixed") {
       lambda_c_i <- control_model$lambda
-    } else {
-      lambda_c_i <- -log(
-        rbeta(1, control_model$t1_Beta_a, control_model$t1_Beta_b)
-      ) / control_model$t1
+    } else if (control_model$parameter_mode == "Distribution") {
+      lambda_c_i <- -log(rbeta(1, control_model$t1_Beta_a, control_model$t1_Beta_b)) / control_model$t1
     }
+    gamma_c_i <- NULL
   }
 
   if (control_model$dist == "Weibull") {
-    if (control_model$parameter_mode == "Fixed" &&
-        control_model$fixed_type == "Parameters") {
-      lambda_c_i <- control_model$lambda
-      gamma_c_i  <- control_model$gamma
-    } else if (control_model$parameter_mode == "Fixed" &&
-               control_model$fixed_type == "Landmark") {
-      WeibFunc <- function(p) {
-        lam <- p[1]; k <- p[2]
-        c(
-          exp(-(control_model$t1 * lam)^k) - control_model$surv_t1,
-          exp(-(control_model$t2 * lam)^k) - control_model$surv_t2
-        )
+    if (control_model$parameter_mode == "Fixed") {
+      if (control_model$fixed_type == "Parameters") {
+        lambda_c_i <- control_model$lambda
+        gamma_c_i <- control_model$gamma
+      } else if (control_model$fixed_type == "Landmark") {
+        WeibFunc <- function(params) {
+          lambda <- params[1]
+          k <- params[2]
+          c(exp(-(control_model$t1 * lambda)^k) - control_model$surv_t1,
+            exp(-(control_model$t2 * lambda)^k) - control_model$surv_t2)
+        }
+        solution <- nleqslv::nleqslv(c(1, 1), fn = WeibFunc)
+        lambda_c_i <- solution$x[1]
+        gamma_c_i <- solution$x[2]
       }
-      sol <- nleqslv::nleqslv(c(1,1), fn = WeibFunc)
-      lambda_c_i <- sol$x[1]; gamma_c_i <- sol$x[2]
-    } else {
-      s1 <- rbeta(1, control_model$t1_Beta_a, control_model$t1_Beta_b)
-      delta <- rbeta(1, control_model$diff_Beta_a, control_model$diff_Beta_b)
-      s2 <- s1 - delta
-      sol <- nleqslv::nleqslv(c(10,1), function(p) {
-        lam <- p[1]; k <- p[2]
-        c(
-          exp(-(control_model$t1 / lam)^k) - s1,
-          exp(-(control_model$t2 / lam)^k) - s2
-        )
+    } else if (control_model$parameter_mode == "Distribution") {
+      sampledS1 <- rbeta(1, control_model$t1_Beta_a, control_model$t1_Beta_b)
+      sampledDelta <- rbeta(1, control_model$diff_Beta_a, control_model$diff_Beta_b)
+      sampledS2 <- sampledS1 - sampledDelta
+      solution <- nleqslv::nleqslv(c(10, 1), function(params) {
+        lambda <- params[1]
+        k <- params[2]
+        c(exp(-(control_model$t1 / lambda)^k) - sampledS1,
+          exp(-(control_model$t2 / lambda)^k) - sampledS2)
       })
-      lambda_c_i <- 1 / sol$x[1]; gamma_c_i <- sol$x[2]
+      lambda_c_i <- 1 / solution$x[1]
+      gamma_c_i <- solution$x[2]
     }
   }
 
   if (is.na(lambda_c_i)) {
-    stop("lambda_c_i not assigned; check control_model settings.")
+    stop("lambda_c_i was not assigned. Check control_model settings.")
   }
 
-  #--- Simulate survival data with DTE
-  trial_data <- sim_dte(
-    n_c, n_t,
-    lambda_c = lambda_c_i,
-    delay_time = delay_time,
-    post_delay_HR = post_delay_HR,
-    dist = control_model$dist,
-    gamma_c = gamma_c_i
-  )
+  # --- Sample treatment effect ---
+  if (runif(1) > effect_model$P_S) {
+    delay_time <- 0
+    post_delay_HR <- 1
+  } else if (runif(1) > effect_model$P_DTE) {
+    delay_time <- 0
+    post_delay_HR <- post_delay_HR_samples[i]
+  } else {
+    delay_time <- delay_time_samples[i]
+    post_delay_HR <- post_delay_HR_samples[i]
+  }
 
-  #--- Add recruitment times
-  trial_data <- add_recruitment_time(
-    trial_data,
-    rec_method   = recruitment_model$method,
-    rec_period   = recruitment_model$period,
-    rec_power    = recruitment_model$power,
-    rec_rate     = recruitment_model$rate,
-    rec_duration = recruitment_model$duration
-  )
+  # --- Simulate survival data ---
+  data <- sim_dte(n_c[j], n_t[j], lambda_c_i, delay_time, post_delay_HR,
+                  dist = control_model$dist, gamma_c = gamma_c_i)
+
+  # --- Add recruitment time ---
+  data <- add_recruitment_time(data,
+                               rec_method = recruitment_model$method,
+                               rec_period = recruitment_model$period,
+                               rec_power = recruitment_model$power,
+                               rec_rate = recruitment_model$rate,
+                               rec_duration = recruitment_model$duration)
 
   return(trial_data)
 }
 
-apply_gsd_design <- function(trial_data,
-                             analysis_model,
-                             GSD_design) {
-  K <- length(GSD_design$IF_vec)
-  success      <- FALSE
-  early_stop   <- FALSE
-  futility_stop<- FALSE
-  stage_success <- logical(K)
-  stage_futility<- logical(K)
 
-  for (k in seq_len(K)) {
-    IF_k     <- GSD_design$IF_vec[k]
-    alpha_k  <- GSD_design$alpha_spending[k]
-    beta_k   <- GSD_design$beta_spending[k]
+apply_GSD_to_trial <- function(trial_data, design, total_events) {
 
-    censored <- cens_data(trial_data,
-                          cens_method = "IF",
-                          cens_IF     = IF_k)
+  trial_data <- trial_data[order(trial_data$pseudo_time),]
 
-    test <- survival_test(
-      censored$data,
-      analysis_method         = analysis_model$method,
-      alpha                   = 1,  # manual boundary apply
-      alternative             = analysis_model$alternative_hypothesis,
-      rho                     = analysis_model$rho,
-      gamma                   = analysis_model$gamma,
-      t_star                  = analysis_model$t_star,
-      s_star                  = analysis_model$s_star
-    )
+  # Interim setup
+  info_rates        <- design$informationRates
+  event_thresholds  <- ceiling(info_rates * total_events)
+  n_interims        <- length(info_rates)
 
-    Z <- test$Z
+  # Initialize tracking
+  decision          <- "Continue"
+  stop_time         <- NA
+  boundary_crossed  <- NA
+  interim_results   <- vector("list", n_interims)
 
-    if (Z >= qnorm(1 - alpha_k)) {
-      success      <- TRUE
-      early_stop   <- (k < K)
-      stage_success[k] <- TRUE
+  for (i in seq_len(n_interims - 1)) {
+    n_events <- event_thresholds[i]
+
+    # Interim calendar time is defined by the nth event
+    t_interim <- trial_data$pseudo_time[n_events]
+
+    eligible_df <- trial_data %>%
+      filter(rec_time <= t_interim)
+
+    # Censoring logic
+    eligible_df$status <- eligible_df$pseudo_time < t_interim
+    eligible_df$survival_time <- ifelse(eligible_df$status, eligible_df$time, t_interim - eligible_df$rec_time)
+
+    fit     <- survival::coxph(Surv(survival_time, status) ~ group, data = eligible_df)
+    fit_summary <- summary(fit)
+    z_stat <- -fit_summary$coefficients[, "z"]
+
+   # cat("The ", i, "z is: ", z_stat, "\n")
+
+
+    eff_bound <- design$criticalValues[i]
+    fut_bound <- if (i <= length(design$futilityBounds)) design$futilityBounds[i] else NA
+
+    if (!is.na(eff_bound) && z_stat > eff_bound) {
+      decision         <- "Stop for efficacy"
+      stop_time        <- t_interim
+      boundary_crossed <- "Efficacy"
       break
-    } else if (Z <= qnorm(beta_k)) {
-      futility_stop  <- TRUE
-      stage_futility[k] <- TRUE
+    } else if (!is.na(fut_bound) && z_stat < fut_bound) {
+      decision         <- "Stop for futility"
+      stop_time        <- t_interim
+      boundary_crossed <- "Futility"
       break
     }
+
+    interim_results[[i]] <- list(
+      interim         = i,
+      n_events        = n_events,
+      z_stat          = z_stat,
+      efficacy_bound  = eff_bound,
+      futility_bound  = fut_bound
+    )
+  }
+
+
+
+  # Final analysis
+  if (is.na(stop_time) || !is.finite(stop_time)) {
+    i <- n_interims
+    n_events <- event_thresholds[i]
+
+    # Interim calendar time is defined by the nth event
+    t_interim <- trial_data$pseudo_time[n_events]
+
+    eligible_df <- trial_data %>%
+      filter(rec_time <= t_interim)
+
+    # Censoring logic
+    eligible_df$status <- eligible_df$pseudo_time < t_interim
+    eligible_df$survival_time <- ifelse(eligible_df$status, eligible_df$time, t_interim - eligible_df$rec_time)
+
+    fit     <- survival::coxph(Surv(survival_time, status) ~ group, data = eligible_df)
+    fit_summary <- summary(fit)
+    z_stat <- -fit_summary$coefficients[, "z"]
+
+    #cat("The final z is: ", z_stat, "\n")
+
+        eff_bound <- design$criticalValues[i]
+
+        if (!is.na(z_stat) && z_stat > eff_bound) {
+          decision         <- "Successful at final"
+          boundary_crossed <- "Efficacy"
+        } else {
+          decision         <- "Unsuccessful at final"
+          boundary_crossed <- NA
+        }
+
+        stop_time <- t_interim
+
+        interim_results[[i]] <- list(
+          interim         = i,
+          n_events        = n_events,
+          z_stat          = z_stat,
+          efficacy_bound  = eff_bound,
+          futility_bound  = NA
+        )
   }
 
   return(list(
-    success       = success,
-    early_stop    = early_stop,
-    futility_stop = futility_stop,
-    stage_success = stage_success,
-    stage_futility= stage_futility
+    decision         = decision,
+    stop_time        = stop_time,
+    boundary_crossed = boundary_crossed,
+    interim_results  = interim_results,
+    final_z = z_stat
   ))
 }
 
 
-compare_gsd_designs <- function(n_c, n_t,
-                                control_model,
-                                effect_model,
-                                recruitment_model,
-                                analysis_model,
-                                GSD_designs,
-                                n_sims = 1000) {
 
-  D <- length(GSD_designs)
-  # Containers: designs × replications
-  success_mat        <- matrix(FALSE, nrow = n_sims, ncol = D)
-  early_stop_mat     <- matrix(FALSE, nrow = n_sims, ncol = D)
-  futility_stop_mat  <- matrix(FALSE, nrow = n_sims, ncol = D)
-  stage_success_arr  <- array(FALSE, dim = c(n_sims, D, max(sapply(GSD_designs, function(x) length(x$IF_vec)))))
-  stage_futility_arr <- stage_success_arr
+summarize_gsd_results <- function(gsd_outcomes) {
+  n <- length(gsd_outcomes)
 
-  for (i in seq_len(n_sims)) {
-    trial_data <- simulate_full_trial(n_c, n_t,
-                                      control_model,
-                                      effect_model,
-                                      recruitment_model)
+  decisions   <- sapply(gsd_outcomes, `[[`, "decision")
+  stop_times  <- sapply(gsd_outcomes, `[[`, "stop_time")
+  boundaries  <- sapply(gsd_outcomes, `[[`, "boundary_crossed")
+  final_z <- sapply(gsd_outcomes, `[[`, "final_z")
 
-    for (d in seq_len(D)) {
-      res <- apply_gsd_design(trial_data,
-                              analysis_model,
-                              GSD_designs[[d]])
+  # Decision rates
+  assurance       <- assurance <- mean(decisions %in% c("Stop for efficacy", "Successful at final"))
+  futility_rate   <- mean(decisions == "Stop for futility")
+  continue_rate   <- mean(decisions == "Continue")
+  final_rate      <- mean(decisions == "Stop at final")
+  incomplete_rate <- mean(decisions == "Incomplete")
 
-      success_mat[i, d]        <- res$success
-      early_stop_mat[i, d]     <- res$early_stop
-      futility_stop_mat[i, d]  <- res$futility_stop
-      stage_success_arr[i, d, ]<- res$stage_success
-      stage_futility_arr[i, d, ]<- res$stage_futility
-    }
-  }
+  # Expected duration (excluding incomplete trials)
+  expected_duration <- mean(stop_times[is.finite(stop_times)])
 
-  # Summarize by design
-  summary_list <- lapply(seq_len(D), function(d) {
-    K <- length(GSD_designs[[d]]$IF_vec)
-    list(
-      assurance           = mean(success_mat[, d]),
-      early_stop_prob     = mean(early_stop_mat[, d]),
-      futility_stop_prob  = mean(futility_stop_mat[, d]),
-      stage_success       = colMeans(stage_success_arr[, d, 1:K]),
-      stage_futility      = colMeans(stage_futility_arr[, d, 1:K])
-    )
-  })
+  # Boundary summary
+  boundary_summary <- table(factor(boundaries, levels = c("Efficacy", "Futility", NA)))
 
-  names(summary_list) <- names(GSD_designs)
-  return(summary_list)
+  return(list(
+    assurance         = assurance,
+    futility_rate     = futility_rate,
+    continue_rate     = continue_rate,
+    final_rate        = final_rate,
+    incomplete_rate   = incomplete_rate,
+    expected_duration = expected_duration,
+    boundary_summary  = boundary_summary,
+    decisions         = decisions,
+    stop_times        = stop_times,
+    final_z = final_z
+  ))
 }
+
 
 
 

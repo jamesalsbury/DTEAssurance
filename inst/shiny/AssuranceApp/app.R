@@ -48,18 +48,13 @@ ui <- fluidPage(
                              column(6,
                                     numericInput("ExpSurv", label =  HTML(paste0("S(t",tags$sub("1"), ")")), 0.5),
                                     bsTooltip(id = "ExpSurv", title = "Survival probability at time 1")
-
-
                              )
                            )
                          )
                        ),
                        conditionalPanel(
                          condition = "input.ExpChoice == 'Distribution'",
-                         selectInput("ExpDistChoice", "Choice", choices = c("Elicitation", "MCMC sample" = "MCMC"), selected = "Elicitation"),
-                         conditionalPanel(
-                           condition = "input.ExpDistChoice == 'Elicitation'",
-                        numericInput("ExpSurvTime", label = HTML(paste0("t",tags$sub("1"))), value = 12),
+                         numericInput("ExpSurvTime", label = HTML(paste0("t",tags$sub("1"))), value = 12),
                          bsTooltip(id = "ExpSurvTime", title = "Time 1"),
                          fluidRow(
                            column(4,
@@ -76,17 +71,15 @@ ui <- fluidPage(
                                       tags$span(")")
                                   )
                            )
-                         )
-
+                         ),
                        ),
-                       conditionalPanel(
-                         condition = "input.ExpDistChoice == 'MCMC'",
-                         fileInput("MCMC_upload", "Upload a CSV file", accept = ".csv"),
-                       )
+
+
+
 
 
                      ),
-                     ),
+
                      # Conditional UI for Weibull distribution
                      conditionalPanel(
                        condition = "input.ControlDist == 'Weibull'",
@@ -553,11 +546,6 @@ ui <- fluidPage(
 
     # Functions for the control tab ---------------------------------
 
-    MCMC_sample <- reactive({
-      req(input$MCMC_upload)  # Ensure file is uploaded
-      read.csv(input$MCMC_upload$datapath)  # Or read.csv(), depending on file type
-    })
-
 
     output$ExpDistText <- renderUI({
       HTML(paste0("S(", input$ExpSurvTime, ") ~ Beta("))
@@ -593,7 +581,6 @@ ui <- fluidPage(
 
         } else if (input$ExpChoice == "Distribution") {
 
-          if (input$ExpDistChoice == "Elicitation"){
             sampledLambda <- -log(rbeta(100, input$ExpBetaA, input$ExpBetaB)) / input$ExpSurvTime
             controlTime <- seq(0, -log(0.05) / min(sampledLambda), length.out = 100)
 
@@ -605,24 +592,8 @@ ui <- fluidPage(
             result$controlDF <- data.frame(controlTime = controlTime, medVec = medVec, UBVec = UBVec, LBVec = LBVec)
             result$type <- "distribution"
 
-          } else if (input$ExpDistChoice == "MCMC"){
-
-
-            sampledLambda <- sample(MCMC_sample()[,1], 500)
-            controlTime <- seq(0, -log(0.05) / quantile(sampledLambda, 0.05), length.out = 1000)
-
-            survivalMatrix <- exp(-outer(sampledLambda, controlTime, "*")) # Vectorized calculation
-            medVec <- apply(survivalMatrix, 2, median)
-            UBVec <- apply(survivalMatrix, 2, quantile, 0.975)
-            LBVec <- apply(survivalMatrix, 2, quantile, 0.025)
-
-            result$controlDF <- data.frame(controlTime = controlTime, medVec = medVec, UBVec = UBVec, LBVec = LBVec)
-            result$type <- "distribution"
-
-
-
           }
-        }
+
 
       } else if (input$ControlDist == "Weibull") {
         if (input$WeibullChoice == "Fixed") {
@@ -1240,22 +1211,22 @@ ui <- fluidPage(
                           paste(round(n_c), collapse = ", "),
                           "), \n n_t = c(",
                           paste(round(n_t), collapse = ", "),
-                          "), \n control_dist = \"",
+                          "), \n control_model = list(dist = \"",
                           input$ControlDist,
                           "\"")
 
       if (input$ControlDist=="Exponential"){
         base_call <- paste0(base_call,
-                            ", \n control_parameters = \"",
+                            ", \n parameter_mode = \"",
                             input$ExpChoice,
                             "\"")
         if (input$ExpChoice=="Fixed"){
           base_call <- paste0(base_call,
-                              ", \n fixed_parameters_type = \"",
+                              ", \n fixed_type = \"",
                               input$ExpRateorTime,
                               "\"")
           if (input$ExpRateorTime == "Parameter"){
-            base_call <-  paste0(base_call, ", \n lambda_c = ",
+            base_call <-  paste0(base_call, ", \n lambda = ",
                                  input$ExpRate)
           } else if (input$ExpRateorTime == "Landmark"){
             base_call <-  paste0(base_call, ", \n t1 = ",
@@ -1263,30 +1234,19 @@ ui <- fluidPage(
                                  ", \n surv_t1 = ",
                                  input$ExpSurv)
           }
+        } else {
+          base_call <-  paste0(base_call, ", \n t1 = ",
+                               input$ExpSurvTime,
+                               ", \n t1_Beta_a = ",
+                               input$ExpBetaA,
+                               ", \n t1_Beta_b = ",
+                               input$ExpBetaB)
         }
 
-        if (input$ExpChoice=="Distribution"){
 
-
-          base_call <- paste0(base_call,
-                              ", \n control_distribution = \"",
-                              input$ExpDistChoice,
-                              "\"")
-          if (input$ExpDistChoice=="Elicitation"){
-            base_call <-  paste0(base_call, ", \n t1 = ",
-                                 input$ExpSurvTime,
-                                 ", \n t1_Beta_a = ",
-                                 input$ExpBetaA,
-                                 ", \n t1_Beta_b = ",
-                                 input$ExpBetaB)
-          } else if (input$ExpDistChoice=="MCMC"){
-            req(input$MCMC_upload)
-            base_call <-  paste0(base_call, ", \n MCMC_sample = MCMC_sample")
-
-          }
 
         }
-      }
+
 
       if (input$ControlDist == "Weibull"){
         base_call <- paste0(base_call,
@@ -1334,7 +1294,7 @@ ui <- fluidPage(
 
 
       base_call <- paste0(base_call,
-                          ", \n delay_time_SHELF = SHELF::fitdist(c(",
+                          "), \n effect_model = list(delay_SHELF = SHELF::fitdist(c(",
                           input$TValues,
                           "), probs = c(",
                           input$TProbs,
@@ -1342,9 +1302,9 @@ ui <- fluidPage(
                           strsplit(input$TLimits, ", ")[[1]][1],
                           ", upper = ",
                           strsplit(input$TLimits, ", ")[[1]][2],
-                          "), \n delay_time_dist = \"",
+                          "), \n delay_dist = \"",
                           input$TDist,
-                          "\", \n post_delay_HR_SHELF = SHELF::fitdist(c(",
+                          "\", \n HR_SHELF = SHELF::fitdist(c(",
                           input$HRValues,
                           "), probs = c(",
                           input$HRProbs,
@@ -1352,56 +1312,56 @@ ui <- fluidPage(
                           strsplit(input$HRLimits, ", ")[[1]][1],
                           ", upper = ",
                           strsplit(input$HRLimits, ", ")[[1]][2],
-                          "), \n post_delay_HR_dist = \"",
+                          "), \n HR_dist = \"",
                           input$HRDist,
                           "\",  \n P_S = ",
                           input$P_S,
                           ", \n P_DTE = ",
                           input$P_DTE,
-                          ", \n cens_method = \"",
+                          "), \n censoring_model = list(method = \"",
                           input$censType,
                           "\"")
 
       if (input$censType == "Time"){
         base_call <- paste0(base_call,
-                            ", \n cens_time = ",
+                            ", \n time = ",
                             input$cens_time)
       }
 
       if (input$censType == "Events"){
         base_call <- paste0(base_call,
-                            ", \n cens_events = ",
+                            ", \n events = ",
                             input$cens_events)
       }
 
       if (input$censType == "IF"){
         base_call <- paste0(base_call,
-                            ", \n cens_IF = ",
+                            ", \n IF = ",
                             input$cens_IF)
       }
 
       base_call <- paste0(base_call,
-                          ", \n rec_method = \"",
+                          "), \n recruitment_model = list(method = \"",
                           input$rec_method,
                           "\"")
 
       if (input$rec_method == "power"){
         base_call <- paste0(base_call,
-                            ", \n rec_period = ",
+                            ", \n period = ",
                             input$rec_period,
-                            ", \n rec_power = ",
+                            ", \n power = ",
                             input$rec_power)
       }
       if (input$rec_method == "PWC"){
         base_call <- paste0(base_call,
-                            ", \n rec_rate = ",
+                            ", \n rate = ",
                             input$rec_rate,
-                            ", \n rec_duration = ",
+                            ", \n duration = ",
                             input$rec_duration)
       }
 
       base_call <- paste0(base_call,
-                          ", \n analysis_method = \"",
+                          "), \n analysis_model = list(method =  \"",
                           input$analysisType,
                           "\"")
 
@@ -1432,19 +1392,19 @@ ui <- fluidPage(
 
 
       base_call <- paste0(base_call,
-                          ", \n alternative = \"",
+                          ", \n alternative_hypothesis = \"",
                           input$test_type,
                           "\", \n alpha = ",
                           input$alphaLevel)
 
       if (input$targetHRTF){
         base_call <- paste0(base_call,
-                            ", \n target_HR = ",
+                            ", \n success_threshold_HR = ",
                             input$target_HR)
       }
 
       base_call <- paste0(base_call,
-                          ", \n nSims = ",
+                          "), \n n_sims = ",
                           input$nSamples,
                           ")")
 
@@ -1463,10 +1423,6 @@ ui <- fluidPage(
 
       # Create an environment with necessary objects
       eval_env <- new.env()
-
-      if (input$ExpDistChoice=="MCMC"){
-        list2env(list(MCMC_sample = MCMC_sample()), envir = eval_env)
-      }
 
 
       result <- tryCatch({
@@ -1488,13 +1444,16 @@ ui <- fluidPage(
 
       if (input$targetHRTF){
 
+
         assuranceDF <- data.frame(N = n,
-                                  Ass = sapply(assOutput, function(x) x$assurance),
-                                  LB = sapply(assOutput, function(x) if (!is.null(x$CI_assurance)) x$CI_assurance[1] else NA),
-                                  UB = sapply(assOutput, function(x) if (!is.null(x$CI_assurance)) x$CI_assurance[2] else NA),
-                                  Ass_Target = sapply(assOutput, function(x) x$assurance_targetHR),
-                                  LB_Target = sapply(assOutput, function(x) if (!is.null(x$CI_assurance_targetHR)) x$CI_assurance_targetHR[1] else NA),
-                                  UB_Target = sapply(assOutput, function(x) if (!is.null(x$CI_assurance_targetHR)) x$CI_assurance_targetHR[2] else NA))
+                                  Ass = assOutput$assurance,
+                                  LB = assOutput$CI[,1],
+                                  UB = assOutput$CI[,2],
+                                  Ass_Target = assOutput$assurance_targetHR,
+                                  LB_Target = assOutput$CI_targetHR[,1],
+                                  UB_Target = assOutput$CI_targetHR[,2])
+
+
 
 
         # Generate the plot using ggplot
@@ -1512,9 +1471,9 @@ ui <- fluidPage(
 
       } else {
         assuranceDF <- data.frame(N = n,
-                                  Ass = sapply(assOutput, function(x) x$assurance),
-                                  LB = sapply(assOutput, function(x) if (!is.null(x$CI_assurance)) x$CI_assurance[1] else NA),
-                                  UB = sapply(assOutput, function(x) if (!is.null(x$CI_assurance)) x$CI_assurance[2] else NA))
+                                  Ass = assOutput$assurance,
+                                  LB = assOutput$CI[,1],
+                                  UB = assOutput$CI[,2])
 
 
         # Generate the plot using ggplot
