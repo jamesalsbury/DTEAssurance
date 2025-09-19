@@ -2,7 +2,7 @@
 % Please edit documentation in R/main.R
 \name{calc_dte_assurance_interim}
 \alias{calc_dte_assurance_interim}
-\title{Calculates operating characteristics for a Group Sequential Trial for a trial with a Delayed Treatment Effect, with elicited priors}
+\title{Calculates operating characteristics for a Group Sequential Trial for a trial with a Delayed Treatment Effect, using elicited priors}
 \usage{
 calc_dte_assurance_interim(
   n_c,
@@ -11,7 +11,7 @@ calc_dte_assurance_interim(
   effect_model,
   recruitment_model,
   GSD_model,
-  nSims = 1000
+  n_sims = 1000
 )
 }
 \arguments{
@@ -59,8 +59,8 @@ calc_dte_assurance_interim(
 \item \code{IF_vec} Vector of information fractions
 }}
 
-\item{nSims}{Number of simulations, default is 1000}
+\item{n_sims}{Number of simulations, default is 1000}
 }
 \description{
-Calculates operating characteristics for a Group Sequential Trial for a trial with a Delayed Treatment Effect, with elicited priors
+Calculates operating characteristics for a Group Sequential Trial for a trial with a Delayed Treatment Effect, using elicited priors
 }

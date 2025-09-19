@@ -215,19 +215,15 @@ calc_dte_assurance <- function(n_c,
       next
     }
 
-    delay_time_samples <- SHELF::sampleFit(effect_model$delay_SHELF, n = n_sims)[, effect_model$delay_dist]
-    post_delay_HR_samples <- SHELF::sampleFit(effect_model$HR_SHELF, n = n_sims)[, effect_model$HR_dist]
 
     sim_results <- future_lapply(seq_len(n_sims), simulate_one_trial, future.seed = TRUE,
                                  j = j,
-                                 n_c = n_c, n_t = n_t,
+                                 n_c = n_c[j], n_t = n_t[j],
                                  control_model = control_model,
                                  effect_model = effect_model,
                                  censoring_model = censoring_model,
                                  recruitment_model = recruitment_model,
-                                 analysis_model = analysis_model,
-                                 delay_time_samples = delay_time_samples,
-                                 post_delay_HR_samples = post_delay_HR_samples)
+                                 analysis_model = analysis_model)
 
     assurance_flags <- sapply(sim_results, `[[`, "Signif")
     cens_vec <- sapply(sim_results, `[[`, "cens_time")
@@ -445,54 +441,48 @@ calc_dte_assurance_interim <- function(n_c, n_t,
                                        recruitment_model,
                                        GSD_model,
                                        n_sims = 1000) {
-  # Parse IF vectors
-  IF_list <- lapply(GSD_model$IF_vec, function(x) as.numeric(strsplit(x, ",\\s*")[[1]]))
+  IF_list   <- lapply(GSD_model$IF_vec, function(x) as.numeric(strsplit(x, ",\\s*")[[1]]))
+  alpha_list <- lapply(GSD_model$alpha_spending, function(x) as.numeric(strsplit(x, ",\\s*")[[1]]))
+  beta_list <- lapply(GSD_model$beta_spending, function(x) as.numeric(strsplit(x, ",\\s*")[[1]]))
+  IF_labels <- GSD_model$IF_vec
 
-  # Simulate full trial datasets
-  trials <- replicate(n_sims, simulate_full_trial(n_c, n_t, control_model, effect_model, recruitment_model), simplify = FALSE)
+  results <- future_lapply(seq_len(n_sims), function(i) {
+    trial <- simulate_trial_with_recruitment(n_c, n_t, control_model, effect_model, recruitment_model)
 
+    do.call(rbind, lapply(seq_along(IF_list), function(j) {
+      design <- rpact::getDesignGroupSequential(
+        typeOfDesign = "asUser",
+        informationRates = IF_list[[j]],
+        userAlphaSpending = alpha_list[[j]],
+        typeBetaSpending = "bsUser",
+        userBetaSpending = beta_list[[j]]
+      )
 
+      outcome <- apply_GSD_to_trial(trial, design, GSD_model$events)
 
-  # Apply GSD logic across IF scenarios
-  scenario_results <- lapply(seq_along(IF_list), function(i) {
-    IF <- IF_list[[i]]
-    IF_label <- GSD_model$IF_vec[i]
+      data.frame(
+        Trial = i,
+        IF = IF_labels[j],
+        Decision = outcome$decision,
+        StopTime = outcome$stop_time,
+        SampleSize = outcome$sample_size
+      )
+    }))
+  }, future.seed = TRUE)
 
-    # Create rpact design
-    # design <- rpact::getDesignGroupSequential(
-    #   typeOfDesign = "asUser",
-    #   informationRates = IF,
-    #   userAlphaSpending = GSD_model$alpha_spending,
-    #   typeBetaSpending = "bsUser",
-    #   userBetaSpending = GSD_model$beta_spending
-    # )
+  results_df <- do.call(rbind, results)
 
-    design <- rpact::getDesignGroupSequential(
-      typeOfDesign = "asUser",
-      informationRates = c(1/3, 2/3, 1),
-      userAlphaSpending = c(0, 0, 0.025)
+  design_summary <- results_df %>%
+    group_by(IF) %>%
+    summarise(
+      assurance = mean(Decision %in% c("Stop for efficacy", "Successful at final")),
+      expectedDuration = mean(StopTime, na.rm = TRUE),
+      expectedSampleSize = mean(SampleSize, na.rm = TRUE),
+      .groups = "drop"
     )
 
-
-    # Apply GSD to each trial
-    gsd_outcomes <- lapply(trials, function(trial) {
-      apply_GSD_to_trial(trial, design, GSD_model$events)
-    })
-
-    # Summarize results
-    summary <- summarize_gsd_results(gsd_outcomes)
-
-    list(
-      IF_label = IF_label,
-      design = design,
-      summary = summary
-    )
-  })
-
-  return(scenario_results)
+  return(design_summary)
 }
-
-
 
 
 

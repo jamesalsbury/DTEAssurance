@@ -6,10 +6,14 @@ library(nleqslv)
 library(shinyBS)
 #remotes::install_github("jamesalsbury/DTEAssurance")
 library(DT)
+library(rlang)
 
 
 
 ui <- fluidPage(
+
+
+
     withMathJax(),
 
     # Application title
@@ -450,30 +454,57 @@ ui <- fluidPage(
                    mainPanel = mainPanel(
                      tags$h4(
                        id = "toggleHeader",
-                       style = "cursor: pointer; display: flex; align-items: center;",
-                       tags$span(id = "arrow", "►"),  # Arrow icon
-                       "Show/hide the function"
+                       style = "cursor: pointer; display: flex; align-items: center; justify-content: space-between;",
+                       div(
+                         style = "display: flex; align-items: center;",
+                         tags$span(id = "arrow", "►"),  # Arrow icon
+                         " Show/hide the function"
+                       ),
+                       actionButton(
+                         inputId = "copy_btn",
+                         label = "📋 Copy",
+                         class = "btn btn-sm btn-outline-primary"
+                       )
                      ),
+
                      tags$div(
                        id = "collapseText",
                        class = "collapse",
-                       verbatimTextOutput("display_func")
+                       aceEditor(
+                         outputId = "display_func",
+                         value = "",
+                         mode = "r",
+                         theme = "monokai",
+                         readOnly = TRUE,
+                         height = "400px"
+                       )
                      ),
-                     tags$script(
-                       "$(document).on('click', '#toggleHeader', function() {
-      $('#collapseText').collapse('toggle');
-      var arrow = $('#arrow');
-      if (arrow.text() == '►') {
-        arrow.text('▼');
-      } else {
-        arrow.text('►');
-      }
-    });"
-                     ),
-                     plotOutput("assurancePlot"),
-                     #DTOutput("OC_table"),
 
+                     tags$script(HTML("
+    // Toggle collapse + arrow
+    $(document).on('click', '#toggleHeader', function(e) {
+      if (!$(e.target).is('#copy_btn')) {   // avoid toggle when clicking copy
+        $('#collapseText').collapse('toggle');
+        var arrow = $('#arrow');
+        if (arrow.text() == '►') {
+          arrow.text('▼');
+        } else {
+          arrow.text('►');
+        }
+      }
+    });
+
+    // Copy-to-clipboard
+    $(document).on('click', '#copy_btn', function() {
+      var editorText = ace.edit('display_func').getValue();
+      navigator.clipboard.writeText(editorText);
+    });
+  ")),
+
+                     plotOutput("assurancePlot")
                    )
+
+
                  ),
 
         ),
@@ -1409,13 +1440,16 @@ ui <- fluidPage(
                           ")")
 
 
-      return(base_call)
+      base_call
 
     })
 
-    output$display_func <- renderText({
-      function_call()
+
+
+    observe({
+      updateAceEditor(session, "display_func", value = function_call())
     })
+
 
 
     calculateAssurance <- eventReactive(input$calcAssurance, {
@@ -1423,7 +1457,6 @@ ui <- fluidPage(
 
       # Create an environment with necessary objects
       eval_env <- new.env()
-
 
       result <- tryCatch({
         eval(parse(text = call_string), envir = eval_env)

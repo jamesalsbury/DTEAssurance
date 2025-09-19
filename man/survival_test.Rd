@@ -36,7 +36,7 @@ survival_test(
 A list with:
 \describe{
 \item{Signif}{Logical indicator of statistical significance}
-\item{deltad}{Estimated hazard ratio from Cox model}
+\item{observed_HR}{Estimated hazard ratio from Cox model}
 }
 }
 \description{

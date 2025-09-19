@@ -1,15 +1,11 @@
-# library(shiny)
+library(shiny)
 library(shinyjs)
 library(survival)
-# library(doParallel)
-# library(ggplot2)
 library(DT)
 library(rhandsontable)
 library(rpact)
 library(dplyr)
-# library(SHELF)
 library(plotly)
-# library(survminer)
 library(shinyBS)
 #remotes::install_github("jamesalsbury/DTEAssurance")
 library(DTEAssurance)
@@ -27,6 +23,57 @@ rowCallback <- c(
 
 table_choices <- c("% Stop", "% Stop for Efficacy", "% Stop for Futility")
 
+# ---- Design card module ----
+designCardUI <- function(id) {
+  ns <- NS(id)
+  tagList(
+    fluidRow(
+      column(width = 3,
+             numericInput(ns("n_looks"), "Stages", value = 2, min = 1, max = 20)
+      ),
+      column(width = 9,
+             rHandsontableOutput(ns("table"))
+      )
+    )
+  )
+}
+
+designCardServer <- function(id, initial_n_looks = 2) {
+  moduleServer(id, function(input, output, session) {
+
+    # Function to generate a table with n rows
+    default_table <- function(n) {
+      data.frame(
+        IF = seq(1/n, 1, length.out = n),                     # last row IF = 1
+        `α-spending` = seq(0.025/n, 0.025, length.out = n),  # example pre-fill
+        `β-spending`  = seq(0.1/n, 0.1, length.out = n),    # example pre-fill
+        check.names = F
+      )
+    }
+
+    # Initialize reactiveVal
+    table_rv <- reactiveVal(default_table(initial_n_looks))
+
+    # Whenever n_looks changes, generate a fresh table
+    observeEvent(input$n_looks, {
+      n <- input$n_looks
+      table_rv(default_table(n))   # replace old table completely
+    })
+
+    # Render the table
+    output$table <- renderRHandsontable({
+      df <- table_rv()
+      # Round numeric columns to 3 decimal places for display
+      num_cols <- sapply(df, is.numeric)
+      df[num_cols] <- lapply(df[num_cols], function(x) round(x, 3))
+
+      rhandsontable(df, useTypes = FALSE)
+    })
+
+
+    return(table_rv)
+  })
+}
 
 
 # UI definition
@@ -52,8 +99,17 @@ ui <- fluidPage(
       tabPanel("Design",
                sidebarLayout(
                  sidebarPanel = sidebarPanel(
-                   fileInput("parametersFile", "Choose RDS File", accept = ".rds"),
-                   h3("Control"),
+                   #fileInput("parametersFile", "Choose RDS File", accept = ".rds"),
+                   h3("sample_size"),
+                   fluidRow(
+                     column(6,
+                            numericInput("n_c", label =  HTML(paste0("n",tags$sub("c"))), value = 500)
+                     ),
+                     column(6,
+                            numericInput("n_t", label =  HTML(paste0("n",tags$sub("t"))), value = 500)
+                     )
+                   ),
+                   h3("control_model"),
                    selectInput("ControlDist", "Distribution", choices = c("Exponential", "Weibull"), selected = "Exponential"),
                    # Conditional UI for Exponential distribution
                    conditionalPanel(
@@ -205,18 +261,7 @@ ui <- fluidPage(
                        )
                      ),
                    ),
-                   h3("Conditional Probabilities"),
-                   fluidRow(
-                     column(6,
-                            numericInput("P_S", "Pr(survival curves separate)", value = 1, min = 0, max = 1)
-
-                     ),
-                     column(6,
-                            numericInput("P_DTE", "Pr(treatment subject to a delay|survival curves separate)", value = 0, min = 0, max = 1)
-
-                     )
-                   ),
-                   h3("Length of Delay - Elicit"),
+                   h3("effect_model"),
                    fluidRow(
                      column(4,
                             textInput("TLimits", label = h5("Length of delay limits"),
@@ -257,7 +302,6 @@ ui <- fluidPage(
 
 
                    ),
-                   h3("Post-delay hazard ratio - Elicit"),
                    fluidRow(
                      column(4,
                             textInput("HRLimits", label = h5("Post-delay hazard ratio limits"),
@@ -296,19 +340,21 @@ ui <- fluidPage(
                                            value = 3)
 
                             )
-                     )
+                     ),
+
 
                    ),
-                   h3("Trial Setup"),
-                   numericInput("numofpatients", "Number of patients in the trial", value=1000),
                    fluidRow(
                      column(6,
-                            numericInput("ControlRatio", "Ratio control", value=1, min=1)
+                            numericInput("P_S", "Pr(survival curves separate)", value = 1, min = 0, max = 1)
+
                      ),
                      column(6,
-                            numericInput("TreatmentRatio", "Ratio treatment", value=2, min=1)
+                            numericInput("P_DTE", "Pr(treatment subject to a delay|survival curves separate)", value = 0, min = 0, max = 1)
+
                      )
                    ),
+                   h3("recruitment_model"),
                    selectInput("rec_method", "Recruitment method", choices = c("Power"="power", "Piecewise constant"="PWC"), selected = "power"),
 
                    conditionalPanel(
@@ -334,11 +380,6 @@ ui <- fluidPage(
                        )
                      )
                    ),
-
-
-                   numericInput("censEvents", "Number of events", value = 100),
-                   numericInput("nSamples", "Number of simulations", value=250),
-
                  ),
                  mainPanel = mainPanel(
                    uiOutput("P_S"),
@@ -359,11 +400,17 @@ ui <- fluidPage(
       tabPanel("Simulate",
                sidebarLayout(
                  sidebarPanel = sidebarPanel(
-                   numericInput("number_of_looks", "Number of Stages", value = 2),
-                    uiOutput("IA_inputs"),
-
-                     rHandsontableOutput("error_spending_table"),
-                   hidden(numericInput("alpha_spending_one_look", "Type I error", value = 0.025)),
+                   h3("GSD_model"),
+                   fluidRow(
+                     column(6,
+                            numericInput("total_events", "Number of Events", value = 300)
+                            ),
+                     column(6,
+                            numericInput("n_designs", "Number of Designs", value = 1, min = 1, max = 20)
+                            )
+                   ),
+                   uiOutput("design_cards"),
+                   numericInput("n_sims", "Number of simulations", value=1000),
                    actionButton("calc_GSD_assurance", label  = "Calculate")
                  ),
                  mainPanel = mainPanel(
@@ -628,103 +675,51 @@ server <- function(input, output, session) {
 
   # Simulate Logic ---------------------------------
 
-  observe({
+  # Store per-design reactive tables
+  design_tables <- reactiveVal(list())
 
-    req(input$number_of_looks)
+  # Render design cards
+  output$design_cards <- renderUI({
+    n <- input$n_designs
+    if (is.null(n) || n < 1) return(NULL)
 
-    if (input$number_of_looks == 1){
-      shinyjs::show("alpha_spending_one_look")
-      shinyjs::hide("IA_inputs")
-      shinyjs::hide("error_spending_table")
-      shinyjs::hide("Boundary_IA")
-      shinyjs::hide("boundary_plot")
-    } else {
-      shinyjs::hide("alpha_spending_one_look")
-      shinyjs::show("IA_inputs")
-      shinyjs::show("error_spending_table")
-      shinyjs::show("Boundary_IA")
-      shinyjs::show("boundary_plot")
-    }
-
+    # Generate UI for each design
+    lapply(1:n, function(i) {
+      fluidRow(
+        column(12, designCardUI(paste0("design_", i)))
+      )
+    })
   })
 
-  output$IA_inputs <- renderUI({
-
-    if (input$number_of_looks>1){
-      num_looks <- input$number_of_looks - 1
-      input_list <- lapply(1:num_looks, function(i) {
-        fluidRow(
-          column(4, numericInput(paste0("IA_LB", i), paste0("IA", i, ", from:"), value = 0.25)),
-          column(4, numericInput(paste0("IA_UB", i), "to:", value = 0.75)),
-          column(4, numericInput(paste0("IA_By", i), "by:", value = 0.25))
-        )
-      })
-      do.call(tagList, input_list)
-    }
-
-
-  })
-
+  # Initialize modules for each design
   observe({
-    req(input$number_of_looks > 1)  # Ensure a valid number of looks
+    n <- input$n_designs
+    tables <- design_tables()
 
-    IA_List <- vector("list", input$number_of_looks - 1)
-
-    for (k in 1:(input$number_of_looks - 1)) {
-      # Extract values first and check for NULL before using them
-      lb <- input[[paste0("IA_LB", k)]]
-      ub <- input[[paste0("IA_UB", k)]]
-      by <- input[[paste0("IA_By", k)]]
-
-      req(!is.null(lb), !is.null(ub), !is.null(by))  # Ensure values exist
-
-      # Check for valid sequence parameters
-      if (!is.numeric(lb) || !is.numeric(ub) || !is.numeric(by) || by <= 0 || lb >= ub) {
-        return()  # Skip invalid sequences
+    for (i in 1:n) {
+      id <- paste0("design_", i)
+      if (is.null(tables[[id]])) {
+        # Start module and save its reactiveVal
+        tables[[id]] <- designCardServer(id)
+        design_tables(tables)
       }
-
-      IA_List[[k]] <- seq(from = lb, to = ub, by = by)
     }
 
-    # Check if IA_List is empty to prevent errors
-    if (length(IA_List) == 0 || all(sapply(IA_List, length) == 0)) {
-      return()  # Exit observe to prevent crashes
+    # Remove extra tables if n_designs decreased
+    if (length(tables) > n) {
+      for (i in (n+1):length(tables)) {
+        tables[[paste0("design_", i)]] <- NULL
+      }
+      design_tables(tables)
     }
-
-    # Generate IF_list based on number_of_looks
-    if (input$number_of_looks > 2) {
-      IF_list <- strictly_increasing_combinations(IA_List)
-    } else {
-      IF_list <- seq(input$IA_LB1, input$IA_UB1, by = input$IA_By1)
-    }
-
-    # Ensure IF_list is valid before updating UI
-    if (length(IF_list) == 0) return()
-
-    IF_list <- paste(IF_list, ", 1", sep = "")
-
-    updateSelectInput(session, "Boundary_IA", choices = IF_list)
-
-    updateSelectInput(session, "Barchart_IA", choices = IF_list, selected = IF_list)
-
   })
+
+
+
 
 
   observe({
 
-
-    req(input$number_of_looks > 1)
-
-    req(input$error_spending_table)
-    req(input$Boundary_IA)
-
-    values <- hot_to_r(input$error_spending_table)
-
-    design <- getDesignGroupSequential(typeOfDesign = "asUser",
-                                         informationRates = as.numeric(input$Boundary_IA),
-                                         userAlphaSpending = as.numeric(values[,2]),
-                                         typeBetaSpending = "bsUser",
-                                         userBetaSpending = as.numeric(values[,3]))
 
 
 
@@ -769,45 +764,30 @@ server <- function(input, output, session) {
 
 
   function_call_sim <- reactive({
-    n_c <- (input$numofpatients*input$ControlRatio)/(sum(input$ControlRatio+input$TreatmentRatio))
-    n_t <- (input$numofpatients*input$TreatmentRatio)/(sum(input$ControlRatio+input$TreatmentRatio))
-
-    if (input$number_of_looks > 2){
-      IA_List <- vector("list", input$number_of_looks-1)
-
-      for (k in 1:(input$number_of_looks-1)){
-        IA_List[[k]] <- seq(from = input[[paste0("IA_LB", k)]], to = input[[paste0("IA_UB", k)]], by = input[[paste0("IA_By", k)]])
-      }
-      IF_list <- strictly_increasing_combinations(IA_List)
-    } else {
-      IF_list <- seq(input$IA_LB1, input$IA_UB1, by = input$IA_By1)
-
-    }
-    IF_list <- paste(IF_list, ", 1", sep = "")
 
 
     spendingTable <- hot_to_r(input$error_spending_table)
 
     base_call <- paste0("calc_dte_assurance_interim(n_c = ",
-                        paste(round(n_c), collapse = ", "),
+                        input$n_c,
                         ", \n n_t = ",
-                        paste(round(n_t), collapse = ", "),
-                        ", \n control_dist = \"",
+                        input$n_t,
+                        ", \n control_model = list(dist = \"",
                         input$ControlDist,
                         "\"")
 
     if (input$ControlDist=="Exponential"){
       base_call <- paste0(base_call,
-                          ", \n control_parameters = \"",
+                          ", \n parameter_mode = \"",
                           input$ExpChoice,
                           "\"")
       if (input$ExpChoice=="Fixed"){
         base_call <- paste0(base_call,
-                            ", \n fixed_parameters_type = \"",
+                            ", \n fixed_type = \"",
                             input$ExpRateorTime,
                             "\"")
         if (input$ExpRateorTime == "Parameter"){
-          base_call <-  paste0(base_call, ", \n lambda_c = ",
+          base_call <-  paste0(base_call, ", \n lambda = ",
                                input$ExpRate)
         } else if (input$ExpRateorTime == "Landmark"){
           base_call <-  paste0(base_call, ", \n t1 = ",
@@ -873,7 +853,7 @@ server <- function(input, output, session) {
 
 
     base_call <- paste0(base_call,
-                        ", \n delay_time_SHELF = SHELF::fitdist(c(",
+                        "), \n effect_model = list(delay_SHELF = SHELF::fitdist(c(",
                         input$TValues,
                         "), probs = c(",
                         input$TProbs,
@@ -883,7 +863,7 @@ server <- function(input, output, session) {
                         strsplit(input$TLimits, ", ")[[1]][2],
                         "), \n delay_time_dist = \"",
                         input$TDist,
-                        "\", \n post_delay_HR_SHELF = SHELF::fitdist(c(",
+                        "\", \n HR_SHELF = SHELF::fitdist(c(",
                         input$HRValues,
                         "), probs = c(",
                         input$HRProbs,
@@ -891,31 +871,29 @@ server <- function(input, output, session) {
                         strsplit(input$HRLimits, ", ")[[1]][1],
                         ", upper = ",
                         strsplit(input$HRLimits, ", ")[[1]][2],
-                        "), \n post_delay_HR_dist = \"",
+                        "), \n HR_dist = \"",
                         input$HRDist,
                         "\",  \n P_S = ",
                         input$P_S,
                         ", \n P_DTE = ",
                         input$P_DTE,
-                        ", \n cens_events = ",
-                        input$censEvents,
-                        ", \n rec_method = \"",
+                        "), \n recruitment_model = list(method = \"",
                         input$rec_method,
                         "\"")
 
 
     if (input$rec_method == "power"){
       base_call <- paste0(base_call,
-                          ", \n rec_period = ",
+                          ", \n period = ",
                           input$rec_period,
-                          ", \n rec_power = ",
+                          ", \n power = ",
                           input$rec_power)
     }
     if (input$rec_method == "PWC"){
       base_call <- paste0(base_call,
-                          ", \n rec_rate = ",
+                          ", \n rate = ",
                           input$rec_rate,
-                          ", \n rec_duration = ",
+                          ", \n duration = ",
                           input$rec_duration)
     }
 
@@ -923,29 +901,50 @@ server <- function(input, output, session) {
 
 
     base_call <- paste0(base_call,
-                        ", \n nSims = ",
-                        input$nSamples,
-                        ", \n k = ",
-                        input$number_of_looks)
+                        "), \n GSD_model = list(events = ",
+                        input$total_events)
+
+    tables <- design_tables()
+
+    alpha_list <- lapply(tables, function(tr) {
+      df <- tr()
+      df$`α-spending`
+    })
+
+    alpha_vector <- sapply(alpha_list, function(x) paste(x, collapse = ", "))
 
 
-    if (input$number_of_looks > 1){
-      base_call <- paste0(base_call,
-                          ", \n IF_list = ",
-                          paste0("c(", paste0('"', IF_list, '"', collapse = ", "), ")"),
-                          paste0(", \n alpha_spending = c(", paste(spendingTable[,2], collapse = ", "), ")"),
-                          paste0(", \n beta_spending = c(", paste(spendingTable[,3], collapse = ", "), ")")
-      )
-    } else {
-      base_call <- paste0(base_call,
-                          ", \n type_one_error = ",
-                          input$alpha_spending_one_look)
-    }
+    base_call <- paste0(base_call,
+                        ", \n alpha_spending = c(",
+                        paste0('"', alpha_vector, '"', collapse = ", "),
+                        ")")
 
+    beta_list <- lapply(tables, function(tr) {
+      df <- tr()
+      df$`β-spending`
+    })
 
+    beta_vector <- sapply(beta_list, function(x) paste(x, collapse = ", "))
 
+    base_call <- paste0(base_call,
+                        ", \n beta_spending = c(",
+                        paste0('"', beta_vector, '"', collapse = ", "),
+                        ")")
 
-    base_call <- paste0(base_call, ")")
+    IF_list <- lapply(tables, function(tr) {
+      df <- tr()
+      df$IF
+    })
+
+    IF_vector <- sapply(IF_list, function(x) paste(x, collapse = ", "))
+
+    base_call <- paste0(base_call,
+                        ", \n IF_vec = c(",
+                        paste0('"', IF_vector, '"', collapse = ", "),
+                        ")), \n n_sims = ",
+                        input$n_sims,
+                        ")")
+
 
     return(base_call)
 
@@ -966,314 +965,216 @@ server <- function(input, output, session) {
 
 
 
-  output$error_spending_table <- renderRHandsontable({
-    if (input$number_of_looks > 1){
-      k <- input$number_of_looks
-
-      stage_names <- paste0("IA", 1:(k - 1))
-      stage_names <- c(stage_names, "Final")
-
-      initial_data <- data.frame(
-        Stage = stage_names,
-        alphaspending = seq(0.01, 0.025, length.out = k),
-        betaspending = seq(0.05, 0.1, length.out = k)
-      )
-
-      colnames(initial_data) <- c("Stage", "Alpha spending (cumulative)", "Beta spending (cumulative)")
-
-      rhandsontable(initial_data, rowHeaders = FALSE) %>%
-        hot_col("Stage", readOnly = TRUE) %>%
-        hot_col("Alpha spending (cumulative)", format = "0.0000") %>%  # 4 decimal places
-        hot_col("Beta spending (cumulative)", format = "0.0000")       # 4 decimal places
-    }
-  })
-
-
-
-  observe({
-
-    sim_output <- calculateGSDAssurance()
-
-    if (input$number_of_looks > 1){
-      num_IAs <- input$number_of_looks - 1
-      extra_column_names <- rep(NA, num_IAs)
-
-      for (k in 1:num_IAs){
-        extra_column_names[k] <- paste("Timing_IA", k, sep="")
-      }
-
-      updateSelectizeInput(session, "selected_columns_sim_table", choices = c("Assurance", "Duration", "Sample Size", table_choices, extra_column_names),
-                           selected = c("Assurance", "Duration", "Sample Size"))
-
-    } else {
-      updateSelectizeInput(session, "selected_columns_sim_table", choices = c("Assurance", "Duration", "Sample Size"),
-                           selected = c("Assurance", "Duration", "Sample Size"))
-      }
-
-
-
-
-  })
-
-
     output$sim_table <- renderDT({
       sim_output <- calculateGSDAssurance()
 
-      if (input$number_of_looks > 1){
-        sim_output_DF <- do.call(rbind, lapply(sim_output, function(x) {
-          data.frame(
-            `Information Fraction` = paste(x$IF, collapse = ", "),
-            Assurance = round(x$assurance_mean, 2),
-            `Sample Size` = round(x$ss_mean, 1),
-            Duration = round(x$duration_mean, 1),
-            `Stop Early`= round(x$stop_mean, 2),
-            `Stop Early for Efficacy` = round(x$eff_mean, 2),
-            `Stop Early for Futility` = round(x$fut_mean, 2)
-          )
-        }))
-
-        colnames(sim_output_DF) <- c("Information Fraction", "Assurance", "Sample Size", "Duration",
-                                     "% Stop", "% Stop for Efficacy", "% Stop for Futility")
-
-
-        for (k in 1:length(sim_output)){
-          num_IAs <- input$number_of_looks - 1
-
-          for (ia in 1:num_IAs){
-            column_name <- paste("Timing_IA", ia, sep="")
-
-            sim_output_DF[[column_name]][k] <- round(mean(as.numeric(sapply(strsplit(sim_output[[k]]$IATimes, ", "), function(x) x[ia]))), 1)
-          }
-        }
-
-        sim_output_DF <- subset(sim_output_DF, select = c("Information Fraction", input$selected_columns_sim_table))
-
-        datatable(sim_output_DF)
-
-      } else {
-
-        sim_output_DF <- data.frame(
-            Assurance = round(sim_output[[1]]$assurance, 2),
-            `Sample Size` = round(sim_output[[1]]$sample_size, 1),
-            Duration = round(sim_output[[1]]$duration, 1)
-          )
-
-        colnames(sim_output_DF) <- c("Assurance", "Sample Size", "Duration")
-
-        sim_output_DF <- subset(sim_output_DF, select =  input$selected_columns_sim_table)
-
-        datatable(sim_output_DF)
-
-      }
-
+      myOutput <<- sim_output
 
     })
 
 
-    output$sim_plot <- renderPlotly({
-      sim_output <- calculateGSDAssurance()
-
-      if (input$number_of_looks>1){
-        sim_output_DF <- do.call(rbind, lapply(sim_output, function(x) {
-          data.frame(
-            `Information Fraction` = paste(x$IF, collapse = ", "),
-            Assurance = round(x$assurance_mean, 2),
-            `Sample Size` = round(x$ss_mean, 1),
-            Duration = round(x$duration_mean, 1),
-            `Stop Early`= round(x$stop_mean, 2),
-            `Stop Early for Efficacy` = round(x$eff_mean, 2),
-            `Stop Early for Futility` = round(x$fut_mean, 2)
-          )
-        }))
-
-        colnames(sim_output_DF) <- c("Information Fraction", "Assurance", "Sample Size", "Duration",
-                                     "% Stop", "% Stop for Efficacy", "% Stop for Futility")
-
-
-        for (k in 1:length(sim_output)){
-          num_IAs <- input$number_of_looks - 1
-
-          for (ia in 1:num_IAs){
-            column_name <- paste("Timing_IA", ia, sep="")
-
-            sim_output_DF[[column_name]][k] <- mean(as.numeric(sapply(strsplit(sim_output[[k]]$IATimes, ", "), function(x) x[ia])))
-          }
-        }
-
-        sim_output_DF <- subset(sim_output_DF, select = c("Information Fraction", input$selected_metrics_sim_plot))
-
-        # Get the second and third column names
-        x_col <- colnames(sim_output_DF)[2]
-        y_col <- colnames(sim_output_DF)[3]
-
-        # Create the plot using the second and third columns
-        plot_ly(sim_output_DF,
-                x = ~get(x_col),  # Dynamically refer to the second column
-                y = ~get(y_col),  # Dynamically refer to the third column
-                type = "scatter",
-                mode = "markers",
-                marker = list(color = "blue", size = 8),
-                text = ~`Information Fraction`,  # Hover text
-                hoverinfo = "text") %>%
-          layout(
-            title = paste(x_col, "vs", y_col),
-            xaxis = list(title = x_col),
-            yaxis = list(title = y_col)
-          )
-
-      } else {
-
-        sim_output_DF <- data.frame(
-          Assurance = round(sim_output[[1]]$assurance, 2),
-          `Sample Size` = round(sim_output[[1]]$sample_size, 1),
-          Duration = round(sim_output[[1]]$duration, 1)
-        )
-
-        colnames(sim_output_DF) <- c("Assurance", "Sample Size", "Duration")
-
-        sim_output_DF <- subset(sim_output_DF, select = input$selected_metrics_sim_plot)
-
-        # Get the second and third column names
-        x_col <- colnames(sim_output_DF)[1]
-        y_col <- colnames(sim_output_DF)[2]
-
-        # Create the plot using the second and third columns
-        plot_ly(sim_output_DF,
-                x = ~get(x_col),  # Dynamically refer to the second column
-                y = ~get(y_col),  # Dynamically refer to the third column
-                type = "scatter",
-                mode = "markers",
-                marker = list(color = "blue", size = 8)
-                ) %>%
-          layout(
-            title = paste(x_col, "vs", y_col),
-            xaxis = list(title = x_col),
-            yaxis = list(title = y_col)
-          )
-
-      }
-
-    })
-
-
-    output$Prop_Barchart <- renderPlot({
-      sim_output <- calculateGSDAssurance()
-
-      #myX <<- sim_output
-
-      formatted_IF <- c(sapply(sim_output, function(x) toString(x$IF)), "1")
-
-
-      outcomes_decisions <- c("Successful at Final Analysis", "Correctly stopped for Efficacy",
-                              "Incorrectly stopped for Efficacy", "Incorrectly stopped for Futility",
-                              "Correctly stopped for Futility", "Unsuccessful at Final Analysis")
-
-      outcome_decisions_colors <- setNames(c("green", "green", "green", "red", "red", "red"), outcomes_decisions)
-
-      IF_outcomes_mat <- data.frame(matrix(NA, ncol = length(formatted_IF), nrow = length(outcomes_decisions)))
-      colnames(IF_outcomes_mat) <- formatted_IF
-      rownames(IF_outcomes_mat) <- outcomes_decisions
-
-
-      for (i in seq_along(sim_output)) {
-        raw <- sim_output[[i]]$status
-
-        # Recode IA decision
-        decision <- dplyr::case_when(
-          grepl("Efficacy", raw) ~ "Stop for Efficacy",
-          grepl("Futility", raw) ~ "Stop for Futility",
-          grepl("Successful", raw) ~ "Successful at Final Analysis",
-          grepl("Unsuccessful", raw) ~ "Unsuccessful at Final Analysis",
-          TRUE ~ NA_character_
-        )
-
-        sim_output[[i]]$IA_Decision <- decision
-        sim_output[[i]]$IA_Correct <- decision  # Initialize
-
-        for (j in seq_along(decision)) {
-          if (decision[j] == "Stop for Efficacy") {
-            sim_output[[i]]$IA_Correct[j] <- if (sim_output[[i]]$final_success[j]) {
-              "Correctly stopped for Efficacy"
-            } else {
-              "Incorrectly stopped for Efficacy"
-            }
-          }
-          if (decision[j] == "Stop for Futility") {
-            sim_output[[i]]$IA_Correct[j] <- if (sim_output[[i]]$final_success[j]) {
-              "Incorrectly stopped for Futility"
-            } else {
-              "Correctly stopped for Futility"
-            }
-          }
-        }
-      }
-
-
-
-      for (i in 1:length(sim_output)){
-        IF_outcomes_mat[,i] <- prop.table(table(factor(sim_output[[i]]$IA_Correct, levels = outcomes_decisions)))
-      }
-
-
-      IF_outcomes_mat[, length(formatted_IF)] <- c(mean(sim_output[[1]]$final_success), 0, 0, 0, 0, 1 - mean(sim_output[[1]]$final_success))
-
-      IF_outcomes_mat <- subset(IF_outcomes_mat, select = c(input$Barchart_IA, "1"))
-
-      density_vals <- c(NA, 20, 50, 50, 20, NA)
-      angle_vals <- c(0, 45, -45, -45, 45, 0)
-
-      par(mar = c(5, 4, 4, 20))  # Increase right margin
-
-      # Get bar heights to determine where to draw lines
-      bar_heights <- apply(IF_outcomes_mat[1:3, ], 2, sum)
-
-
-
-
-
-      bar_positions <- barplot(as.matrix(IF_outcomes_mat),
-                               beside = FALSE,
-                               width = 1,  # Optional, but explicit
-                               col = outcome_decisions_colors[outcomes_decisions],
-                               density = density_vals,
-                               angle = angle_vals,
-                               xlab = "Information Fraction",
-                               ylab = "Proportion",
-                               main = "Proportion of Trial Outcomes at Different Information Fractions")
-
-
-
-      legend("topright",
-             legend = c(rev(outcomes_decisions), "Assurance"),
-             fill = c(rev(outcome_decisions_colors[outcomes_decisions]), NA),
-             border = c(rep("black", length(outcomes_decisions)), NA),
-             density = c(rev(density_vals), NA),
-             angle = c(rev(angle_vals), NA),
-             col = c(rep(NA, length(outcomes_decisions)), "black"),
-             cex = 0.6,
-             xpd = TRUE,
-             inset = c(-0.4, 0),
-             bty = "n")
-
-
-
-      # Add black separator lines between top and bottom outcome segments
-      segments(x0 = bar_positions - 0.5,  # left edge of each bar
-               x1 = bar_positions + 0.5,  # right edge
-               y0 = bar_heights,          # y position (cumulative height of top 3)
-               y1 = bar_heights,
-               col = "black",
-               lwd = 5)
-
-      # Add text labels just below the separator line
-      text(x = bar_positions,
-           y = bar_heights,  # Adjust this for spacing
-           labels = round(bar_heights, 2),
-           cex = 1,                # text size
-           pos = 1)                  # below the specified y (1 = below)
-
-
-    })
+    # output$sim_plot <- renderPlotly({
+    #   sim_output <- calculateGSDAssurance()
+    #
+    #   if (input$number_of_looks>1){
+    #     sim_output_DF <- do.call(rbind, lapply(sim_output, function(x) {
+    #       data.frame(
+    #         `Information Fraction` = paste(x$IF, collapse = ", "),
+    #         Assurance = round(x$assurance_mean, 2),
+    #         `Sample Size` = round(x$ss_mean, 1),
+    #         Duration = round(x$duration_mean, 1),
+    #         `Stop Early`= round(x$stop_mean, 2),
+    #         `Stop Early for Efficacy` = round(x$eff_mean, 2),
+    #         `Stop Early for Futility` = round(x$fut_mean, 2)
+    #       )
+    #     }))
+    #
+    #     colnames(sim_output_DF) <- c("Information Fraction", "Assurance", "Sample Size", "Duration",
+    #                                  "% Stop", "% Stop for Efficacy", "% Stop for Futility")
+    #
+    #
+    #     for (k in 1:length(sim_output)){
+    #       num_IAs <- input$number_of_looks - 1
+    #
+    #       for (ia in 1:num_IAs){
+    #         column_name <- paste("Timing_IA", ia, sep="")
+    #
+    #         sim_output_DF[[column_name]][k] <- mean(as.numeric(sapply(strsplit(sim_output[[k]]$IATimes, ", "), function(x) x[ia])))
+    #       }
+    #     }
+    #
+    #     sim_output_DF <- subset(sim_output_DF, select = c("Information Fraction", input$selected_metrics_sim_plot))
+    #
+    #     # Get the second and third column names
+    #     x_col <- colnames(sim_output_DF)[2]
+    #     y_col <- colnames(sim_output_DF)[3]
+    #
+    #     # Create the plot using the second and third columns
+    #     plot_ly(sim_output_DF,
+    #             x = ~get(x_col),  # Dynamically refer to the second column
+    #             y = ~get(y_col),  # Dynamically refer to the third column
+    #             type = "scatter",
+    #             mode = "markers",
+    #             marker = list(color = "blue", size = 8),
+    #             text = ~`Information Fraction`,  # Hover text
+    #             hoverinfo = "text") %>%
+    #       layout(
+    #         title = paste(x_col, "vs", y_col),
+    #         xaxis = list(title = x_col),
+    #         yaxis = list(title = y_col)
+    #       )
+    #
+    #   } else {
+    #
+    #     sim_output_DF <- data.frame(
+    #       Assurance = round(sim_output[[1]]$assurance, 2),
+    #       `Sample Size` = round(sim_output[[1]]$sample_size, 1),
+    #       Duration = round(sim_output[[1]]$duration, 1)
+    #     )
+    #
+    #     colnames(sim_output_DF) <- c("Assurance", "Sample Size", "Duration")
+    #
+    #     sim_output_DF <- subset(sim_output_DF, select = input$selected_metrics_sim_plot)
+    #
+    #     # Get the second and third column names
+    #     x_col <- colnames(sim_output_DF)[1]
+    #     y_col <- colnames(sim_output_DF)[2]
+    #
+    #     # Create the plot using the second and third columns
+    #     plot_ly(sim_output_DF,
+    #             x = ~get(x_col),  # Dynamically refer to the second column
+    #             y = ~get(y_col),  # Dynamically refer to the third column
+    #             type = "scatter",
+    #             mode = "markers",
+    #             marker = list(color = "blue", size = 8)
+    #             ) %>%
+    #       layout(
+    #         title = paste(x_col, "vs", y_col),
+    #         xaxis = list(title = x_col),
+    #         yaxis = list(title = y_col)
+    #       )
+    #
+    #   }
+    #
+    # })
+    #
+    #
+    # output$Prop_Barchart <- renderPlot({
+    #   sim_output <- calculateGSDAssurance()
+    #
+    #   formatted_IF <- c(sapply(sim_output, function(x) toString(x$IF)), "1")
+    #
+    #
+    #   outcomes_decisions <- c("Successful at Final Analysis", "Correctly stopped for Efficacy",
+    #                           "Incorrectly stopped for Efficacy", "Incorrectly stopped for Futility",
+    #                           "Correctly stopped for Futility", "Unsuccessful at Final Analysis")
+    #
+    #   outcome_decisions_colors <- setNames(c("green", "green", "green", "red", "red", "red"), outcomes_decisions)
+    #
+    #   IF_outcomes_mat <- data.frame(matrix(NA, ncol = length(formatted_IF), nrow = length(outcomes_decisions)))
+    #   colnames(IF_outcomes_mat) <- formatted_IF
+    #   rownames(IF_outcomes_mat) <- outcomes_decisions
+    #
+    #
+    #   for (i in seq_along(sim_output)) {
+    #     raw <- sim_output[[i]]$status
+    #
+    #     # Recode IA decision
+    #     decision <- dplyr::case_when(
+    #       grepl("Efficacy", raw) ~ "Stop for Efficacy",
+    #       grepl("Futility", raw) ~ "Stop for Futility",
+    #       grepl("Successful", raw) ~ "Successful at Final Analysis",
+    #       grepl("Unsuccessful", raw) ~ "Unsuccessful at Final Analysis",
+    #       TRUE ~ NA_character_
+    #     )
+    #
+    #     sim_output[[i]]$IA_Decision <- decision
+    #     sim_output[[i]]$IA_Correct <- decision  # Initialize
+    #
+    #     for (j in seq_along(decision)) {
+    #       if (decision[j] == "Stop for Efficacy") {
+    #         sim_output[[i]]$IA_Correct[j] <- if (sim_output[[i]]$final_success[j]) {
+    #           "Correctly stopped for Efficacy"
+    #         } else {
+    #           "Incorrectly stopped for Efficacy"
+    #         }
+    #       }
+    #       if (decision[j] == "Stop for Futility") {
+    #         sim_output[[i]]$IA_Correct[j] <- if (sim_output[[i]]$final_success[j]) {
+    #           "Incorrectly stopped for Futility"
+    #         } else {
+    #           "Correctly stopped for Futility"
+    #         }
+    #       }
+    #     }
+    #   }
+    #
+    #
+    #
+    #   for (i in 1:length(sim_output)){
+    #     IF_outcomes_mat[,i] <- prop.table(table(factor(sim_output[[i]]$IA_Correct, levels = outcomes_decisions)))
+    #   }
+    #
+    #
+    #   IF_outcomes_mat[, length(formatted_IF)] <- c(mean(sim_output[[1]]$final_success), 0, 0, 0, 0, 1 - mean(sim_output[[1]]$final_success))
+    #
+    #   IF_outcomes_mat <- subset(IF_outcomes_mat, select = c(input$Barchart_IA, "1"))
+    #
+    #   density_vals <- c(NA, 20, 50, 50, 20, NA)
+    #   angle_vals <- c(0, 45, -45, -45, 45, 0)
+    #
+    #   par(mar = c(5, 4, 4, 20))  # Increase right margin
+    #
+    #   # Get bar heights to determine where to draw lines
+    #   bar_heights <- apply(IF_outcomes_mat[1:3, ], 2, sum)
+    #
+    #
+    #
+    #
+    #
+    #   bar_positions <- barplot(as.matrix(IF_outcomes_mat),
+    #                            beside = FALSE,
+    #                            width = 1,  # Optional, but explicit
+    #                            col = outcome_decisions_colors[outcomes_decisions],
+    #                            density = density_vals,
+    #                            angle = angle_vals,
+    #                            xlab = "Information Fraction",
+    #                            ylab = "Proportion",
+    #                            main = "Proportion of Trial Outcomes at Different Information Fractions")
+    #
+    #
+    #
+    #   legend("topright",
+    #          legend = c(rev(outcomes_decisions), "Assurance"),
+    #          fill = c(rev(outcome_decisions_colors[outcomes_decisions]), NA),
+    #          border = c(rep("black", length(outcomes_decisions)), NA),
+    #          density = c(rev(density_vals), NA),
+    #          angle = c(rev(angle_vals), NA),
+    #          col = c(rep(NA, length(outcomes_decisions)), "black"),
+    #          cex = 0.6,
+    #          xpd = TRUE,
+    #          inset = c(-0.4, 0),
+    #          bty = "n")
+    #
+    #
+    #
+    #   # Add black separator lines between top and bottom outcome segments
+    #   segments(x0 = bar_positions - 0.5,  # left edge of each bar
+    #            x1 = bar_positions + 0.5,  # right edge
+    #            y0 = bar_heights,          # y position (cumulative height of top 3)
+    #            y1 = bar_heights,
+    #            col = "black",
+    #            lwd = 5)
+    #
+    #   # Add text labels just below the separator line
+    #   text(x = bar_positions,
+    #        y = bar_heights,  # Adjust this for spacing
+    #        labels = round(bar_heights, 2),
+    #        cex = 1,                # text size
+    #        pos = 1)                  # below the specified y (1 = below)
+    #
+    #
+    # })
 
 
   # Bayesian Logic ---------------------------------

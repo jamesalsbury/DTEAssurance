@@ -1,48 +1,4 @@
-# group_sequential_decision <- function(z_scores, critical_values, futility_values, sample_sizes, durations, alpha_spending) {
-#   num_stages <- length(z_scores)
-#
-#   for (i in seq_len(num_stages - 1)) {  # Loop through all interim stages, not including the final one
-#     # Check futility if a futility boundary is provided
-#     if (!is.na(futility_values[i]) && z_scores[i] < futility_values[i]) {
-#       return(list(
-#         status = paste("Stop for Futility at IA", i),
-#         successful = FALSE,
-#         analysis = i,
-#         z_score = z_scores[i],
-#         sample_size = sample_sizes[i],
-#         duration = durations[i],
-#         final_success = z_scores[num_stages] > stats::qnorm(1-alpha_spending)
-#       ))
-#     }
-#
-#     # Check efficacy if a critical value is provided
-#     if (!is.na(critical_values[i]) && z_scores[i] > critical_values[i]) {
-#       return(list(
-#         status = paste("Stop for Efficacy at IA", i),
-#         successful = TRUE,
-#         analysis = i,
-#         z_score = z_scores[i],
-#         sample_size = sample_sizes[i],
-#         duration = durations[i],
-#         final_success = z_scores[num_stages] > stats::qnorm(1-alpha_spending)
-#       ))
-#     }
-#   }
-#
-#   # Now handle the final analysis (last stage)
-#   final_success <- z_scores[num_stages] > critical_values[num_stages]
-#
-#   return(list(
-#     status = if (final_success) "Successful at Final Analysis" else "Unsuccessful at Final Analysis",
-#     successful = final_success,
-#     analysis = num_stages,  # This is the final analysis
-#     z_score = z_scores[num_stages],
-#     sample_size = sample_sizes[num_stages],
-#     duration = durations[num_stages],
-#     final_success = z_scores[num_stages] > stats::qnorm(1-alpha_spending)
-#   ))
-# }
-#
+
 # strictly_increasing_combinations <- function(...) {
 #   #vectors <- list(...)  # Convert input vectors into a list
 #   combinations <- expand.grid(...)  # Generate all possible combinations
@@ -63,81 +19,9 @@ simulate_one_trial <- function(i, j,
                                effect_model,
                                censoring_model,
                                recruitment_model,
-                               analysis_model,
-                               delay_time_samples,
-                               post_delay_HR_samples) {
+                               analysis_model) {
 
-  # --- Sample control parameters ---
-  lambda_c_i <- NA
-  gamma_c_i <- NA
-
-  if (control_model$dist == "Exponential") {
-    if (control_model$parameter_mode == "Fixed") {
-      lambda_c_i <- control_model$lambda
-    } else if (control_model$parameter_mode == "Distribution") {
-      lambda_c_i <- -log(rbeta(1, control_model$t1_Beta_a, control_model$t1_Beta_b)) / control_model$t1
-    }
-    gamma_c_i <- NULL
-  }
-
-  if (control_model$dist == "Weibull") {
-    if (control_model$parameter_mode == "Fixed") {
-      if (control_model$fixed_type == "Parameters") {
-        lambda_c_i <- control_model$lambda
-        gamma_c_i <- control_model$gamma
-      } else if (control_model$fixed_type == "Landmark") {
-        WeibFunc <- function(params) {
-          lambda <- params[1]
-          k <- params[2]
-          c(exp(-(control_model$t1 * lambda)^k) - control_model$surv_t1,
-            exp(-(control_model$t2 * lambda)^k) - control_model$surv_t2)
-        }
-        solution <- nleqslv::nleqslv(c(1, 1), fn = WeibFunc)
-        lambda_c_i <- solution$x[1]
-        gamma_c_i <- solution$x[2]
-      }
-    } else if (control_model$parameter_mode == "Distribution") {
-      sampledS1 <- rbeta(1, control_model$t1_Beta_a, control_model$t1_Beta_b)
-      sampledDelta <- rbeta(1, control_model$diff_Beta_a, control_model$diff_Beta_b)
-      sampledS2 <- sampledS1 - sampledDelta
-      solution <- nleqslv::nleqslv(c(10, 1), function(params) {
-        lambda <- params[1]
-        k <- params[2]
-        c(exp(-(control_model$t1 / lambda)^k) - sampledS1,
-          exp(-(control_model$t2 / lambda)^k) - sampledS2)
-      })
-      lambda_c_i <- 1 / solution$x[1]
-      gamma_c_i <- solution$x[2]
-    }
-  }
-
-  if (is.na(lambda_c_i)) {
-    stop("lambda_c_i was not assigned. Check control_model settings.")
-  }
-
-  # --- Sample treatment effect ---
-  if (runif(1) > effect_model$P_S) {
-    delay_time <- 0
-    post_delay_HR <- 1
-  } else if (runif(1) > effect_model$P_DTE) {
-    delay_time <- 0
-    post_delay_HR <- post_delay_HR_samples[i]
-  } else {
-    delay_time <- delay_time_samples[i]
-    post_delay_HR <- post_delay_HR_samples[i]
-  }
-
-  # --- Simulate survival data ---
-  data <- sim_dte(n_c[j], n_t[j], lambda_c_i, delay_time, post_delay_HR,
-                  dist = control_model$dist, gamma_c = gamma_c_i)
-
-  # --- Add recruitment time ---
-  data <- add_recruitment_time(data,
-                               rec_method = recruitment_model$method,
-                               rec_period = recruitment_model$period,
-                               rec_power = recruitment_model$power,
-                               rec_rate = recruitment_model$rate,
-                               rec_duration = recruitment_model$duration)
+  data <- simulate_trial_with_recruitment(n_c, n_t, control_model, effect_model, recruitment_model)
 
   # --- Apply censoring ---
   if (censoring_model$method == "Time") {
@@ -168,7 +52,7 @@ simulate_one_trial <- function(i, j,
 }
 
 
-simulate_full_trial <- function(n_c, n_t,
+simulate_trial_with_recruitment <- function(n_c, n_t,
                                 control_model,
                                 effect_model,
                                 recruitment_model) {
@@ -221,19 +105,20 @@ simulate_full_trial <- function(n_c, n_t,
   }
 
   # --- Sample treatment effect ---
+
   if (runif(1) > effect_model$P_S) {
     delay_time <- 0
     post_delay_HR <- 1
   } else if (runif(1) > effect_model$P_DTE) {
     delay_time <- 0
-    post_delay_HR <- post_delay_HR_samples[i]
+    post_delay_HR <- SHELF::sampleFit(effect_model$HR_SHELF, n = 1)[, effect_model$HR_dist]
   } else {
-    delay_time <- delay_time_samples[i]
-    post_delay_HR <- post_delay_HR_samples[i]
+    delay_time <- SHELF::sampleFit(effect_model$delay_SHELF, n = 1)[, effect_model$delay_dist]
+    post_delay_HR <- SHELF::sampleFit(effect_model$HR_SHELF, n = 1)[, effect_model$HR_dist]
   }
 
   # --- Simulate survival data ---
-  data <- sim_dte(n_c[j], n_t[j], lambda_c_i, delay_time, post_delay_HR,
+  data <- sim_dte(n_c, n_t, lambda_c_i, delay_time, post_delay_HR,
                   dist = control_model$dist, gamma_c = gamma_c_i)
 
   # --- Add recruitment time ---
@@ -244,7 +129,7 @@ simulate_full_trial <- function(n_c, n_t,
                                rec_rate = recruitment_model$rate,
                                rec_duration = recruitment_model$duration)
 
-  return(trial_data)
+  return(data)
 }
 
 
@@ -351,12 +236,12 @@ apply_GSD_to_trial <- function(trial_data, design, total_events) {
         )
   }
 
+  sample_size <- sum(trial_data$rec_time <= stop_time)
+
   return(list(
     decision         = decision,
     stop_time        = stop_time,
-    boundary_crossed = boundary_crossed,
-    interim_results  = interim_results,
-    final_z = z_stat
+    sample_size = sample_size
   ))
 }
 
@@ -367,33 +252,18 @@ summarize_gsd_results <- function(gsd_outcomes) {
 
   decisions   <- sapply(gsd_outcomes, `[[`, "decision")
   stop_times  <- sapply(gsd_outcomes, `[[`, "stop_time")
-  boundaries  <- sapply(gsd_outcomes, `[[`, "boundary_crossed")
-  final_z <- sapply(gsd_outcomes, `[[`, "final_z")
+  sample_size <- sapply(gsd_outcomes, `[[`, "sample_size")
 
   # Decision rates
   assurance       <- assurance <- mean(decisions %in% c("Stop for efficacy", "Successful at final"))
-  futility_rate   <- mean(decisions == "Stop for futility")
-  continue_rate   <- mean(decisions == "Continue")
-  final_rate      <- mean(decisions == "Stop at final")
-  incomplete_rate <- mean(decisions == "Incomplete")
-
-  # Expected duration (excluding incomplete trials)
   expected_duration <- mean(stop_times[is.finite(stop_times)])
+  expected_sample_size <- mean(sample_size)
 
-  # Boundary summary
-  boundary_summary <- table(factor(boundaries, levels = c("Efficacy", "Futility", NA)))
 
   return(list(
     assurance         = assurance,
-    futility_rate     = futility_rate,
-    continue_rate     = continue_rate,
-    final_rate        = final_rate,
-    incomplete_rate   = incomplete_rate,
     expected_duration = expected_duration,
-    boundary_summary  = boundary_summary,
-    decisions         = decisions,
-    stop_times        = stop_times,
-    final_z = final_z
+    expected_sample_size = expected_sample_size
   ))
 }
 
