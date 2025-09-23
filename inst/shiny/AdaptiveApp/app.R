@@ -9,6 +9,8 @@ library(plotly)
 library(shinyBS)
 #remotes::install_github("jamesalsbury/DTEAssurance")
 library(DTEAssurance)
+library(shinyAce)
+
 
 rowCallback <- c(
   "function(row, data){",
@@ -24,55 +26,65 @@ rowCallback <- c(
 table_choices <- c("% Stop", "% Stop for Efficacy", "% Stop for Futility")
 
 # ---- Design card module ----
-designCardUI <- function(id) {
-  ns <- NS(id)
-  tagList(
-    fluidRow(
-      column(width = 3,
-             numericInput(ns("n_looks"), "Stages", value = 2, min = 1, max = 20)
-      ),
-      column(width = 9,
-             rHandsontableOutput(ns("table"))
-      )
-    )
+# designCardUI <- function(id) {
+#   ns <- NS(id)
+#   tagList(
+#     fluidRow(
+#       column(width = 3,
+#              numericInput(ns("n_looks"), "Stages", value = 2, min = 1, max = 20)
+#       ),
+#       column(width = 9,
+#              rHandsontableOutput(ns("table"))
+#       )
+#     )
+#   )
+# }
+#
+# designCardServer <- function(id, initial_n_looks = 2) {
+#   moduleServer(id, function(input, output, session) {
+#
+#     # Function to generate a table with n rows
+#     default_table <- function(n) {
+#       data.frame(
+#         IF = seq(1/n, 1, length.out = n),
+#         `α-spending` = seq(0.025/n, 0.025, length.out = n),
+#         `β-spending`  = seq(0.1/n, 0.1, length.out = n),
+#         check.names = F
+#       )
+#     }
+#
+#     # Initialize reactiveVal
+#     table_rv <- reactiveVal(default_table(initial_n_looks))
+#
+#     # Whenever n_looks changes, generate a fresh table
+#     observeEvent(input$n_looks, {
+#       n <- input$n_looks
+#       table_rv(default_table(n))   # replace old table completely
+#     })
+#
+#     # Render the table
+#     output$table <- renderRHandsontable({
+#       df <- table_rv()
+#       # Round numeric columns to 3 decimal places for display
+#       num_cols <- sapply(df, is.numeric)
+#       df[num_cols] <- lapply(df[num_cols], function(x) round(x, 3))
+#
+#       rhandsontable(df, useTypes = FALSE)
+#     })
+#
+#
+#     return(table_rv)
+#   })
+# }
+
+default_table <- function(n) {
+  data.frame(
+    Stage = 1:n,   # non-editable
+    IF = seq(1/n, 1, length.out = n),
+    `α-spending` = seq(0.025/n, 0.025, length.out = n),
+    `β-spending` = seq(0.1/n, 0.1, length.out = n),
+    check.names = FALSE
   )
-}
-
-designCardServer <- function(id, initial_n_looks = 2) {
-  moduleServer(id, function(input, output, session) {
-
-    # Function to generate a table with n rows
-    default_table <- function(n) {
-      data.frame(
-        IF = seq(1/n, 1, length.out = n),                     # last row IF = 1
-        `α-spending` = seq(0.025/n, 0.025, length.out = n),  # example pre-fill
-        `β-spending`  = seq(0.1/n, 0.1, length.out = n),    # example pre-fill
-        check.names = F
-      )
-    }
-
-    # Initialize reactiveVal
-    table_rv <- reactiveVal(default_table(initial_n_looks))
-
-    # Whenever n_looks changes, generate a fresh table
-    observeEvent(input$n_looks, {
-      n <- input$n_looks
-      table_rv(default_table(n))   # replace old table completely
-    })
-
-    # Render the table
-    output$table <- renderRHandsontable({
-      df <- table_rv()
-      # Round numeric columns to 3 decimal places for display
-      num_cols <- sapply(df, is.numeric)
-      df[num_cols] <- lapply(df[num_cols], function(x) round(x, 3))
-
-      rhandsontable(df, useTypes = FALSE)
-    })
-
-
-    return(table_rv)
-  })
 }
 
 
@@ -409,51 +421,77 @@ ui <- fluidPage(
                             numericInput("n_designs", "Number of Designs", value = 1, min = 1, max = 20)
                             )
                    ),
-                   uiOutput("design_cards"),
+                   uiOutput("design_blocks"),
                    numericInput("n_sims", "Number of simulations", value=1000),
                    actionButton("calc_GSD_assurance", label  = "Calculate")
                  ),
                  mainPanel = mainPanel(
                    tags$h4(
                      id = "toggleHeader",
-                     style = "cursor: pointer; display: flex; align-items: center;",
-                     tags$span(id = "arrow", "►"),  # Arrow icon
-                     "Show/hide the function"
-                   ),
-                   tags$div(
-                     id = "collapseText",
-                     class = "collapse",
-                     verbatimTextOutput("display_func_sim")
-                   ),
-                   tags$script(
-                     "$(document).on('click', '#toggleHeader', function() {
-      $('#collapseText').collapse('toggle');
-      var arrow = $('#arrow');
-      if (arrow.text() == '►') {
-        arrow.text('▼');
-      } else {
-        arrow.text('►');
-      }
-    });"
-                   ),
-                   tabsetPanel(
-                     tabPanel("Tables",
-                              hidden(selectizeInput("selected_columns_sim_table", "Metrics to View",
-                                                    choices = c("Assurance", "Duration", "Sample Size"), selected = c("Assurance", "Duration", "Sample Size"),
-                                                    multiple = TRUE)),
-                              DTOutput("sim_table")),
-                     tabPanel("Plots",
-                              selectInput("Boundary_IA", "Choose the IF (to view)", choices = NULL),
-                              plotlyOutput("boundary_plot"),
-                              br(), br(),
-
-                              hidden(selectizeInput("Barchart_IA", "Information Fractions to View",
-                                                    choices = NULL,
-                                                    multiple = T)),
-                              plotOutput("Prop_Barchart"))
-                   ),
-
+                     style = "cursor: pointer; display: flex; align-items: center; justify-content: space-between;",
+                     div(
+                       style = "display: flex; align-items: center;",
+                       tags$span(id = "arrow", "►"),  # Arrow icon
+                       " Show/hide the function"
+                     ),
+                 actionButton(
+                   inputId = "copy_btn",
+                   label = "📋 Copy",
+                   class = "btn btn-sm btn-outline-primary"
                  )
+               ),
+
+               tags$div(
+                 id = "collapseText",
+                 class = "collapse",
+                 aceEditor(
+                   outputId = "display_func_simulate",
+                   value = "",
+                   mode = "r",
+                   theme = "monokai",
+                   readOnly = TRUE,
+                   height = "400px"
+                 )
+               ),
+
+               tags$script(HTML("
+    // Toggle collapse + arrow
+    $(document).on('click', '#toggleHeader', function(e) {
+      if (!$(e.target).is('#copy_btn')) {   // avoid toggle when clicking copy
+        $('#collapseText').collapse('toggle');
+        var arrow = $('#arrow');
+        if (arrow.text() == '►') {
+          arrow.text('▼');
+        } else {
+          arrow.text('►');
+        }
+      }
+    });
+
+    // Copy-to-clipboard
+    $(document).on('click', '#copy_btn', function() {
+      var editorText = ace.edit('display_func_simulate').getValue();
+      navigator.clipboard.writeText(editorText);
+    });
+  ")),
+
+               tabsetPanel(
+                 tabPanel("Tables",
+                          hidden(selectizeInput("selected_columns_sim_table", "Metrics to View",
+                                                choices = c("Assurance", "Duration", "Sample Size"), selected = c("Assurance", "Duration", "Sample Size"),
+                                                multiple = TRUE)),
+                          DTOutput("sim_table")),
+                 tabPanel("Plots",
+                          selectInput("Boundary_IA", "Choose the IF (to view)", choices = NULL),
+                          plotlyOutput("boundary_plot"),
+                          br(), br(),
+
+                          hidden(selectizeInput("Barchart_IA", "Information Fractions to View",
+                                                choices = NULL,
+                                                multiple = T)),
+                          plotOutput("Prop_Barchart"))
+               ),
+      )
                )
       ),
       # Bayesian UI ---------------------------------
@@ -675,52 +713,116 @@ server <- function(input, output, session) {
 
   # Simulate Logic ---------------------------------
 
-  # Store per-design reactive tables
-  design_tables <- reactiveVal(list())
+  # # Store per-design reactive tables
+  # design_tables <- reactiveVal(list())
+  #
+  # # Render design cards
+  # output$design_cards <- renderUI({
+  #   n <- input$n_designs
+  #   if (is.null(n) || n < 1) return(NULL)
+  #
+  #   # Generate UI for each design
+  #   lapply(1:n, function(i) {
+  #     fluidRow(
+  #       column(12, designCardUI(paste0("design_", i)))
+  #     )
+  #   })
+  # })
+  #
+  # # Initialize modules for each design
+  # observe({
+  #   n <- input$n_designs
+  #   tables <- design_tables()
+  #
+  #   for (i in 1:n) {
+  #     id <- paste0("design_", i)
+  #     if (is.null(tables[[id]])) {
+  #       # Start module and save its reactiveVal
+  #       tables[[id]] <- designCardServer(id)
+  #       design_tables(tables)
+  #     }
+  #   }
+  #
+  #   # Remove extra tables if n_designs decreased
+  #   if (length(tables) > n) {
+  #     for (i in (n+1):length(tables)) {
+  #       tables[[paste0("design_", i)]] <- NULL
+  #     }
+  #     design_tables(tables)
+  #   }
+  # })
 
-  # Render design cards
-  output$design_cards <- renderUI({
+  # Store table data for each design
+  tables <- reactiveValues()
+
+  # Dynamic UI
+  output$design_blocks <- renderUI({
     n <- input$n_designs
-    if (is.null(n) || n < 1) return(NULL)
-
-    # Generate UI for each design
-    lapply(1:n, function(i) {
+    blocks <- lapply(1:n, function(i) {
       fluidRow(
-        column(12, designCardUI(paste0("design_", i)))
+        column(4,
+               numericInput(paste0("n_interims_", i),
+                            "Stages",
+                            value = 3, min = 1, max = 20)
+        ),
+        column(8,
+               DTOutput(paste0("table_", i))
+        )
       )
+    })
+    do.call(tagList, blocks)
+  })
+
+  # Render editable tables
+  observe({
+    n <- input$n_designs
+    lapply(1:n, function(i) {
+      output[[paste0("table_", i)]] <- renderDT({
+        n_interims <- input[[paste0("n_interims_", i)]]
+        if (is.null(n_interims)) return(NULL)
+
+        # Create initial table if it does not exist
+        if (is.null(tables[[paste0("design_", i)]])) {
+          tables[[paste0("design_", i)]] <- default_table(n_interims)
+        } else {
+          # Adjust row count if n_interims changed
+          old_data <- tables[[paste0("design_", i)]]
+          n_old <- nrow(old_data)
+          if (n_interims > n_old) {
+            new_rows <- default_table(n_interims)[(n_old+1):n_interims, ]
+            old_data <- rbind(old_data, new_rows)
+          } else if (n_interims < n_old) {
+            old_data <- old_data[1:n_interims, ]
+          }
+          tables[[paste0("design_", i)]] <- old_data
+        }
+
+        datatable(
+          tables[[paste0("design_", i)]],
+          editable = list(target = "cell", disable = list(columns = 0)),  # Stage non-editable
+          options = list(dom = 't', paging = FALSE),
+          rownames = FALSE
+        )
+      })
     })
   })
 
-  # Initialize modules for each design
+  # Capture edits
   observe({
     n <- input$n_designs
-    tables <- design_tables()
-
-    for (i in 1:n) {
-      id <- paste0("design_", i)
-      if (is.null(tables[[id]])) {
-        # Start module and save its reactiveVal
-        tables[[id]] <- designCardServer(id)
-        design_tables(tables)
-      }
-    }
-
-    # Remove extra tables if n_designs decreased
-    if (length(tables) > n) {
-      for (i in (n+1):length(tables)) {
-        tables[[paste0("design_", i)]] <- NULL
-      }
-      design_tables(tables)
-    }
+    lapply(1:n, function(i) {
+      observeEvent(input[[paste0("table_", i, "_cell_edit")]], {
+        info <- input[[paste0("table_", i, "_cell_edit")]]
+        i_row <- info$row
+        i_col <- info$col + 1  # DT uses 0-based column index
+        tables[[paste0("design_", i)]][i_row, i_col] <- info$value
+      })
+    })
   })
 
 
 
-
-
   observe({
-
-
 
 
     output$boundary_plot <- renderPlotly({
@@ -763,10 +865,7 @@ server <- function(input, output, session) {
   })
 
 
-  function_call_sim <- reactive({
-
-
-    spendingTable <- hot_to_r(input$error_spending_table)
+  function_call_simulate <- reactive({
 
     base_call <- paste0("calc_dte_assurance_interim(n_c = ",
                         input$n_c,
@@ -904,58 +1003,60 @@ server <- function(input, output, session) {
                         "), \n GSD_model = list(events = ",
                         input$total_events)
 
-    tables <- design_tables()
-
-    alpha_list <- lapply(tables, function(tr) {
-      df <- tr()
-      df$`α-spending`
-    })
-
-    alpha_vector <- sapply(alpha_list, function(x) paste(x, collapse = ", "))
 
 
-    base_call <- paste0(base_call,
-                        ", \n alpha_spending = c(",
-                        paste0('"', alpha_vector, '"', collapse = ", "),
-                        ")")
+    myTables <<- tables
 
-    beta_list <- lapply(tables, function(tr) {
-      df <- tr()
-      df$`β-spending`
-    })
-
-    beta_vector <- sapply(beta_list, function(x) paste(x, collapse = ", "))
-
-    base_call <- paste0(base_call,
-                        ", \n beta_spending = c(",
-                        paste0('"', beta_vector, '"', collapse = ", "),
-                        ")")
-
-    IF_list <- lapply(tables, function(tr) {
-      df <- tr()
-      df$IF
-    })
-
-    IF_vector <- sapply(IF_list, function(x) paste(x, collapse = ", "))
-
-    base_call <- paste0(base_call,
-                        ", \n IF_vec = c(",
-                        paste0('"', IF_vector, '"', collapse = ", "),
-                        ")), \n n_sims = ",
-                        input$n_sims,
-                        ")")
+    # alpha_list <- lapply(tables, function(tr) {
+    #   df <- tr()
+    #   df$`α-spending`
+    # })
+    #
+    # alpha_vector <- sapply(alpha_list, function(x) paste(x, collapse = ", "))
+    #
+    #
+    # base_call <- paste0(base_call,
+    #                     ", \n alpha_spending = c(",
+    #                     paste0('"', alpha_vector, '"', collapse = ", "),
+    #                     ")")
+    #
+    # beta_list <- lapply(tables, function(tr) {
+    #   df <- tr()
+    #   df$`β-spending`
+    # })
+    #
+    # beta_vector <- sapply(beta_list, function(x) paste(x, collapse = ", "))
+    #
+    # base_call <- paste0(base_call,
+    #                     ", \n beta_spending = c(",
+    #                     paste0('"', beta_vector, '"', collapse = ", "),
+    #                     ")")
+    #
+    # IF_list <- lapply(tables, function(tr) {
+    #   df <- tr()
+    #   df$IF
+    # })
+    #
+    # IF_vector <- sapply(IF_list, function(x) paste(x, collapse = ", "))
+    #
+    # base_call <- paste0(base_call,
+    #                     ", \n IF_vec = c(",
+    #                     paste0('"', IF_vector, '"', collapse = ", "),
+    #                     ")), \n n_sims = ",
+    #                     input$n_sims,
+    #                     ")")
 
 
     return(base_call)
 
   })
 
-  output$display_func_sim <- renderText({
-    function_call_sim()
+  observe({
+    updateAceEditor(session, "display_func_simulate", value = function_call_simulate())
   })
 
   calculateGSDAssurance <- eventReactive(input$calc_GSD_assurance, {
-    call_string <- function_call_sim()
+    call_string <- function_call_simulate()
     result <- eval(parse(text = call_string))
     shinyjs::show("selected_columns_sim_table")
     shinyjs::show("selected_metrics_sim_plot")

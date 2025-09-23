@@ -216,7 +216,7 @@ calc_dte_assurance <- function(n_c,
     }
 
 
-    sim_results <- future_lapply(seq_len(n_sims), simulate_one_trial, future.seed = TRUE,
+    sim_results <- future.apply::future_lapply(seq_len(n_sims), simulate_one_trial, future.seed = TRUE,
                                  j = j,
                                  n_c = n_c[j], n_t = n_t[j],
                                  control_model = control_model,
@@ -446,7 +446,7 @@ calc_dte_assurance_interim <- function(n_c, n_t,
   beta_list <- lapply(GSD_model$beta_spending, function(x) as.numeric(strsplit(x, ",\\s*")[[1]]))
   IF_labels <- GSD_model$IF_vec
 
-  results <- future_lapply(seq_len(n_sims), function(i) {
+  results <- future.apply::future_lapply(seq_len(n_sims), function(i) {
     trial <- simulate_trial_with_recruitment(n_c, n_t, control_model, effect_model, recruitment_model)
 
     do.call(rbind, lapply(seq_along(IF_list), function(j) {

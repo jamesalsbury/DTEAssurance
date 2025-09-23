@@ -7,6 +7,7 @@ library(shinyBS)
 #remotes::install_github("jamesalsbury/DTEAssurance")
 library(DT)
 library(rlang)
+library(shinyAce)
 
 
 
