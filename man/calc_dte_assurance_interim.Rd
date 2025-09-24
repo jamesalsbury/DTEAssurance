@@ -2,7 +2,7 @@
 % Please edit documentation in R/main.R
 \name{calc_dte_assurance_interim}
 \alias{calc_dte_assurance_interim}
-\title{Calculates operating characteristics for a Group Sequential Trial for a trial with a Delayed Treatment Effect, using elicited priors}
+\title{Calculates operating characteristics for a Group Sequential Trial with a Delayed Treatment Effect}
 \usage{
 calc_dte_assurance_interim(
   n_c,
@@ -24,43 +24,66 @@ calc_dte_assurance_interim(
 \item \code{dist}: Distribution type ("Exponential" or "Weibull")
 \item \code{parameter_mode}: Either "Fixed" or "Distribution"
 \item \code{fixed_type}: If "Fixed", specify as "Parameters" or "Landmark"
-\item \code{lambda}: Scale parameter (for Exponential or Weibull)
-\item \code{gamma}: Shape parameter (Weibull only)
-\item \code{t1}, \code{t2}: Landmark times (used if \code{fixed_type = "Landmark"})
-\item \code{surv_t1}, \code{surv_t2}: Survival probabilities at \code{t1} and \code{t2}
-\item \code{t1_Beta_a}, \code{t1_Beta_b}: Beta prior parameters for survival at \code{t1}
-\item \code{diff_Beta_a}, \code{diff_Beta_b}: Beta prior parameters for survival difference between \code{t1} and \code{t2}
+\item \code{lambda}, \code{gamma}: Scale and shape parameters
+\item \code{t1}, \code{t2}: Landmark times
+\item \code{surv_t1}, \code{surv_t2}: Survival probabilities at landmarks
+\item \code{t1_Beta_a}, \code{t1_Beta_b}, \code{diff_Beta_a}, \code{diff_Beta_b}: Beta prior parameters
 }}
 
 \item{effect_model}{A named list specifying beliefs about the treatment effect:
 \itemize{
-\item \code{delay_SHELF}: SHELF object encoding beliefs about delay time
-\item \code{delay_dist}: Distribution type for delay ("hist" by default)
-\item \code{HR_SHELF}: SHELF object encoding beliefs about post-delay hazard ratio
-\item \code{HR_dist}: Distribution type for hazard ratio ("hist" by default)
+\item \code{delay_SHELF}, \code{HR_SHELF}: SHELF objects encoding beliefs
+\item \code{delay_dist}, \code{HR_dist}: Distribution types ("hist" by default)
 \item \code{P_S}: Probability that survival curves separate
 \item \code{P_DTE}: Probability of delayed separation, conditional on separation
 }}
 
 \item{recruitment_model}{A named list specifying the recruitment process:
 \itemize{
-\item \code{method}: "power" or "PWC" (piecewise constant)
-\item \code{period}: Recruitment period (used for power model)
-\item \code{power}: Accrual shape parameter (used for power model)
-\item \code{rate}: Comma-separated rates (used for PWC model)
-\item \code{duration}: Comma-separated durations (used for PWC model)
+\item \code{method}: "power" or "PWC"
+\item \code{period}, \code{power}: Parameters for power model
+\item \code{rate}, \code{duration}: Comma-separated strings for PWC model
 }}
 
-\item{GSD_model}{A named list specifying the GSD process:
+\item{GSD_model}{A named list specifying the group sequential design:
 \itemize{
-\item \code{events} Number of events
-\item \code{alpha_spending} Cumulative alpha spending
-\item \code{beta_spending} Cumulative beta spending
-\item \code{IF_vec} Vector of information fractions
+\item \code{events}: Total number of events
+\item \code{alpha_spending}: Cumulative alpha spending vector
+\item \code{beta_spending}: Cumulative beta spending vector
+\item \code{IF_vec}: Vector of information fractions
 }}
 
-\item{n_sims}{Number of simulations, default is 1000}
+\item{n_sims}{Number of simulations to run (default = 1000)}
+}
+\value{
+A data frame with one row per simulated trial and the following columns:
+\describe{
+\item{Trial}{Simulation index}
+\item{IF}{Information fraction label used at the decision point}
+\item{Decision}{Interim decision outcome (e.g., "Continue", "Stop for efficacy", "Stop for futility")}
+\item{StopTime}{Time at which the trial stopped or completed}
+\item{SampleSize}{Total sample size at the time of decision}
+\item{Final_Decision}{Final classification of trial success based on the test statistic and threshold}
+}
+Class: \code{data.frame}
 }
 \description{
-Calculates operating characteristics for a Group Sequential Trial for a trial with a Delayed Treatment Effect, using elicited priors
+Simulates assurance and operating characteristics for a group sequential trial under prior uncertainty about a delayed treatment effect. The function integrates beliefs about control survival, treatment delay, post-delay hazard ratio, recruitment, and group sequential design (GSD) parameters.
+}
+\examples{
+# Minimal example with placeholder inputs
+control_model <- list(dist = "Exponential", parameter_mode = "Fixed",
+fixed_type = "Parameters", lambda = 0.1)
+effect_model <- list(P_S = 1, P_DTE = 0)
+recruitment_model <- list(method = "power", period = 12, power = 1)
+GSD_model <- list(events = 300, alpha_spending = c(0.01, 0.025),
+                  beta_spending = c(0.05, 0.1), IF_vec = c(0.5, 1))
+result <- assurance_GSD(n_c = 300, n_t = 300,
+                        control_model = control_model,
+                        effect_model = effect_model,
+                        recruitment_model = recruitment_model,
+                        GSD_model = GSD_model,
+                        n_sims = 10)
+str(result)
+
 }

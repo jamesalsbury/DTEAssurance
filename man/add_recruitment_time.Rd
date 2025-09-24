@@ -14,21 +14,37 @@ add_recruitment_time(
 )
 }
 \arguments{
-\item{data}{A survival dataframe with columns: time, status, group}
+\item{data}{A dataframe containing survival data with columns: \code{time}, \code{status}, and \code{group}}
 
-\item{rec_method}{Recruitment method: "power" or "PWC" (piecewise constant)}
+\item{rec_method}{Recruitment method: \code{"power"} for power model or \code{"PWC"} for piecewise constant model}
 
-\item{rec_period}{Period length for power model}
+\item{rec_period}{Period length for the power model}
 
-\item{rec_power}{Power parameter for power model}
+\item{rec_power}{Power parameter for the power model}
 
-\item{rec_rate}{Comma-separated string of rates for PWC model}
+\item{rec_rate}{Comma-separated string of recruitment rates for the PWC model}
 
-\item{rec_duration}{Comma-separated string of durations for PWC model}
+\item{rec_duration}{Comma-separated string of durations corresponding to each rate in the PWC model}
 }
 \value{
-A dataframe with added columns: rec_time and pseudo_time
+A dataframe with two additional columns:
+\describe{
+\item{rec_time}{Simulated recruitment time for each subject}
+\item{pseudo_time}{Time from recruitment to event or censoring}
+}
+Class: \code{data.frame}
 }
 \description{
-Add recruitment time to a survival dataset
+Simulates recruitment timing for each subject in a survival dataset using either a power model or a piecewise constant (PWC) model. The function appends recruitment times and pseudo survival times (time from recruitment to event or censoring).
+}
+\examples{
+set.seed(123)
+df <- data.frame(
+  time = rexp(20, rate = 0.1),
+  status = rbinom(20, 1, 0.8),
+  group = rep(c("Control", "Treatment"), each = 10)
+)
+recruited <- add_recruitment_time(df, rec_method = "power", rec_period = 12, rec_power = 1)
+head(recruited)
+
 }

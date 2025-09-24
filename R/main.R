@@ -1,14 +1,24 @@
-#' Simulate a DTE data set
+#' Simulates survival times for a delayed treatment effect (DTE) scenario, where the treatment group experiences a delayed onset of benefit. Control and treatment groups are generated under exponential or Weibull distributions.
 #'
-#' @param n_c number of patients in the control group
-#' @param n_t number of patients in the treatment group
-#' @param lambda_c control hazard
-#' @param delay_time length of delay
-#' @param post_delay_HR the hazard ratio, once the treatment begins to take effect
-#' @param dist distribution of control distribution, must be one of "exponential" (default) or "weibull"
-#' @param gamma_c gamma parameter in the Weibull distribution
+#' @param n_c The number of patients in the control group
+#' @param n_t The number of patients in the treatment group
+#' @param lambda_c The baseline hazard rate for the control group
+#' @param delay_time The length of delay before treatment effect begins
+#' @param post_delay_HR The hazard ratio after the delay period
+#' @param dist The distribution for the control group; must be one of "Exponential" (default) or "Weibull"
+#' @param gamma_c The shape parameter for the Weibull distribution (only used if \code{dist = "Weibull"})
 #'
-#' @return a DTE data set
+#' @return A data frame with two columns:
+#' \item{time}{Simulated survival times}
+#' \item{group}{Group assignment: "Control" or "Treatment"}
+#' Class: \code{data.frame}
+#'
+#' @examples
+#' set.seed(123)
+#' sim_data <- sim_dte(n_c = 10, n_t = 10, lambda_c = 0.1,
+#'                     delay_time = 6, post_delay_HR = 0.6)
+#' head(sim_data)
+#'
 #' @export
 #'
 sim_dte <- function(n_c, n_t, lambda_c, delay_time, post_delay_HR, dist = "Exponential", gamma_c = NULL){
@@ -52,20 +62,35 @@ sim_dte <- function(n_c, n_t, lambda_c, delay_time, post_delay_HR, dist = "Expon
 
 #' Censor a survival dataset
 #'
-#' @param data A dataframe containing uncensored survival data with columns: pseudo_time, rec_time, and time
-#' @param cens_method Censoring method: "Time" (default), "Events", or "IF"
-#' @param cens_time Time point for censoring (required if cens_method = "Time")
-#' @param cens_IF Information fraction for censoring (required if cens_method = "IF")
-#' @param cens_events Number of events for censoring (required if cens_method = "Events")
+#' Applies administrative censoring to a survival dataset using one of three methods: fixed time, fixed number of events, or fixed information fraction. The input data must contain columns for pseudo survival time, recruitment time, and observed time.
+#'
+#' @param data A dataframe containing uncensored survival data with columns: \code{pseudo_time}, \code{rec_time}, and \code{time}
+#' @param cens_method Censoring method: \code{"Time"} (default), \code{"Events"}, or \code{"IF"}
+#' @param cens_time Time point for censoring (required if \code{cens_method = "Time"})
+#' @param cens_IF Information fraction for censoring (required if \code{cens_method = "IF"})
+#' @param cens_events Number of events for censoring (required if \code{cens_method = "Events"})
 #'
 #' @return A list containing:
 #' \describe{
-#'   \item{data}{Censored dataframe}
+#'   \item{data}{Censored dataframe with updated \code{status} and filtered rows}
 #'   \item{cens_events}{Number of events used for censoring (if applicable)}
 #'   \item{cens_time}{Time point used for censoring}
 #'   \item{sample_size}{Number of subjects remaining after censoring}
 #' }
+#'
+#'
+#' @examples
+#' set.seed(123)
+#' df <- data.frame(
+#'   pseudo_time = rexp(20, rate = 0.1),
+#'   rec_time = runif(20, 0, 12),
+#'   time = rexp(20, rate = 0.1)
+#' )
+#' censored <- cens_data(df, cens_method = "Time", cens_time = 10)
+#' str(censored)
+#'
 #' @export
+
 cens_data <- function(data,
                       cens_method = "Time",
                       cens_time = NULL,
@@ -101,7 +126,7 @@ cens_data <- function(data,
   # Apply censoring
   data$status <- as.integer(data$pseudo_time <= cens_time)
   data$enrolled <- data$rec_time < cens_time
-  data <- subset(data, enrolled)
+  data <- data[data$enrolled, ]
 
   # Ensure survival time is defined
   if (!"time" %in% names(data)) {
@@ -124,58 +149,78 @@ cens_data <- function(data,
 
 #' Calculate Assurance for a Trial with a Delayed Treatment Effect
 #'
+#' Simulates operating characteristics for a clinical trial under prior uncertainty about a delayed treatment effect. The function integrates beliefs about control survival, treatment delay, post-delay hazard ratio, recruitment, censoring, and analysis method to estimate assurance and other trial metrics.
+#'
 #' @param n_c Vector of control group sample sizes
 #' @param n_t Vector of treatment group sample sizes
 #' @param control_model A named list specifying the control arm survival distribution:
-#'   - `dist`: Distribution type ("Exponential" or "Weibull")
-#'   - `parameter_mode`: Either "Fixed" or "Distribution"
-#'   - `fixed_type`: If "Fixed", specify as "Parameters" or "Landmark"
-#'   - `lambda`: Scale parameter (for Exponential or Weibull)
-#'   - `gamma`: Shape parameter (Weibull only)
-#'   - `t1`, `t2`: Landmark times (used if `fixed_type = "Landmark"`)
-#'   - `surv_t1`, `surv_t2`: Survival probabilities at `t1` and `t2`
-#'   - `t1_Beta_a`, `t1_Beta_b`: Beta prior parameters for survival at `t1`
-#'   - `diff_Beta_a`, `diff_Beta_b`: Beta prior parameters for survival difference between `t1` and `t2`
-#'
+#'   \itemize{
+#'     \item \code{dist}: Distribution type ("Exponential" or "Weibull")
+#'     \item \code{parameter_mode}: Either "Fixed" or "Distribution"
+#'     \item \code{fixed_type}: If "Fixed", specify as "Parameters" or "Landmark"
+#'     \item \code{lambda}, \code{gamma}: Scale and shape parameters
+#'     \item \code{t1}, \code{t2}: Landmark times
+#'     \item \code{surv_t1}, \code{surv_t2}: Survival probabilities at landmarks
+#'     \item \code{t1_Beta_a}, \code{t1_Beta_b}, \code{diff_Beta_a}, \code{diff_Beta_b}: Beta prior parameters
+#'   }
 #' @param effect_model A named list specifying beliefs about the treatment effect:
-#'   - `delay_SHELF`: SHELF object encoding beliefs about delay time
-#'   - `delay_dist`: Distribution type for delay ("hist" by default)
-#'   - `HR_SHELF`: SHELF object encoding beliefs about post-delay hazard ratio
-#'   - `HR_dist`: Distribution type for hazard ratio ("hist" by default)
-#'   - `P_S`: Probability that survival curves separate
-#'   - `P_DTE`: Probability of delayed separation, conditional on separation
-#'
+#'   \itemize{
+#'     \item \code{delay_SHELF}, \code{HR_SHELF}: SHELF objects encoding beliefs
+#'     \item \code{delay_dist}, \code{HR_dist}: Distribution types ("hist" by default)
+#'     \item \code{P_S}: Probability that survival curves separate
+#'     \item \code{P_DTE}: Probability of delayed separation, conditional on separation
+#'   }
 #' @param censoring_model A named list specifying the censoring mechanism:
-#'   - `method`: One of "Time", "Events", or "IF"
-#'   - `time`: Fixed follow-up time (used if `method = "Time"`)
-#'   - `events`: Number of events to censor at (used if `method = "Events"`)
-#'   - `IF`: Information fraction for censoring (used if `method = "IF"`)
-#'
+#'   \itemize{
+#'     \item \code{method}: "Time", "Events", or "IF"
+#'     \item \code{time}, \code{events}, \code{IF}: Parameters for each method
+#'   }
 #' @param recruitment_model A named list specifying the recruitment process:
-#'   - `method`: "power" or "PWC" (piecewise constant)
-#'   - `period`: Recruitment period (used for power model)
-#'   - `power`: Accrual shape parameter (used for power model)
-#'   - `rate`: Comma-separated rates (used for PWC model)
-#'   - `duration`: Comma-separated durations (used for PWC model)
-#'
+#'   \itemize{
+#'     \item \code{method}: "power" or "PWC"
+#'     \item \code{period}, \code{power}: Parameters for power model
+#'     \item \code{rate}, \code{duration}: Comma-separated strings for PWC model
+#'   }
 #' @param analysis_model A named list specifying the statistical test and decision rule:
-#'   - `method`: "LRT" (default), "WLRT", or "MW"
-#'   - `alpha`: Type I error rate (default = 0.025)
-#'   - `alternative_hypothesis`: "one.sided" or "two.sided"
-#'   - `rho`, `gamma`: Fleming-Harrington parameters (WLRT)
-#'   - `t_star`, `s_star`: Modestly weighted test parameters (MW)
-#'   - `success_threshold_HR`: Optional threshold for declaring success (e.g., HR < 0.8)
-#'
+#'   \itemize{
+#'     \item \code{method}: "LRT", "WLRT", or "MW"
+#'     \item \code{alpha}, \code{alternative_hypothesis}: Type I error and hypothesis direction
+#'     \item \code{rho}, \code{gamma}, \code{t_star}, \code{s_star}: Parameters for WLRT or MW
+#'     \item \code{success_threshold_HR}: Optional threshold for declaring success
+#'   }
 #' @param n_sims Number of simulations to run (default = 1000)
 #'
-#' @return A named list containing operating characteristics:
-#'   - `assurance`: Estimated assurance (probability of success under prior uncertainty)
-#'   - `CI`: 95% confidence interval for assurance
-#'   - `duration`: Mean trial duration
-#'   - `sample_size`: Mean sample size
-#'   - Additional diagnostics if `success_threshold_HR` is specified
+#' @return A named list containing:
+#' \describe{
+#'   \item{assurance}{Estimated assurance (probability of success under prior uncertainty)}
+#'   \item{CI}{95% confidence interval for assurance}
+#'   \item{duration}{Mean trial duration across simulations}
+#'   \item{sample_size}{Mean sample size across simulations}
+#'   \item{diagnostics}{Additional diagnostics if \code{success_threshold_HR} is specified}
+#' }
+#' Class: \code{list}
+#'
+#' @examples
+#' # Minimal example with placeholder inputs
+#' control_model <- list(dist = "Exponential", parameter_mode = "Fixed",
+#' fixed_type = "Parameters", lambda = 0.1)
+#' effect_model <- list(delay_SHELF = SHELF::fitdist(c(3, 4, 5), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 10),
+#' delay_dist = "gamma", HR_SHELF = SHELF::fitdist(c(0.55, 0.6, 0.7), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 1.5), HR_dist = "gamma",
+#' P_S = 1, P_DTE = 0)
+#' censoring_model <- list(method = "Time", time = 12)
+#' recruitment_model <- list(method = "power", period = 12, power = 1)
+#' analysis_model <- list(method = "LRT", alpha = 0.025, alternative_hypothesis = "two.sided")
+#' result <- calc_dte_assurance(n_c = 300, n_t = 300,
+#'                                      control_model = control_model,
+#'                                      effect_model = effect_model,
+#'                                      censoring_model = censoring_model,
+#'                                      recruitment_model = recruitment_model,
+#'                                      analysis_model = analysis_model,
+#'                                      n_sims = 10)
+#' str(result)
 #'
 #' @export
+
 calc_dte_assurance <- function(n_c,
                                n_t,
                                control_model,
@@ -259,23 +304,35 @@ calc_dte_assurance <- function(n_c,
 }
 
 
-#' Calculate statistical significance on a survival data set
+#' Calculate statistical significance on a survival dataset
 #'
-#' @import nph
+#' Performs a survival analysis using either the standard log-rank test (LRT) or a weighted log-rank test (WLRT). The function estimates the hazard ratio and determines whether the result is statistically significant based on the specified alpha level and alternative hypothesis.
 #'
-#' @param data A survival dataframe
-#' @param analysis_method Method of analysis, "LRT" (default) for standard log-rank test, or "WLRT" for weighted log-rank test
-#' @param alpha Type I error
-#' @param alternative String specifying the alternative hypothesis, must be one of "one.sided" or "two-sided" (default)
-#' @param rho Rho parameter for the Fleming-Harrington weighted log-rank test
-#' @param gamma Gamma parameter for the Fleming-Harrington weighted log-rank test
-#' @param t_star Parameter t^* in the modestly weighted test
-#' @param s_star Parameter s^* in the modestly weighted test
-#' @return A list with:
+#' @param data A dataframe containing survival data. Must include columns for survival time, event status, and treatment group.
+#' @param analysis_method Method of analysis: \code{"LRT"} (default) for standard log-rank test, or \code{"WLRT"} for weighted log-rank test.
+#' @param alpha Type I error threshold for significance testing.
+#' @param alternative String specifying the alternative hypothesis. Must be one of \code{"one.sided"} or \code{"two.sided"} (default).
+#' @param rho Rho parameter for the Fleming-Harrington weighted log-rank test.
+#' @param gamma Gamma parameter for the Fleming-Harrington weighted log-rank test.
+#' @param t_star Parameter \eqn{t^*} used in modestly weighted tests.
+#' @param s_star Parameter \eqn{s^*} used in modestly weighted tests.
+#'
+#' @return A list containing:
 #' \describe{
-#'   \item{Signif}{Logical indicator of statistical significance}
-#'   \item{observed_HR}{Estimated hazard ratio from Cox model}
+#'   \item{Signif}{Logical indicator of statistical significance based on the chosen test and alpha level.}
+#'   \item{observed_HR}{Estimated hazard ratio from a Cox proportional hazards model.}
 #' }
+#'
+#' @examples
+#' set.seed(123)
+#' df <- data.frame(
+#'   time = rexp(40, rate = 0.1),
+#'   status = rbinom(40, 1, 0.8),
+#'   group = rep(c("Control", "Treatment"), each = 20)
+#' )
+#' result <- survival_test(df, analysis_method = "LRT", alpha = 0.05)
+#' str(result)
+#'
 #' @export
 
 
@@ -288,12 +345,12 @@ survival_test <- function(data, analysis_method = "LRT", alternative = "one.side
   Signif <- 0
 
   if (analysis_method=="LRT"){
-    test_result <- survdiff(Surv(survival_time, status) ~ group, data = data)
+    test_result <- survival::survdiff(Surv(survival_time, status) ~ group, data = data)
     Z <- (test_result$exp[2] - test_result$obs[2]) / sqrt(test_result$var[2, 2])
     if (alternative=="one.sided"){
-      Signif <- Z > qnorm(1-alpha)
+      Signif <- Z > stats::qnorm(1-alpha)
     } else {
-      Signif <- abs(Z) > qnorm(1-alpha/2)
+      Signif <- abs(Z) > stats::qnorm(1-alpha/2)
     }
 
   } else if (analysis_method=="WLRT"){
@@ -308,9 +365,9 @@ survival_test <- function(data, analysis_method = "LRT", alternative = "one.side
                          data = data, method = "mw",
                          t_star = t_star, s_star = s_star)
     if (alternative=="one.sided"){
-      Signif <- test$z > qnorm(1-alpha)
+      Signif <- test$z > stats::qnorm(1-alpha)
     } else {
-      Signif <- abs(test$z) > qnorm(1-alpha/2)
+      Signif <- abs(test$z) > stats::qnorm(1-alpha/2)
     }
   }
 
@@ -320,15 +377,34 @@ survival_test <- function(data, analysis_method = "LRT", alternative = "one.side
 
 #' Add recruitment time to a survival dataset
 #'
-#' @param data A survival dataframe with columns: time, status, group
-#' @param rec_method Recruitment method: "power" or "PWC" (piecewise constant)
-#' @param rec_period Period length for power model
-#' @param rec_power Power parameter for power model
-#' @param rec_rate Comma-separated string of rates for PWC model
-#' @param rec_duration Comma-separated string of durations for PWC model
+#' Simulates recruitment timing for each subject in a survival dataset using either a power model or a piecewise constant (PWC) model. The function appends recruitment times and pseudo survival times (time from recruitment to event or censoring).
 #'
-#' @return A dataframe with added columns: rec_time and pseudo_time
+#' @param data A dataframe containing survival data with columns: \code{time}, \code{status}, and \code{group}
+#' @param rec_method Recruitment method: \code{"power"} for power model or \code{"PWC"} for piecewise constant model
+#' @param rec_period Period length for the power model
+#' @param rec_power Power parameter for the power model
+#' @param rec_rate Comma-separated string of recruitment rates for the PWC model
+#' @param rec_duration Comma-separated string of durations corresponding to each rate in the PWC model
+#'
+#' @return A dataframe with two additional columns:
+#' \describe{
+#'   \item{rec_time}{Simulated recruitment time for each subject}
+#'   \item{pseudo_time}{Time from recruitment to event or censoring}
+#' }
+#' Class: \code{data.frame}
+#'
+#' @examples
+#' set.seed(123)
+#' df <- data.frame(
+#'   time = rexp(20, rate = 0.1),
+#'   status = rbinom(20, 1, 0.8),
+#'   group = rep(c("Control", "Treatment"), each = 10)
+#' )
+#' recruited <- add_recruitment_time(df, rec_method = "power", rec_period = 12, rec_power = 1)
+#' head(recruited)
+#'
 #' @export
+
 
 add_recruitment_time <- function(data, rec_method,
                                  rec_period = NULL, rec_power = NULL,
@@ -379,8 +455,8 @@ add_recruitment_time <- function(data, rec_method,
     }, df$N, df$origin, df$finish))
 
     if (length(rec) < n_patients) {
-      final_rate <- tail(df$rate, 1)
-      final_time <- tail(df$finish, 1)
+      final_rate <- utils::tail(df$rate, 1)
+      final_time <- utils::tail(df$finish, 1)
       if (final_rate == 0) stop("Final recruitment rate must be positive to complete enrollment")
       extra <- cumsum(stats::rexp(n_patients - length(rec), rate = final_rate)) + final_time
       rec <- c(rec, extra)
@@ -397,43 +473,73 @@ add_recruitment_time <- function(data, rec_method,
 }
 
 
-#' Calculates operating characteristics for a Group Sequential Trial for a trial with a Delayed Treatment Effect, using elicited priors
+#' Calculates operating characteristics for a Group Sequential Trial with a Delayed Treatment Effect
+#'
+#' Simulates assurance and operating characteristics for a group sequential trial under prior uncertainty about a delayed treatment effect. The function integrates beliefs about control survival, treatment delay, post-delay hazard ratio, recruitment, and group sequential design (GSD) parameters.
 #'
 #' @param n_c Control group sample size
 #' @param n_t Treatment group sample size
 #' @param control_model A named list specifying the control arm survival distribution:
-#'   - `dist`: Distribution type ("Exponential" or "Weibull")
-#'   - `parameter_mode`: Either "Fixed" or "Distribution"
-#'   - `fixed_type`: If "Fixed", specify as "Parameters" or "Landmark"
-#'   - `lambda`: Scale parameter (for Exponential or Weibull)
-#'   - `gamma`: Shape parameter (Weibull only)
-#'   - `t1`, `t2`: Landmark times (used if `fixed_type = "Landmark"`)
-#'   - `surv_t1`, `surv_t2`: Survival probabilities at `t1` and `t2`
-#'   - `t1_Beta_a`, `t1_Beta_b`: Beta prior parameters for survival at `t1`
-#'   - `diff_Beta_a`, `diff_Beta_b`: Beta prior parameters for survival difference between `t1` and `t2`
-#'
+#'   \itemize{
+#'     \item \code{dist}: Distribution type ("Exponential" or "Weibull")
+#'     \item \code{parameter_mode}: Either "Fixed" or "Distribution"
+#'     \item \code{fixed_type}: If "Fixed", specify as "Parameters" or "Landmark"
+#'     \item \code{lambda}, \code{gamma}: Scale and shape parameters
+#'     \item \code{t1}, \code{t2}: Landmark times
+#'     \item \code{surv_t1}, \code{surv_t2}: Survival probabilities at landmarks
+#'     \item \code{t1_Beta_a}, \code{t1_Beta_b}, \code{diff_Beta_a}, \code{diff_Beta_b}: Beta prior parameters
+#'   }
 #' @param effect_model A named list specifying beliefs about the treatment effect:
-#'   - `delay_SHELF`: SHELF object encoding beliefs about delay time
-#'   - `delay_dist`: Distribution type for delay ("hist" by default)
-#'   - `HR_SHELF`: SHELF object encoding beliefs about post-delay hazard ratio
-#'   - `HR_dist`: Distribution type for hazard ratio ("hist" by default)
-#'   - `P_S`: Probability that survival curves separate
-#'   - `P_DTE`: Probability of delayed separation, conditional on separation
-#'
+#'   \itemize{
+#'     \item \code{delay_SHELF}, \code{HR_SHELF}: SHELF objects encoding beliefs
+#'     \item \code{delay_dist}, \code{HR_dist}: Distribution types ("hist" by default)
+#'     \item \code{P_S}: Probability that survival curves separate
+#'     \item \code{P_DTE}: Probability of delayed separation, conditional on separation
+#'   }
 #' @param recruitment_model A named list specifying the recruitment process:
-#'   - `method`: "power" or "PWC" (piecewise constant)
-#'   - `period`: Recruitment period (used for power model)
-#'   - `power`: Accrual shape parameter (used for power model)
-#'   - `rate`: Comma-separated rates (used for PWC model)
-#'   - `duration`: Comma-separated durations (used for PWC model)
+#'   \itemize{
+#'     \item \code{method}: "power" or "PWC"
+#'     \item \code{period}, \code{power}: Parameters for power model
+#'     \item \code{rate}, \code{duration}: Comma-separated strings for PWC model
+#'   }
+#' @param GSD_model A named list specifying the group sequential design:
+#'   \itemize{
+#'     \item \code{events}: Total number of events
+#'     \item \code{alpha_spending}: Cumulative alpha spending vector
+#'     \item \code{beta_spending}: Cumulative beta spending vector
+#'     \item \code{IF_vec}: Vector of information fractions
+#'   }
+#' @param n_sims Number of simulations to run (default = 1000)
 #'
-#' @param GSD_model A named list specifying the GSD process:
-#'   - `events` Number of events
-#'   - `alpha_spending` Cumulative alpha spending
-#'   - `beta_spending` Cumulative beta spending
-#'   - `IF_vec` Vector of information fractions
-#' @param n_sims Number of simulations, default is 1000
+#' @return A data frame with one row per simulated trial and the following columns:
+#' \describe{
+#'   \item{Trial}{Simulation index}
+#'   \item{IF}{Information fraction label used at the decision point}
+#'   \item{Decision}{Interim decision outcome (e.g., "Continue", "Stop for efficacy", "Stop for futility")}
+#'   \item{StopTime}{Time at which the trial stopped or completed}
+#'   \item{SampleSize}{Total sample size at the time of decision}
+#'   \item{Final_Decision}{Final classification of trial success based on the test statistic and threshold}
+#' }
+#' Class: \code{data.frame}
+#'
+#' @examples
+#' # Minimal example with placeholder inputs
+#' control_model <- list(dist = "Exponential", parameter_mode = "Fixed",
+#' fixed_type = "Parameters", lambda = 0.1)
+#' effect_model <- list(P_S = 1, P_DTE = 0)
+#' recruitment_model <- list(method = "power", period = 12, power = 1)
+#' GSD_model <- list(events = 300, alpha_spending = c(0.01, 0.025),
+#'                   beta_spending = c(0.05, 0.1), IF_vec = c(0.5, 1))
+#' result <- assurance_GSD(n_c = 300, n_t = 300,
+#'                         control_model = control_model,
+#'                         effect_model = effect_model,
+#'                         recruitment_model = recruitment_model,
+#'                         GSD_model = GSD_model,
+#'                         n_sims = 10)
+#' str(result)
+#'
 #' @export
+
 
 calc_dte_assurance_interim <- function(n_c, n_t,
                                        control_model,
@@ -449,6 +555,24 @@ calc_dte_assurance_interim <- function(n_c, n_t,
   results <- future.apply::future_lapply(seq_len(n_sims), function(i) {
     trial <- simulate_trial_with_recruitment(n_c, n_t, control_model, effect_model, recruitment_model)
 
+    #Pretend we are contuining to the end
+    trial_data <- trial[order(trial$pseudo_time),]
+    n_events <- GSD_model$events
+    t_interim <- trial_data$pseudo_time[n_events]
+
+    eligible_df <- trial_data %>%
+      dplyr::filter(.data$rec_time <= t_interim)
+
+
+    # Censoring logic
+    eligible_df$status <- eligible_df$pseudo_time < t_interim
+    eligible_df$survival_time <- ifelse(eligible_df$status, eligible_df$time, t_interim - eligible_df$rec_time)
+
+    fit     <- survival::coxph(Surv(survival_time, status) ~ group, data = eligible_df)
+    fit_summary <- summary(fit)
+    z_stat <- -fit_summary$coefficients[, "z"]
+
+
     do.call(rbind, lapply(seq_along(IF_list), function(j) {
       design <- rpact::getDesignGroupSequential(
         typeOfDesign = "asUser",
@@ -460,355 +584,23 @@ calc_dte_assurance_interim <- function(n_c, n_t,
 
       outcome <- apply_GSD_to_trial(trial, design, GSD_model$events)
 
+
       data.frame(
         Trial = i,
         IF = IF_labels[j],
         Decision = outcome$decision,
         StopTime = outcome$stop_time,
-        SampleSize = outcome$sample_size
+        SampleSize = outcome$sample_size,
+        Final_Decision = ifelse(z_stat > stats::qnorm(1-0.025), "Successful", "Unsuccessful")
       )
     }))
   }, future.seed = TRUE)
 
   results_df <- do.call(rbind, results)
 
-  design_summary <- results_df %>%
-    group_by(IF) %>%
-    summarise(
-      assurance = mean(Decision %in% c("Stop for efficacy", "Successful at final")),
-      expectedDuration = mean(StopTime, na.rm = TRUE),
-      expectedSampleSize = mean(SampleSize, na.rm = TRUE),
-      .groups = "drop"
-    )
 
-  return(design_summary)
+  return(results_df)
 }
 
 
 
-#'  Calculates the Bayesian Predictive Probability for a trial with a Delayed Treatment Effect
-#'
-#' @param n_c Number of patients in the control group
-#' @param n_t Number of patients in the treatment group
-#' @param control_dist Distribution of control group, must be one of "Exponential" (default) or "weibull"
-#' @param t1 Time 1
-#' @param t2 Time 2
-#' @param t1_Beta_a Hyperparameter a for the Beta distribution for the survival probability at time 1
-#' @param t1_Beta_b Hyperparameter a for the Beta distribution for the survival probability at time 1
-#' @param diff_Beta_a Hyperparameter a for the Beta distribution for the difference in survival probabilities (t2-t1)
-#' @param diff_Beta_b Hyperparameter b for the Beta distribution for the difference in survival probabilities (t2-t1)
-#' @param delay_time_SHELF A SHELF object, beliefs about the delay time
-#' @param delay_time_dist Distribution of the delay time, "hist" is default. See SHELF help for more details
-#' @param post_delay_HR_SHELF A SHELF object, beliefs about the post-delay hazard ratio
-#' @param post_delay_HR_dist Distribution of the post-delay hazard ratio, "hist" is default. See SHELF help for more details
-#' @param P_S Probability of the survival curves separating
-#' @param P_DTE Probability of the survival curves being subject to a DTE, given they separate
-#' @param cens_events Number of events at which you wish to perform the censoring (must be less than n_c + n_t)
-#' @param IF Information fraction at which BPP is calculated
-#' @param rec_method Recruitment method, must be one of "power" or "PWC" (piecewise constant)
-#' @param rec_period Parameter used to model recruitment according to power model
-#' @param rec_power Parameter used to model recruitment according to power model
-#' @param rec_rate Parameter used to model recruitment according to piecewise constant model
-#' @param rec_duration Parameter used to model recruitment according to piecewise constant model
-#' @param alpha_spending Cumulative alpha spending
-#' @param beta_spending Cumulative beta spending
-#' @param IF_list Vector of information fractions - must be in the format: `c("0.5, 1")'
-#' @param k Number of stages
-#' @param N Number of trials simulated (default is 50)
-#' @param M Number of samples from the posterior (default is 50)
-#'
-#' @return Numeric vector of length `N` containing the simulated Bayesian Predictive Probabilities.
-#'
-#' @examples
-#' set.seed(123)
-#' # Minimal example for CRAN: small n_sim for fast execution
-#' res <- calc_BPP_hist(n_c = 300,
-#'                      n_t = 300,
-#'                      control_dist = "Exponential",
-#'                      t1 = 12,
-#'                      t1_Beta_a = 20,
-#'                      t1_Beta_b = 32,
-#'                      delay_time_SHELF = SHELF::fitdist(c(5.5, 6, 6.5), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 12),
-#'                      delay_time_dist = "gamma",
-#'                      post_delay_HR_SHELF = SHELF::fitdist(c(0.5, 0.6, 0.7), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 1),
-#'                      post_delay_HR_dist = "gamma",
-#'                      P_S = 1,
-#'                      P_DTE = 0,
-#'                      cens_events = 300,
-#'                      rec_method = "power",
-#'                      rec_period = 12,
-#'                      rec_power = 1,
-#'                      alpha_spending = c(0.01, 0.025),
-#'                      beta_spending = c(0.05, 0.1),
-#'                      IF_list = c("0.5, 1"),
-#'                      k = 2,
-#'                      M = 5,
-#'                      N = 5)
-#' str(res)
-#'
-
-#' @export
-
-
-calc_BPP_hist <- function(n_c, n_t,
-                          control_dist = "Exponential",
-                          t1 = NULL, t2 = NULL,
-                          t1_Beta_a = NULL, t1_Beta_b = NULL,
-                          diff_Beta_a = NULL, diff_Beta_b = NULL,
-                          delay_time_SHELF, delay_time_dist = "hist",
-                          post_delay_HR_SHELF, post_delay_HR_dist = "hist",
-                          P_S = 1, P_DTE = 0, cens_events = NULL, IF = NULL,
-                          rec_method, rec_period=NULL, rec_power=NULL, rec_rate=NULL, rec_duration=NULL,
-                          alpha_spending = NULL, beta_spending = NULL, IF_list = NULL, k = 2,
-                          N = 50, M = 50){
-
-  outerBPPVec <- rep(NA, N)
-
-  design <- rpact::getDesignGroupSequential(typeOfDesign = "asUser",
-                                            informationRates = IF_list,
-                                            userAlphaSpending = alpha_spending,
-                                            typeBetaSpending = "bsUser",
-                                            userbetaSpending = beta_spending)
-
-  designList <- list(
-    critValues = design$criticalValues,
-    futBounds = design$futilityBounds
-  )
-
-  for (i in 1:N){
-
-    if (control_dist=="Exponential"){
-      lambda_c <- -log(stats::rbeta(1, t1_Beta_a, t1_Beta_b)) / t1
-    } else if (control_dist=="Weibull"){
-      sampledS1to <- stats::rbeta(1, t1_Beta_a, t1_Beta_b)
-      sampledDelta1 <- stats::rbeta(1, diff_Beta_a, diff_Beta_b)
-      sampledS1toPrime <- sampledS1to - sampledDelta1
-
-      solution <- nleqslv::nleqslv(c(10, 1), function(params) {
-        lambda <- params[1]
-        k <- params[2]
-        c(exp(-(t1 / lambda)^k) - sampledS1to,
-          exp(-(t2 / lambda)^k) - sampledS1toPrime)
-      })
-
-      lambda_c <- 1 / solution$x[1]
-      gamma_c <- solution$x[2]
-    }
-
-    if (stats::runif(1) > P_S){
-      delay_time <- 0
-      post_delay_HR <- 1
-    } else {
-      if (stats::runif(1) > P_DTE){
-        delay_time <- 0
-        post_delay_HR_sample <- SHELF::sampleFit(post_delay_HR_SHELF, n = 1)
-        post_delay_HR <- post_delay_HR_sample[,post_delay_HR_dist]
-      } else{
-        delay_time_sample <- SHELF::sampleFit(delay_time_SHELF, n = 1)
-        post_delay_HR_sample <- SHELF::sampleFit(post_delay_HR_SHELF, n = 1)
-        delay_time <- delay_time_sample[,delay_time_dist]
-        post_delay_HR <- post_delay_HR_sample[,post_delay_HR_dist]
-      }
-    }
-
-    data <- sim_dte(n_c, n_t, lambda_c, delay_time, post_delay_HR, dist = control_dist, gamma_c = gamma_c)
-
-    if (rec_method=="power"){
-      data <- add_recruitment_time(data, rec_method, rec_period, rec_power)
-    }
-
-    if (rec_method == "PWC"){
-      data <- add_recruitment_time(data, rec_method, rec_rate, rec_duration)
-    }
-
-    stopEff <- FALSE
-    stopFut <- FALSE
-
-    if (IF_list[1] <= IF){
-      data_after_cens <- cens_data(data, cens_method = "Events", cens_events = cens_events * IF_list[1])
-      coxmodel <- survival::coxph(survival::Surv(.data$survival_time, .data$status) ~ .data$group, data = data_after_cens$data)
-      Z_Score <- -(stats::coef(summary(coxmodel))[, 4])
-
-      stopEff <- Z_Score > designList$critValues[1]
-      stopFut <- Z_Score < designList$futBounds
-    }
-
-    if (stopEff || stopFut){
-      if (stopEff) outerBPPVec[i] <- 1
-      if (stopFut) outerBPPVec[i] <- 0
-    } else {
-
-      data_after_cens <- cens_data(data, cens_method = "Events", cens_events = cens_events * IF)
-      data <- data_after_cens$data
-      data <- data[order(data$group), ]
-
-      if (delay_time_dist == "beta") {
-        distParambigT <- paste0("bigT2 ~ dbeta(", delay_time_SHELF$Beta[1], ", ", delay_time_SHELF$Beta[2], ")")
-      } else if (delay_time_dist == "gamma") {
-        distParambigT <- paste0("bigT2 ~ dgamma(", delay_time_SHELF$Gamma[1], ", ", delay_time_SHELF$Gamma[2], ")")
-      } else if (delay_time_dist == "lognormal") {
-        distParambigT <- paste0("bigT2 ~ dlnorm(", delay_time_SHELF$Log.normal[1], ", ", 1/delay_time_SHELF$Log.normal[2]^2, ")")
-      }
-
-      if (post_delay_HR_dist == "beta") {
-        distParamHR <- paste0("HR2 ~ dbeta(", post_delay_HR_SHELF$Beta[1], ", ", post_delay_HR_SHELF$Beta[2], ")")
-      } else if (post_delay_HR_dist == "gamma") {
-        distParamHR <- paste0("HR2 ~ dgamma(", post_delay_HR_SHELF$Gamma[1], ", ", post_delay_HR_SHELF$Gamma[2], ")")
-      } else if (post_delay_HR_dist == "lognormal") {
-        distParamHR <- paste0("HR2 ~ dlnorm(", post_delay_HR_SHELF$Log.normal[1], ", ", 1/post_delay_HR_SHELF$Log.normal[2]^2, ")")
-      } else if (post_delay_HR_dist == "student-t") {
-        distParamHR <- paste0("HR2 ~ dt(", post_delay_HR_SHELF$Student.t[1], ", ", post_delay_HR_SHELF$Student.t[2], ", ", post_delay_HR_SHELF$Student.t[3], ")")
-      } else if (post_delay_HR_dist == "normal") {
-        distParamHR <- paste0("HR2 ~ dnorm(", post_delay_HR_SHELF$Normal[1], ", ", 1/post_delay_HR_SHELF$Normal[2]^2, ")")
-      }
-
-      modelString <- paste0(
-        "data {\n",
-        "  for (j in 1:m){\n",
-        "    zeros[j] <- 0\n",
-        "  }\n",
-        "}\n",
-        "\n",
-        "model {\n",
-        "  C <- 10000\n",
-        "  for (i in 1:n){\n",
-        "    zeros[i] ~ dpois(zeros.mean[i])\n",
-        "    zeros.mean[i] <-  -l[i] + C\n",
-        "    l[i] <- ifelse(datEvent[i]==1, log(lambda_c)-(lambda_c*datTimes[i]), -(lambda_c*datTimes[i]))\n",
-        "  }\n",
-        "  for (i in (n+1):m){\n",
-        "    zeros[i] ~ dpois(zeros.mean[i])\n",
-        "    zeros.mean[i] <-  -l[i] + C\n",
-        "    l[i] <- ifelse(datEvent[i]==1, ifelse(datTimes[i]<bigT, log(lambda_c)-(lambda_c*datTimes[i]), log(lambda_t)-lambda_t*(datTimes[i]-bigT)-(bigT*lambda_c)),\n",
-        "      ifelse(datTimes[i]<bigT, -(lambda_c*datTimes[i]), -(lambda_c*bigT)-lambda_t*(datTimes[i]-bigT)))\n",
-        "  }\n",
-        " \n",
-        "    lambda_c ~ dbeta(1, 1)T(0,)\n",
-        "   \n",
-        "    mixT ~ dbern(1-P_S*P_DTE)\n",
-        "    bigT <- mixT * bigT1 + (1-mixT) * bigT2\n",
-        "    bigT1 ~ dnorm(0, 100)T(0,)\n",
-        "    ", distParambigT, "\n",
-        "   \n",
-        "    mixHR ~ dbern(1-P_S)\n",
-        "    HR <- mixHR * HR1 + (1-mixHR) * HR2\n",
-        "    HR1 ~ dnorm(1, 10000)T(0,)\n",
-        "    ", distParamHR, "\n",
-        "   \n",
-        "    lambda_t <- lambda_c*HR\n",
-        "}"
-      )
-
-      model = rjags::jags.model(textConnection(modelString), data = list(datTimes = data$survival_time,
-                                                                         datEvent = data$status, n = sum(data$group=="Control"),
-                                                                         m=nrow(data),
-                                                                         P_S = P_S,
-                                                                         P_DTE = P_DTE), quiet = TRUE)
-
-      stats::update(model, n.iter=50, progress.bar = "none")
-      output = rjags::coda.samples(model = model, variable.names = c("HR", "bigT", "lambda_c"), n.iter = 100, progress.bar = "none")
-
-      cPatientsLeft <- n_c - sum(data$group == "Control")
-      tPatientsLeft <- n_t - sum(data$group == "Treatment")
-
-      HRoutput <- as.numeric(unlist(output[,1]))
-      bigToutput <- as.numeric(unlist(output[,2]))
-      lambda_coutput <- as.numeric(unlist(output[,3]))
-
-      BPPVec <- rep(NA, M)
-
-      for (j in 1:M){
-
-        unenrolledrec_times <- stats::runif(cPatientsLeft + tPatientsLeft, data_after_cens$cens_time, rec_period)
-
-        sampledHR <- sample(HRoutput, 1)
-        sampledbigT <- sample(bigToutput, 1)
-        sampledlambda_c <- sample(lambda_coutput, 1)
-        sampledlambda_t <- sampledlambda_c * sampledHR
-
-        CP <- exp(-(sampledlambda_c * sampledbigT))
-        u <- stats::runif(tPatientsLeft)
-
-        unenrolledData <- data.frame(
-          time = c(stats::rexp(cPatientsLeft, rate = sampledlambda_c),
-                   ifelse(u > CP, (-log(u)) / sampledlambda_c, (1 / sampledlambda_t) * (sampledbigT * sampledlambda_t - log(u) - sampledbigT * sampledlambda_c))),
-          group = c(rep("Control", cPatientsLeft), rep("Treatment", tPatientsLeft)),
-          rec_time = unenrolledrec_times
-        )
-
-        unenrolledData$pseudo_time <- unenrolledData$time + unenrolledData$rec_time
-
-        censoredData <- data[data$status == 0, ]
-
-        cCensored <- sum(censoredData$group == "Control")
-        tCensored <- sum(censoredData$group == "Treatment")
-
-        cCensoredData <- censoredData %>%
-          dplyr::filter(.data$group == "Control")
-
-        cCensoredData$finalsurvTime <- cCensoredData$survival_time + stats::rexp(cCensored, rate = sampledlambda_c)
-        cCensoredData$finalPsuedoTime <- cCensoredData$rec_time + cCensoredData$finalsurvTime
-
-        tBeforeDelay <- censoredData %>%
-          dplyr::filter(.data$group == "Treatment") %>%
-          dplyr::filter(.data$survival_time < sampledbigT)
-
-        tAfterDelay <- censoredData %>%
-          dplyr::filter(.data$group == "Treatment") %>%
-          dplyr::filter(.data$survival_time > sampledbigT)
-
-        tBeforeDelay$IASurv <- tBeforeDelay$survival_time + stats::rexp(nrow(tBeforeDelay), rate = sampledlambda_c)
-
-        tBeforeDelay1 <- tBeforeDelay %>%
-          dplyr::filter(.data$IASurv < sampledbigT)
-
-        tBeforeDelay2 <- tBeforeDelay %>%
-          dplyr::filter(.data$IASurv > sampledbigT)
-
-        tBeforeDelay2$IASurv2 <- sampledbigT + stats::rexp(nrow(tBeforeDelay2), rate = sampledlambda_t)
-        tAfterDelay$IASurv <- tAfterDelay$survival_time + stats::rexp(nrow(tAfterDelay), rate = sampledlambda_t)
-
-        tBeforeDelay1$IApsuedoTime <- tBeforeDelay1$IASurv + tBeforeDelay1$rec_time
-        tBeforeDelay2$IApsuedoTime <- tBeforeDelay2$IASurv2 + tBeforeDelay2$rec_time
-        tAfterDelay$IApsuedoTime <- tAfterDelay$IASurv + tAfterDelay$rec_time
-
-        cCensoredData <- cCensoredData[, c(8, 2, 3, 9)]
-        tBeforeDelay1 <- tBeforeDelay1[, c(8, 2, 3, 9)]
-        tBeforeDelay2 <- tBeforeDelay2[, c(9, 2, 3, 10)]
-        tAfterDelay <- tAfterDelay[, c(8, 2, 3, 9)]
-
-        colnames(cCensoredData) <- c("time", "group", "rec_time", "pseudo_time")
-        colnames(tBeforeDelay1) <- c("time", "group", "rec_time", "pseudo_time")
-        colnames(tBeforeDelay2) <- c("time", "group", "rec_time", "pseudo_time")
-        colnames(tAfterDelay) <- c("time", "group", "rec_time", "pseudo_time")
-
-        finalDataset <- data %>%
-          dplyr::filter(.data$status == 1)
-
-        finalDataset <- finalDataset[, 1:4]
-
-        finalDataset <- rbind(finalDataset, tBeforeDelay1, tBeforeDelay2, tAfterDelay, unenrolledData, cCensoredData)
-
-        censTime1 <- sort(finalDataset$pseudo_time)[cens_events]
-        finalDataset$status <- finalDataset$pseudo_time <= censTime1
-        finalDataset$status <- as.integer(finalDataset$status)
-        finalDataset$enrolled <- finalDataset$rec_time <= censTime1
-        finalDataset <- finalDataset[finalDataset$enrolled == TRUE, ]
-        finalDataset$survival_time <- ifelse(finalDataset$pseudo_time > censTime1, censTime1 - finalDataset$rec_time, finalDataset$time)
-
-        coxmodel <- survival::coxph(survival::Surv(.data$survival_time, .data$status) ~ .data$group, data = finalDataset)
-        Z_Score <- -(stats::coef(summary(coxmodel))[, 4])
-
-        BPPVec[j] <- Z_Score > designList$critValues[2]
-
-      } # end j loop
-
-      outerBPPVec[i] <- mean(BPPVec)
-
-    } # end else (not stopped)
-
-  } # end i loop
-
-  return(list(outerBPPVec = outerBPPVec))
-
-} # end function

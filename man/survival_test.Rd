@@ -2,7 +2,7 @@
 % Please edit documentation in R/main.R
 \name{survival_test}
 \alias{survival_test}
-\title{Calculate statistical significance on a survival data set}
+\title{Calculate statistical significance on a survival dataset}
 \usage{
 survival_test(
   data,
@@ -16,29 +16,40 @@ survival_test(
 )
 }
 \arguments{
-\item{data}{A survival dataframe}
+\item{data}{A dataframe containing survival data. Must include columns for survival time, event status, and treatment group.}
 
-\item{analysis_method}{Method of analysis, "LRT" (default) for standard log-rank test, or "WLRT" for weighted log-rank test}
+\item{analysis_method}{Method of analysis: \code{"LRT"} (default) for standard log-rank test, or \code{"WLRT"} for weighted log-rank test.}
 
-\item{alternative}{String specifying the alternative hypothesis, must be one of "one.sided" or "two-sided" (default)}
+\item{alternative}{String specifying the alternative hypothesis. Must be one of \code{"one.sided"} or \code{"two.sided"} (default).}
 
-\item{alpha}{Type I error}
+\item{alpha}{Type I error threshold for significance testing.}
 
-\item{rho}{Rho parameter for the Fleming-Harrington weighted log-rank test}
+\item{rho}{Rho parameter for the Fleming-Harrington weighted log-rank test.}
 
-\item{gamma}{Gamma parameter for the Fleming-Harrington weighted log-rank test}
+\item{gamma}{Gamma parameter for the Fleming-Harrington weighted log-rank test.}
 
-\item{t_star}{Parameter t^* in the modestly weighted test}
+\item{t_star}{Parameter \eqn{t^*} used in modestly weighted tests.}
 
-\item{s_star}{Parameter s^* in the modestly weighted test}
+\item{s_star}{Parameter \eqn{s^*} used in modestly weighted tests.}
 }
 \value{
-A list with:
+A list containing:
 \describe{
-\item{Signif}{Logical indicator of statistical significance}
-\item{observed_HR}{Estimated hazard ratio from Cox model}
+\item{Signif}{Logical indicator of statistical significance based on the chosen test and alpha level.}
+\item{observed_HR}{Estimated hazard ratio from a Cox proportional hazards model.}
 }
 }
 \description{
-Calculate statistical significance on a survival data set
+Performs a survival analysis using either the standard log-rank test (LRT) or a weighted log-rank test (WLRT). The function estimates the hazard ratio and determines whether the result is statistically significant based on the specified alpha level and alternative hypothesis.
+}
+\examples{
+set.seed(123)
+df <- data.frame(
+  time = rexp(40, rate = 0.1),
+  status = rbinom(40, 1, 0.8),
+  group = rep(c("Control", "Treatment"), each = 20)
+)
+result <- survival_test(df, analysis_method = "LRT", alpha = 0.05)
+str(result)
+
 }

@@ -13,25 +13,36 @@ cens_data(
 )
 }
 \arguments{
-\item{data}{A dataframe containing uncensored survival data with columns: pseudo_time, rec_time, and time}
+\item{data}{A dataframe containing uncensored survival data with columns: \code{pseudo_time}, \code{rec_time}, and \code{time}}
 
-\item{cens_method}{Censoring method: "Time" (default), "Events", or "IF"}
+\item{cens_method}{Censoring method: \code{"Time"} (default), \code{"Events"}, or \code{"IF"}}
 
-\item{cens_time}{Time point for censoring (required if cens_method = "Time")}
+\item{cens_time}{Time point for censoring (required if \code{cens_method = "Time"})}
 
-\item{cens_IF}{Information fraction for censoring (required if cens_method = "IF")}
+\item{cens_IF}{Information fraction for censoring (required if \code{cens_method = "IF"})}
 
-\item{cens_events}{Number of events for censoring (required if cens_method = "Events")}
+\item{cens_events}{Number of events for censoring (required if \code{cens_method = "Events"})}
 }
 \value{
 A list containing:
 \describe{
-\item{data}{Censored dataframe}
+\item{data}{Censored dataframe with updated \code{status} and filtered rows}
 \item{cens_events}{Number of events used for censoring (if applicable)}
 \item{cens_time}{Time point used for censoring}
 \item{sample_size}{Number of subjects remaining after censoring}
 }
 }
 \description{
-Censor a survival dataset
+Applies administrative censoring to a survival dataset using one of three methods: fixed time, fixed number of events, or fixed information fraction. The input data must contain columns for pseudo survival time, recruitment time, and observed time.
+}
+\examples{
+set.seed(123)
+df <- data.frame(
+  pseudo_time = rexp(20, rate = 0.1),
+  rec_time = runif(20, 0, 12),
+  time = rexp(20, rate = 0.1)
+)
+censored <- cens_data(df, cens_method = "Time", cens_time = 10)
+str(censored)
+
 }

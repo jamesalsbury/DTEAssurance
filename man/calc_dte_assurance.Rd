@@ -25,63 +25,74 @@ calc_dte_assurance(
 \item \code{dist}: Distribution type ("Exponential" or "Weibull")
 \item \code{parameter_mode}: Either "Fixed" or "Distribution"
 \item \code{fixed_type}: If "Fixed", specify as "Parameters" or "Landmark"
-\item \code{lambda}: Scale parameter (for Exponential or Weibull)
-\item \code{gamma}: Shape parameter (Weibull only)
-\item \code{t1}, \code{t2}: Landmark times (used if \code{fixed_type = "Landmark"})
-\item \code{surv_t1}, \code{surv_t2}: Survival probabilities at \code{t1} and \code{t2}
-\item \code{t1_Beta_a}, \code{t1_Beta_b}: Beta prior parameters for survival at \code{t1}
-\item \code{diff_Beta_a}, \code{diff_Beta_b}: Beta prior parameters for survival difference between \code{t1} and \code{t2}
+\item \code{lambda}, \code{gamma}: Scale and shape parameters
+\item \code{t1}, \code{t2}: Landmark times
+\item \code{surv_t1}, \code{surv_t2}: Survival probabilities at landmarks
+\item \code{t1_Beta_a}, \code{t1_Beta_b}, \code{diff_Beta_a}, \code{diff_Beta_b}: Beta prior parameters
 }}
 
 \item{effect_model}{A named list specifying beliefs about the treatment effect:
 \itemize{
-\item \code{delay_SHELF}: SHELF object encoding beliefs about delay time
-\item \code{delay_dist}: Distribution type for delay ("hist" by default)
-\item \code{HR_SHELF}: SHELF object encoding beliefs about post-delay hazard ratio
-\item \code{HR_dist}: Distribution type for hazard ratio ("hist" by default)
+\item \code{delay_SHELF}, \code{HR_SHELF}: SHELF objects encoding beliefs
+\item \code{delay_dist}, \code{HR_dist}: Distribution types ("hist" by default)
 \item \code{P_S}: Probability that survival curves separate
 \item \code{P_DTE}: Probability of delayed separation, conditional on separation
 }}
 
 \item{censoring_model}{A named list specifying the censoring mechanism:
 \itemize{
-\item \code{method}: One of "Time", "Events", or "IF"
-\item \code{time}: Fixed follow-up time (used if \code{method = "Time"})
-\item \code{events}: Number of events to censor at (used if \code{method = "Events"})
-\item \code{IF}: Information fraction for censoring (used if \code{method = "IF"})
+\item \code{method}: "Time", "Events", or "IF"
+\item \code{time}, \code{events}, \code{IF}: Parameters for each method
 }}
 
 \item{recruitment_model}{A named list specifying the recruitment process:
 \itemize{
-\item \code{method}: "power" or "PWC" (piecewise constant)
-\item \code{period}: Recruitment period (used for power model)
-\item \code{power}: Accrual shape parameter (used for power model)
-\item \code{rate}: Comma-separated rates (used for PWC model)
-\item \code{duration}: Comma-separated durations (used for PWC model)
+\item \code{method}: "power" or "PWC"
+\item \code{period}, \code{power}: Parameters for power model
+\item \code{rate}, \code{duration}: Comma-separated strings for PWC model
 }}
 
 \item{analysis_model}{A named list specifying the statistical test and decision rule:
 \itemize{
-\item \code{method}: "LRT" (default), "WLRT", or "MW"
-\item \code{alpha}: Type I error rate (default = 0.025)
-\item \code{alternative_hypothesis}: "one.sided" or "two.sided"
-\item \code{rho}, \code{gamma}: Fleming-Harrington parameters (WLRT)
-\item \code{t_star}, \code{s_star}: Modestly weighted test parameters (MW)
-\item \code{success_threshold_HR}: Optional threshold for declaring success (e.g., HR < 0.8)
+\item \code{method}: "LRT", "WLRT", or "MW"
+\item \code{alpha}, \code{alternative_hypothesis}: Type I error and hypothesis direction
+\item \code{rho}, \code{gamma}, \code{t_star}, \code{s_star}: Parameters for WLRT or MW
+\item \code{success_threshold_HR}: Optional threshold for declaring success
 }}
 
 \item{n_sims}{Number of simulations to run (default = 1000)}
 }
 \value{
-A named list containing operating characteristics:
-\itemize{
-\item \code{assurance}: Estimated assurance (probability of success under prior uncertainty)
-\item \code{CI}: 95\% confidence interval for assurance
-\item \code{duration}: Mean trial duration
-\item \code{sample_size}: Mean sample size
-\item Additional diagnostics if \code{success_threshold_HR} is specified
+A named list containing:
+\describe{
+\item{assurance}{Estimated assurance (probability of success under prior uncertainty)}
+\item{CI}{95\% confidence interval for assurance}
+\item{duration}{Mean trial duration across simulations}
+\item{sample_size}{Mean sample size across simulations}
+\item{diagnostics}{Additional diagnostics if \code{success_threshold_HR} is specified}
 }
+Class: \code{list}
 }
 \description{
-Calculate Assurance for a Trial with a Delayed Treatment Effect
+Simulates operating characteristics for a clinical trial under prior uncertainty about a delayed treatment effect. The function integrates beliefs about control survival, treatment delay, post-delay hazard ratio, recruitment, censoring, and analysis method to estimate assurance and other trial metrics.
+}
+\examples{
+# Minimal example with placeholder inputs
+control_model <- list(dist = "Exponential", parameter_mode = "Fixed",
+fixed_type = "Parameters", lambda = 0.1)
+effect_model <- list(delay_SHELF = SHELF::fitdist(c(3, 4, 5), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 10),
+delay_dist = "gamma", HR_SHELF = SHELF::fitdist(c(0.55, 0.6, 0.7), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 1.5), HR_dist = "gamma",
+P_S = 1, P_DTE = 0)
+censoring_model <- list(method = "Time", time = 12)
+recruitment_model <- list(method = "power", period = 12, power = 1)
+analysis_model <- list(method = "LRT", alpha = 0.025, alternative_hypothesis = "two.sided")
+result <- calc_dte_assurance(n_c = 300, n_t = 300,
+                                     control_model = control_model,
+                                     effect_model = effect_model,
+                                     censoring_model = censoring_model,
+                                     recruitment_model = recruitment_model,
+                                     analysis_model = analysis_model,
+                                     n_sims = 10)
+str(result)
+
 }

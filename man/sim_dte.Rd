@@ -2,7 +2,7 @@
 % Please edit documentation in R/main.R
 \name{sim_dte}
 \alias{sim_dte}
-\title{Simulate a DTE data set}
+\title{Simulates survival times for a delayed treatment effect (DTE) scenario, where the treatment group experiences a delayed onset of benefit. Control and treatment groups are generated under exponential or Weibull distributions.}
 \usage{
 sim_dte(
   n_c,
@@ -15,23 +15,33 @@ sim_dte(
 )
 }
 \arguments{
-\item{n_c}{number of patients in the control group}
+\item{n_c}{The number of patients in the control group}
 
-\item{n_t}{number of patients in the treatment group}
+\item{n_t}{The number of patients in the treatment group}
 
-\item{lambda_c}{control hazard}
+\item{lambda_c}{The baseline hazard rate for the control group}
 
-\item{delay_time}{length of delay}
+\item{delay_time}{The length of delay before treatment effect begins}
 
-\item{post_delay_HR}{the hazard ratio, once the treatment begins to take effect}
+\item{post_delay_HR}{The hazard ratio after the delay period}
 
-\item{dist}{distribution of control distribution, must be one of "exponential" (default) or "weibull"}
+\item{dist}{The distribution for the control group; must be one of "Exponential" (default) or "Weibull"}
 
-\item{gamma_c}{gamma parameter in the Weibull distribution}
+\item{gamma_c}{The shape parameter for the Weibull distribution (only used if \code{dist = "Weibull"})}
 }
 \value{
-a DTE data set
+A data frame with two columns:
+\item{time}{Simulated survival times}
+\item{group}{Group assignment: "Control" or "Treatment"}
+Class: \code{data.frame}
 }
 \description{
-Simulate a DTE data set
+Simulates survival times for a delayed treatment effect (DTE) scenario, where the treatment group experiences a delayed onset of benefit. Control and treatment groups are generated under exponential or Weibull distributions.
+}
+\examples{
+set.seed(123)
+sim_data <- sim_dte(n_c = 10, n_t = 10, lambda_c = 0.1,
+                    delay_time = 6, post_delay_HR = 0.6)
+head(sim_data)
+
 }
