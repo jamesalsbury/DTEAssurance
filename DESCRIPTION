@@ -42,3 +42,4 @@ Config/testthat/edition: 3
 Depends: 
     R (>= 4.0)
 Date: 2025-09-25
+URL: https://jamesalsbury.github.io/DTEAssurance/
