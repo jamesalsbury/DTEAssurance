@@ -1,186 +1,212 @@
 README
 ================
 
-<!-- README.md is generated from README.Rmd. Please edit that file -->
-
 # DTEAssurance
 
 <!-- badges: start -->
+
+[![CRAN
+status](https://www.r-pkg.org/badges/version/DTEAssurance)](https://CRAN.R-project.org/package=DTEAssurance)
+[![Lifecycle:
+stable](https://img.shields.io/badge/lifecycle-stable-brightgreen.svg)](https://lifecycle.r-lib.org/articles/stages.html)
 <!-- badges: end -->
 
-DTEAssurance is an R package for implementing the assurance method for a
-delayed treatment effect. Distributions are elicited for the length of
-delay and the post-delay hazard ratio. The package implements the
-methodology from
+**DTEAssurance** is an R package for implementing assurance methodology
+in the design of clinical trials with an anticipated delayed treatment
+effect (DTE).  
+It uses elicited prior distributions—via the
+[`SHELF`](https://CRAN.R-project.org/package=SHELF) framework—for the
+delay duration and post-delay hazard ratio, and simulates operating
+characteristics to inform trial design.
 
-- Salsbury JA, Oakley JE, Julious SA, Hampson LV. [Assurance methods for
-  designing a clinical trial with a delayed treatment
-  effect](https://onlinelibrary.wiley.com/doi/10.1002/sim.10136).
-  Statistics in Medicine. 2024; 43(19): 3595-3612. doi:
-  10.1002/sim.10136\]
+The methodology is based on the following papers:
+
+- Salsbury JA, Oakley JE, Julious SA, Hampson LV.  
+  [Assurance methods for designing a clinical trial with a delayed
+  treatment
+  effect](https://onlinelibrary.wiley.com/doi/10.1002/sim.10136).  
+  *Statistics in Medicine*, 2024; 43(19): 3595–3612.
+  [doi:10.1002/sim.10136](https://doi.org/10.1002/sim.10136)
+
+- Salsbury JA, Oakley JE, Julious SA, Hampson LV.  
+  [Adaptive clinical trial design with delayed treatment effects using
+  elicited prior distributions](https://arxiv.org/abs/2509.07602).  
+  *arXiv preprint*, 2025; arXiv:2509.07602 \[under revision at
+  *Pharmaceutical Statistics*\]
 
 ## Installation
 
-The \`DTEAssurance’ package is currently on GitHub only. It can be
-installed and loaded using the following commands:
+You can install `DTEAssurance` from GitHub using:
 
 ``` r
+# Install from GitHub
 devtools::install_github("jamesalsbury/DTEAssurance")
+#> Using GitHub PAT from the git credential store.
+#> Skipping install of 'DTEAssurance' from a github remote, the SHA1 (da7dd954) has not changed since last install.
+#>   Use `force = TRUE` to force installation
 library(DTEAssurance)
 ```
 
-## Shiny App
+Once accepted to CRAN, you’ll be able to install it with:
 
-A \`shiny’ app is included in the package for implementing the methods.
-To launch the app, run the command:
+``` r
+install.packages("DTEAssurance")
+#> Warning: package 'DTEAssurance' is in use and will not be installed
+```
+
+## Assurance Methods for Delayed Treatment Effects
+
+### `Shiny` App
+
+Launch the interactive app to explore assurance under delayed treatment
+effects:
 
 ``` r
 DTEAssurance::assurance_shiny_app()
 ```
 
-## Example (from the paper)
+### Offline Example
 
-### Control
-
-We assume the observations in the control group will be exponentially
-distributed, with a median survival time
-(![t_m](https://latex.codecogs.com/png.latex?t_m "t_m")) of 8 months.
-The hazard rate is
-
-![\lambda = \frac{\text{log}(2)}{t_m},](https://latex.codecogs.com/png.latex?%5Clambda%20%3D%20%5Cfrac%7B%5Ctext%7Blog%7D%282%29%7D%7Bt_m%7D%2C "\lambda = \frac{\text{log}(2)}{t_m},")
-
-so in this case
-![\lambda \approx 0.087](https://latex.codecogs.com/png.latex?%5Clambda%20%5Capprox%200.087 "\lambda \approx 0.087")
-
-### Eliciting beliefs about the treatment group
-
-First, we need to elicit beliefs about the probability that the survival
-curves will diverge,
-![P\_{S}](https://latex.codecogs.com/png.latex?P_%7BS%7D "P_{S}"). We
-assume the expert judges this probability to be 0.9.
+You can also use the package offline via the main function:
 
 ``` r
-P_S <- 0.9
+DTEAssurance::calc_dte_assurance()
 ```
 
-Second, we require the probability that the survival curves will be
-subject to a delayed treatment effect, given they diverge,
-![P\_\text{DTE}](https://latex.codecogs.com/png.latex?P_%5Ctext%7BDTE%7D "P_\text{DTE}").
-We assume the expert judges this probability to be 0.7.
+This function requires the following arguments:
+
+- `n_c`: Number of patients in the control group
+- `n_t`: Number of patients in the treatment group
+- `control_model`: A named list specifying the control arm survival
+  distribution
+- `effect_model`: A named list specifying beliefs about the treatment
+  effect
+- `censoring_model`: A named list specifying the censoring mechanism
+- `recruitment_model`: A named list specifying the recruitment process
+- `analysis_model`: A named list specifying the statistical test and
+  decision rule
+- `n_sims`: Number of simulations to run
+
+An example of this is shown:
 
 ``` r
-P_DTE <- 0.7
+control_model <- list(dist = "Exponential", parameter_mode = "Fixed", fixed_type = "Parameters", lambda = 0.1)
+effect_model <- list(delay_SHELF = SHELF::fitdist(c(3, 4, 5), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 10),
+delay_dist = "gamma",
+HR_SHELF = SHELF::fitdist(c(0.55, 0.6, 0.7), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 1.5),
+HR_dist = "gamma",
+P_S = 1, P_DTE = 0)
+censoring_model <- list(method = "Time", time = 12)
+recruitment_model <- list(method = "power", period = 12, power = 1)
+analysis_model <- list(method = "LRT", alpha = 0.025, alternative_hypothesis = "one.sided")
+result <- calc_dte_assurance(n_c = 300, n_t = 300,
+                             control_model = control_model,
+                             effect_model = effect_model,
+                             censoring_model = censoring_model,
+                             recruitment_model = recruitment_model,
+                             analysis_model = analysis_model,
+                             n_sims = 100)
+
+str(result)
+#> List of 4
+#>  $ assurance  : num 0.83
+#>  $ CI         : num [1, 1:2] 0.742 0.898
+#>  $ duration   : num 12
+#>  $ sample_size: num 600
 ```
 
-We now require the expert to consider their uncertainty about the
-following two quantities: the length of the delay, and the magnitude of
-the treatment effect, once the treatment begins to take effect.
-
-### Eliciting length of delay
-
-For the length of delay, suppose the expert provides a median of 4
-months, and two quartiles (25% and 75%) of 3 and 5 months, respectively.
-A Gamma(7.29,1.76) distribution is fit to these judgements
-
-``` r
-delay_time_beliefs <- SHELF::fitdist(c(3, 4, 5), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 10)
-SHELF::plotfit(delay_time_beliefs, d = "gamma")
-```
-
-<img src="man/figures/README-unnamed-chunk-7-1.png" width="100%" />
-
-### Eliciting post-delay hazard ratio
-
-For the post-delay hazard ratio, suppose the expert provides a median of
-0.6 and two quartiles (25% and 75%) of 0.55 and 0.7, respectively. A
-Gamma(29.6, 47.8) distribution is fit to these judgements
-
-``` r
-post_delay_HR_beliefs <- SHELF::fitdist(c(0.55, 0.6, 0.7), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 1.5)
-SHELF::plotfit(post_delay_HR_beliefs, d = "gamma")
-```
-
-<img src="man/figures/README-unnamed-chunk-8-1.png" width="100%" />
-
-## Calculating Assurance
+We can vary the sample sizes and plot the resulting output:
 
 ``` r
 
-DTEAssurance::calc_dte_assurance(n_c = 300,
-                                  n_t = 300,
-                                  lambda_c = log(2)/8,
-                                  control_dist = "Exponential",
-                                  delay_time_SHELF = delay_time_beliefs,
-                                  delay_time_dist = "gamma",
-                                  post_delay_HR_SHELF = post_delay_HR_beliefs,
-                                  post_delay_HR_dist = "gamma",
-                                  P_S = 0.9,
-                                  P_DTE = 0.7,
-                                  cens_events = 150,
-                                  rec_method = "power",
-                                  rec_period = 12,
-                                  rec_power = 1,
-                                  analysis_method = "LRT",
-                                  alpha = 0.05,
-                                  alternative = "one.sided",
-                                  rho = 0,
-                                  gamma = 0,
-                                  nSims = 1000)
-#> $assurance
-#> [1] 0.323
-#> 
-#> $CI_Assurance
-#>             UBAssurance 
-#>   0.2940164   0.3519836 
-#> 
-#> $duration
-#> [1] 9.908946
+result <- calc_dte_assurance(n_c = seq(50, 500, by = 50),
+                             n_t = seq(50, 500, by = 50),
+                             control_model = control_model,
+                             effect_model = effect_model,
+                             censoring_model = censoring_model,
+                             recruitment_model = recruitment_model,
+                             analysis_model = analysis_model,
+                             n_sims = 500)
 ```
+
+<img src="man/figures/README-unnamed-chunk-9-1.png" width="100%" />
+
+## Assurance for DTE - With Group Sequential Designs
+
+### `Shiny` App
+
+Launch the interactive `shiny` app to explore assurance under delayed
+treatment effects using group sequential designs:
+
+``` r
+DTEAssurance::assurance_GSD_shiny_app()
+```
+
+### Offline Example
+
+You can also use the package offline via the main function:
+
+``` r
+DTEAssurance::calc_dte_assurance_interim()
+```
+
+This function requires the following arguments:
+
+- `n_c`: Number of patients in the control group
+- `n_t`: Number of patients in the treatment group
+- `control_model`: A named list specifying the control arm survival
+  distribution
+- `effect_model`: A named list specifying beliefs about the treatment
+  effect
+- `recruitment_model`: A named list specifying the recruitment process
+- `GSD_model`: A named list specifying the group sequential design
+- `n_sims`: Number of simulations to run
+
+An example of this is shown:
+
+``` r
+control_model <- list(dist = "Exponential", parameter_mode = "Fixed", fixed_type = "Parameters", lambda = 0.08)
+effect_model <- list(delay_SHELF = SHELF::fitdist(c(3, 4, 5), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 10),
+delay_dist = "gamma",
+HR_SHELF = SHELF::fitdist(c(0.55, 0.6, 0.7), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 1.5),
+HR_dist = "gamma",
+P_S = 0.9, P_DTE = 0.7)
+recruitment_model <- list(method = "power", period = 12, power = 1)
+GSD_model <- list(events = 450, alpha_spending = c("0.01, 0.025"),
+                  beta_spending = c("0.05, 0.1"), IF_vec = c("0.5, 1"))
+result <- calc_dte_assurance_interim(n_c = 300, n_t = 300,
+                             control_model = control_model,
+                             effect_model = effect_model,
+                             recruitment_model = recruitment_model,
+                             GSD_model = GSD_model,
+                             n_sims = 500)
+
+str(result)
+#> 'data.frame':    500 obs. of  6 variables:
+#>  $ Trial         : int  1 2 3 4 5 6 7 8 9 10 ...
+#>  $ IF            : chr  "0.5, 1" "0.5, 1" "0.5, 1" "0.5, 1" ...
+#>  $ Decision      : chr  "Successful at final" "Stop for efficacy" "Stop for futility" "Stop for futility" ...
+#>  $ StopTime      : num  27.1 13.6 12.5 12.9 13.7 ...
+#>  $ SampleSize    : int  600 600 600 600 600 600 600 600 600 600 ...
+#>  $ Final_Decision: chr  "Successful" "Successful" "Successful" "Successful" ...
+```
+
+If we wish to compare the operating characteristics we can do so by
+changing the `GSD_model` and plotting the proportion of outcomes:
 
 ``` r
 
-nVec <- seq(30, 500, by = 50)
+GSD_model <- list(events = 450, 
+                  alpha_spending = c("0.01, 0.025", "0.01, 0.025", "0.01, 0.025"),
+                  beta_spending = c("0.05, 0.1", "0.05, 0.1", "0.05, 0.1"), 
+                  IF_vec = c("0.25, 1", "0.5, 1", "0.75, 1"))
 
-resultsAssurance <- sapply(nVec, function(n){
-  n_c <- n_t <- n
-  cens_events <- (n_c + n_t) * 0.8
-DTEAssurance::calc_dte_assurance(n_c = n_c,
-                                  n_t = n_t,
-                                  lambda_c = log(2)/8,
-                                  control_dist = "Exponential",
-                                  delay_time_SHELF = delay_time_beliefs,
-                                  delay_time_dist = "gamma",
-                                  post_delay_HR_SHELF = post_delay_HR_beliefs,
-                                  post_delay_HR_dist = "gamma",
-                                  P_S = 0.9,
-                                  P_DTE = 0.7,
-                                  cens_events = cens_events,
-                                  rec_method = "power",
-                                  rec_period = 12,
-                                  rec_power = 1,
-                                  analysis_method = "LRT",
-                                  alpha = 0.05,
-                                  alternative = "one.sided",
-                                  rho = 0,
-                                  gamma = 0,
-                                  nSims = 100)
-})
-
-
-assuranceSmooth <- loess(unlist(resultsAssurance[1,])~nVec)
-assuranceSmooth <- loess(unlist(resultsAssurance[1,])~nVec)
-
-unlist(resultsAssurance[2,])
-#>             UBAssurance             UBAssurance             UBAssurance 
-#>   0.1388077   0.3011923   0.3820784   0.5779216   0.4729652   0.6670348 
-#>             UBAssurance             UBAssurance             UBAssurance 
-#>   0.4936007   0.6863993   0.5993513   0.7806487   0.6540277   0.8259723 
-#>             UBAssurance             UBAssurance             UBAssurance 
-#>   0.6101815   0.7898185   0.6762917   0.8437083   0.7216000   0.8784000 
-#>             UBAssurance 
-#>   0.7216000   0.8784000
-
-plot(nVec*2, predict(assuranceSmooth), type = "l", col = "red", ylim =c(0,1), ylab = "Power/Assurance", xlab = "Total sample size")
+result <- calc_dte_assurance_interim(n_c = 300, n_t = 300,
+                             control_model = control_model,
+                             effect_model = effect_model,
+                             recruitment_model = recruitment_model,
+                             GSD_model = GSD_model,
+                             n_sims = 500)
 ```
 
-<img src="man/figures/README-unnamed-chunk-10-1.png" width="100%" />
+<img src="man/figures/README-unnamed-chunk-14-1.png" width="100%" />

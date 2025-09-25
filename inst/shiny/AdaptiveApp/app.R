@@ -10,6 +10,7 @@ library(shinyBS)
 #remotes::install_github("jamesalsbury/DTEAssurance")
 library(DTEAssurance)
 library(shinyAce)
+library(tidyr)
 
 
 rowCallback <- c(
@@ -1069,6 +1070,8 @@ server <- function(input, output, session) {
     #
     #
     output$Prop_Barchart <- renderPlot({
+      oldpar <- par(no.readonly = TRUE)
+      on.exit(par(oldpar))
     sim_output <- calculateGSDAssurance()
 
     sim_output$Outcome <- with(sim_output, ifelse(

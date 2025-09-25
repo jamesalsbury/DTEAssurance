@@ -1,17 +1,4 @@
 
-# strictly_increasing_combinations <- function(...) {
-#   #vectors <- list(...)  # Convert input vectors into a list
-#   combinations <- expand.grid(...)  # Generate all possible combinations
-#
-#   # Filter rows where elements are in strictly increasing order
-#   valid_combinations <- combinations[apply(combinations, 1, function(row) all(diff(as.numeric(row)) > 0)), ]
-#
-#   # Convert each row into a comma-separated string
-#   result <- apply(valid_combinations, 1, function(row) paste(row, collapse = ", "))
-#
-#   return(result)  # Return as a character vector
-# }
-
 
 simulate_one_trial <- function(i, j,
                                n_c, n_t,
@@ -244,7 +231,6 @@ apply_GSD_to_trial <- function(trial_data, design, total_events) {
     sample_size = sample_size
   ))
 }
-
 
 
 summarize_gsd_results <- function(gsd_outcomes) {

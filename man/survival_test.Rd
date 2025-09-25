@@ -45,7 +45,7 @@ Performs a survival analysis using either the standard log-rank test (LRT) or a 
 \examples{
 set.seed(123)
 df <- data.frame(
-  time = rexp(40, rate = 0.1),
+  survival_time = rexp(40, rate = 0.1),
   status = rbinom(40, 1, 0.8),
   group = rep(c("Control", "Treatment"), each = 20)
 )

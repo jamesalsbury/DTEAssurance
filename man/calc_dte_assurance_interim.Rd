@@ -74,11 +74,16 @@ Simulates assurance and operating characteristics for a group sequential trial u
 # Minimal example with placeholder inputs
 control_model <- list(dist = "Exponential", parameter_mode = "Fixed",
 fixed_type = "Parameters", lambda = 0.1)
-effect_model <- list(P_S = 1, P_DTE = 0)
+effect_model <- list(P_S = 1, P_DTE = 0,
+HR_SHELF = SHELF::fitdist(c(0.6, 0.65, 0.7), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 2),
+HR_dist = "gamma",
+delay_SHELF = SHELF::fitdist(c(3, 4, 5), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 10),
+delay_dist = "gamma"
+)
 recruitment_model <- list(method = "power", period = 12, power = 1)
-GSD_model <- list(events = 300, alpha_spending = c(0.01, 0.025),
-                  beta_spending = c(0.05, 0.1), IF_vec = c(0.5, 1))
-result <- assurance_GSD(n_c = 300, n_t = 300,
+GSD_model <- list(events = 300, alpha_spending = c("0.01, 0.025"),
+                  beta_spending = c("0.05, 0.1"), IF_vec = c("0.5, 1"))
+result <- calc_dte_assurance_interim(n_c = 300, n_t = 300,
                         control_model = control_model,
                         effect_model = effect_model,
                         recruitment_model = recruitment_model,

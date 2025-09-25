@@ -1,4 +1,4 @@
-test_that("calc_dte_assurance_interim returns expected structure", {
+test_that("calc_dte_assurance_interim returns expected structure and values", {
   control_model <- list(
     dist = "Exponential",
     parameter_mode = "Fixed",
@@ -15,7 +15,6 @@ test_that("calc_dte_assurance_interim returns expected structure", {
     P_DTE = 0
   )
 
-
   recruitment_model <- list(
     method = "power",
     period = 12,
@@ -29,7 +28,7 @@ test_that("calc_dte_assurance_interim returns expected structure", {
     IF_vec = c("0.5, 1")
   )
 
-  dteresult <- calc_dte_assurance_interim(
+  result <- calc_dte_assurance_interim(
     n_c = 50,
     n_t = 50,
     control_model = control_model,
@@ -39,7 +38,14 @@ test_that("calc_dte_assurance_interim returns expected structure", {
     n_sims = 5
   )
 
-  expect_s3_class(result, "data.frame")
-  expect_true(all(c("Trial", "IF", "Decision", "StopTime", "SampleSize", "Final_Decision") %in% names(result)))
+  expect_false(is.null(result))
+  expect_true(is.data.frame(result))
   expect_equal(nrow(result), 5)
+  expect_true(all(c("Trial", "IF", "Decision", "StopTime", "SampleSize", "Final_Decision") %in% names(result)))
+  expect_type(result$Trial, "integer")
+  expect_type(result$IF, "character")
+  expect_type(result$Decision, "character")
+  expect_type(result$StopTime, "double")
+  expect_type(result$SampleSize, "integer")
+  expect_type(result$Final_Decision, "character")
 })
