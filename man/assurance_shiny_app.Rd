@@ -16,10 +16,9 @@ where delayed treatment effects (DTE) may be present. The app allows
 elicitation of prior distributions and calculates assurance metrics.
 }
 \examples{
-\dontrun{
-# Launch the interactive app in an R session
-assurance_shiny_app()
+if (interactive()) {
+  # Launch the interactive app in an R session
+  assurance_shiny_app()
 }
-
 
 }

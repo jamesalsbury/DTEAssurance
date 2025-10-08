@@ -16,10 +16,9 @@ delayed treatment effects (DTE) using elicited prior distributions. The app
 allows interactive exploration of trial designs and assurance calculations.
 }
 \examples{
-\dontrun{
-# Launch the interactive app in an R session
-assurance_GSD_shiny_app()
+if (interactive()) {
+  # Launch the interactive app in an R session
+  assurance_GSD_shiny_app()
 }
-
 
 }

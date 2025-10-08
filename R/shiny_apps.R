@@ -8,11 +8,10 @@
 #'         The function launches an interactive 'shiny' application.
 #'
 #' @examples
-#' \dontrun{
-#' # Launch the interactive app in an R session
-#' assurance_shiny_app()
+#' if (interactive()) {
+#'   # Launch the interactive app in an R session
+#'   assurance_shiny_app()
 #' }
-#'
 #'
 #' @export
 assurance_shiny_app <- function() {
@@ -36,11 +35,10 @@ assurance_shiny_app <- function() {
 #'         The function launches an interactive 'shiny' application.
 #'
 #' @examples
-#' \dontrun{
-#' # Launch the interactive app in an R session
-#' assurance_GSD_shiny_app()
+#' if (interactive()) {
+#'   # Launch the interactive app in an R session
+#'   assurance_GSD_shiny_app()
 #' }
-#'
 #'
 #' @export
 assurance_GSD_shiny_app <- function() {
@@ -51,5 +49,3 @@ assurance_GSD_shiny_app <- function() {
 
   shiny::runApp(app_dir, display.mode = "normal")
 }
-
-
