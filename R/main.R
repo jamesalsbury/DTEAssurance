@@ -233,11 +233,43 @@ calc_dte_assurance <- function(n_c,
                                analysis_model,
                                n_sims = 1000) {
 
-  loopVec <- if (censoring_model$method == "Events") {
-    (n_c + n_t) > censoring_model$events
+  if (censoring_model$method == "Events") {
+
+    # Check required field
+    if (is.null(censoring_model$events)) {
+      stop("Error: censoring_model$events must be specified when method = 'Events'.")
+    }
+
+    # Check logical condition
+    if (all((n_c + n_t) <= censoring_model$events)) {
+      stop("Error: n_c + n_t needs to be greater than the number of events.")
+    }
+
+    loopVec <- (n_c + n_t) > censoring_model$events
+
+  } else if (censoring_model$method == "Time") {
+
+    # Check required field
+    if (is.null(censoring_model$time)) {
+      stop("Error: censoring_model$time must be specified when method = 'Time'.")
+    }
+
+    loopVec <- rep(TRUE, length(n_c))  # or your time-based logic here
+
+  } else if (censoring_model$method == "IF") {
+
+    # Check required field
+    if (is.null(censoring_model$IF)) {
+      stop("Error: censoring_model$IF must be specified when method = 'IF'.")
+    }
+
+    loopVec <- rep(TRUE, length(n_c))  # or your IF-based logic here
+
   } else {
-    rep(TRUE, length(n_c))
+    stop("Error: censoring_model$method must be one of 'Events', 'Time', or 'IF'.")
   }
+
+
 
   # Preallocate output containers
   assurance_vec <- numeric(length(n_c))

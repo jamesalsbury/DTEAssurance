@@ -1,3 +1,8 @@
+
+# DTEAssurance 1.0.1
+
+- Fixed bug in `calc_dte_assurance()`
+
 # DTEAssurance 1.0.0
 
 - Initial CRAN release

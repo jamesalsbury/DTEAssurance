@@ -49,7 +49,11 @@ simulate_trial_with_recruitment <- function(n_c, n_t,
 
   if (control_model$dist == "Exponential") {
     if (control_model$parameter_mode == "Fixed") {
-      lambda_c_i <- control_model$lambda
+      if (control_model$fixed_type == "Parameters"){
+        lambda_c_i <- control_model$lambda
+      } else if (control_model$fixed_type == "Landmark"){
+        lambda_c_i <- -log(control_model$surv_t1) / control_model$t1
+      }
     } else if (control_model$parameter_mode == "Distribution") {
       lambda_c_i <- -log(stats::rbeta(1, control_model$t1_Beta_a, control_model$t1_Beta_b)) / control_model$t1
     }
