@@ -1,0 +1,32 @@
+# Package index
+
+## All functions
+
+- [`INTEREST`](https://jamesalsbury.github.io/DTEAssurance/reference/INTEREST.md)
+  : INTEREST data set
+- [`MCMC_sample`](https://jamesalsbury.github.io/DTEAssurance/reference/MCMC_sample.md)
+  : MCMC_sample
+- [`REVEL`](https://jamesalsbury.github.io/DTEAssurance/reference/REVEL.md)
+  : REVEL data set
+- [`ZODIAC`](https://jamesalsbury.github.io/DTEAssurance/reference/ZODIAC.md)
+  : ZODIAC data set
+- [`add_recruitment_time()`](https://jamesalsbury.github.io/DTEAssurance/reference/add_recruitment_time.md)
+  : Add recruitment time to a survival dataset
+- [`assurance_GSD_shiny_app()`](https://jamesalsbury.github.io/DTEAssurance/reference/assurance_GSD_shiny_app.md)
+  : Launch the 'shiny' GSD Assurance app
+- [`assurance_shiny_app()`](https://jamesalsbury.github.io/DTEAssurance/reference/assurance_shiny_app.md)
+  : Launch the 'shiny' Assurance app
+- [`calc_dte_assurance()`](https://jamesalsbury.github.io/DTEAssurance/reference/calc_dte_assurance.md)
+  : Calculate Assurance for a Trial with a Delayed Treatment Effect
+- [`calc_dte_assurance_interim()`](https://jamesalsbury.github.io/DTEAssurance/reference/calc_dte_assurance_interim.md)
+  : Calculates operating characteristics for a Group Sequential Trial
+  with a Delayed Treatment Effect
+- [`cens_data()`](https://jamesalsbury.github.io/DTEAssurance/reference/cens_data.md)
+  : Censor a survival dataset
+- [`sim_dte()`](https://jamesalsbury.github.io/DTEAssurance/reference/sim_dte.md)
+  : Simulates survival times for a delayed treatment effect (DTE)
+  scenario, where the treatment group experiences a delayed onset of
+  benefit. Control and treatment groups are generated under exponential
+  or Weibull distributions.
+- [`survival_test()`](https://jamesalsbury.github.io/DTEAssurance/reference/survival_test.md)
+  : Calculate statistical significance on a survival dataset
