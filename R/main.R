@@ -643,4 +643,36 @@ calc_dte_assurance_interim <- function(n_c, n_t,
 }
 
 
+#' Update prior distributions with some interim data
+#'
+#' @param data A dataframe containing survival data with columns: \code{survival_time}, \code{status}, and \code{group}
+#' @param control_distribution Distribution of the control group, either "Exponential" (default) or "Weibull"
+#' @param control_SHELF SHELF object encoding belief for control group
+#' @param delay_SHELF SHELF object encoding belief for length of delay
+#' @param HR_SHELF SHELF object encoding belief for length of delay
+#' @param control_param_dist Distribution for the prior for the control group
+#' @param delay_param_dist Distribution for the prior for length of delay
+#' @param HR_param_dist Distribution for the prior for the control group
+#' @param parameter_mode Either "Parameter" or "Landmark"
+#' @param t_1 Landmark time (required if `parameter_mode` is "Landmark")
+#' @param n_chains Number of different chains to run for MCMC
+#' @param n_samples Length of MCMC samples
+#'
+#' @return A dataframe with three columns (four if `control_distribution` is "Weibull"):
+#' \describe{
+#'   \item{lambda_c}{Posterior samples for lambda_c}
+#'   \item{delay_time}{Posterior samples for lambda_c}
+#' }
+#' Class: \code{data.frame}
+#'
+#' @examples
+#'
+#' @export
+
+
+update_priors <- function(WRITE) {
+
+
+}
+
 
