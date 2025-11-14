@@ -647,15 +647,22 @@ calc_dte_assurance_interim <- function(n_c, n_t,
 #'
 #' @param data A dataframe containing survival data with columns: \code{survival_time}, \code{status}, and \code{group}
 #' @param control_distribution Distribution of the control group, either "Exponential" (default) or "Weibull"
-#' @param control_SHELF SHELF object encoding belief for control group
+#' @param control_model A named list specifying the control group
+#'   \itemize{
+#'     \item \code{lambda_c_SHELF}
+#'     \item \code{lambda_c_dist}
+#'     \item \code{gamma_c_SHELF}
+#'     \item \code{gamma_c_dist}
+#'     \item \code{s1_SHELF}
+#'     \item \code{s1_dist}
+#'     \item \code{parameter_mode}
+#'     \item \code{t_1}
+#'     }
 #' @param delay_SHELF SHELF object encoding belief for length of delay
 #' @param HR_SHELF SHELF object encoding belief for length of delay
 #' @param control_param_dist Distribution for the prior for the control group
 #' @param delay_param_dist Distribution for the prior for length of delay
 #' @param HR_param_dist Distribution for the prior for the control group
-#' @param parameter_mode Either "Parameter" or "Landmark"
-#' @param t_1 Landmark time (required if `parameter_mode` is "Landmark")
-#' @param n_chains Number of different chains to run for MCMC
 #' @param n_samples Length of MCMC samples
 #'
 #' @return A dataframe with three columns (four if `control_distribution` is "Weibull"):
@@ -669,9 +676,165 @@ calc_dte_assurance_interim <- function(n_c, n_t,
 #'
 #' @export
 
+update_priors <- function(data,
+                          control_distribution = "Exponential",
+                          control_model,
+                          delay_SHELF,
+                          HR_SHELF,
+                          delay_param_dist,
+                          HR_param_dist,
+                          n_samples = 1000) {
 
-update_priors <- function(WRITE) {
+  if (control_distribution == "Exponential"){
 
+    if (control_model$parameter_mode == "Parameter"){
+
+      control_jags <- make_prior_name_jags(control_model$lambda_c_SHELF, control_model$lambda_c_dist)
+
+      control_jags <- paste0("lambda_c ~ ", control_jags)
+    }
+
+    if (control_model$parameter_mode == "Landmark"){
+
+      control_jags <- make_prior_name_jags(control_model$s1_SHELF, control_model$s1_dist)
+
+      control_jags <- paste0("s1 ~ ", control_jags,
+                              "lambda_c <- -log(s1)/t_1")
+    }
+  }
+
+  if (control_distribution == "Weibull"){
+
+    if (control_model$parameter_mode == "Parameter"){
+
+      control_jags_lambda_c <- make_prior_name_jags(control_model$lambda_c_SHELF, control_model$lambda_c_dist)
+
+      control_jags_gamma_c <- make_prior_name_jags(control_model$gamma_c_SHELF, control_model$gamma_c_dist)
+
+      control_jags <- paste0("lambda_c ~ ", control_jags_lambda_c,
+                             "gamma_c ~ ", control_jags_gamma_c)
+
+    }
+
+    if (control_model$parameter_mode == "Landmark"){
+
+      #Come back to this!
+
+    }
+
+
+  }
+
+
+  delay_jags <- make_prior_name_jags(delay_SHELF, delay_param_dist)
+  HR_jags <- make_prior_name_jags(HR_SHELF, HR_param_dist)
+
+
+  if (control_distribution == "Exponential"){
+
+    modelstring <- paste0("
+
+data {
+  for (j in 1:m){
+    zeros[j] <- 0
+  }
+}
+
+model {
+  C <- 10000
+  for (i in 1:n){
+    zeros[i] ~ dpois(zeros.mean[i])
+    zeros.mean[i] <-  -l[i] + C
+    l[i] <- ifelse(df_event[i]==1, log(lambda_c)-(lambda_c*df_time[i]), -(lambda_c*df_time[i]))
+  }
+  for (i in (n+1):m){
+    zeros[i] ~ dpois(zeros.mean[i])
+    zeros.mean[i] <-  -l[i] + C
+    l[i] <- ifelse(df_event[i]==1, ifelse(df_time[i]<delay_time, log(lambda_c)-(lambda_c*df_time[i]), log(lambda_t)-lambda_t*(df_time[i]-delay_time)-(delay_time*lambda_c)),
+      ifelse(df_time[i]<delay_time, -(lambda_c*df_time[i]), -(lambda_c*delay_time)-lambda_t*(df_time[i]-delay_time)))
+  }
+
+
+    HR ~ ", HR_jags, "
+    delay_time ~ ", delay_jags,
+  control_jags, "
+    lambda_t <- lambda_c*HR
+
+    }
+"
+    )
+
+  }
+
+
+  if (control_distribution == "Weibull"){
+
+    modelstring <- paste0("
+
+data {
+  for (j in 1:m){
+    zeros[j] <- 0
+  }
+}
+
+model {
+  C <- 10000
+  for (i in 1:n){
+    zeros[i] ~ dpois(zeros.mean[i])
+    zeros.mean[i] <-  -l[i] + C
+    l[i] <- ifelse(df_event[i]==1, log(gamma_c)+gamma_c*log(lambda_c*df_time[i])-(lambda_c*df_time[i])^gamma_c-log(df_time[i]), -(lambda_c*df_time[i])^gamma_c)
+  }
+  for (i in (n+1):m){
+    zeros[i] ~ dpois(zeros.mean[i])
+    zeros.mean[i] <-  -l[i] + C
+    l[i] <- ifelse(df_event[i]==1, ifelse(df_time[i]<delay_time, log(gamma_c)+gamma_c*log(lambda_c*df_time[i])-(lambda_c*df_time[i])^gamma_c-log(df_time[i]), log(gamma_c)+gamma_c*log(lambda_t)+(gamma_c-1)*log(df_time[i])-lambda_t^gamma_c*(df_time[i]^gamma_c-delay_time^gamma_c)-(delay_time*lambda_c)^gamma_c),
+      ifelse(df_time[i]<delay_time, -(lambda_c*df_time[i])^gamma_c, -(lambda_c*delay_time)^gamma_c-lambda_t^gamma_c*(df_time[i]^gamma_c-delay_time^gamma_c)))
+  }
+
+    HR ~ ", HR_jags, "
+    delay_time ~ ", delay_jags,
+    control_jags, "
+    lambda_t <- lambda_c*pow(HR, 1/gamma_c)
+
+    }
+"
+)
+
+
+
+  }
+
+
+df <- df[order(df$group),]
+n_control <- sum(df$group=="Control")
+n_total <- nrow(df)
+
+data_list <- list(df_time = df$survival_time,
+                  df_event = df$status,
+                  n = n_control,
+                  m = n_total)
+
+if (control_model$parameter_mode == "Landmark"){
+  data_list$t_1 <- t_1
+}
+
+model = jags.model(textConnection(modelstring), data = data_list, quiet = T)
+
+
+update(model, n.iter=100)
+
+var_names <- if (control_distribution == "Exponential") {
+  c("lambda_c", "HR", "delay_time")
+} else {
+  c("lambda_c", "gamma_c", "HR", "delay_time")
+}
+
+output=coda.samples(model=model, variable.names=var_names, n.iter = n_samples)
+
+
+posterior_df <- as.data.frame(as.matrix(output))
+
+return(posterior_df)
 
 }
 

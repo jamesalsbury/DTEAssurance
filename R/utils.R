@@ -522,6 +522,45 @@ calc_BPP_hist <- function(n_c, n_t,
 } # end function
 
 
+make_prior_name_jags <- function(fit, dist) {
+  dist <- tolower(dist)
+
+  if (dist == "gamma") {
+    shape <- fit$Gamma$shape[1]
+    rate  <- fit$Gamma$rate[1]
+    return(sprintf("dgamma(%0.6f, %0.6f)", shape, rate))
+  }
+
+  if (dist == "beta") {
+    a <- fit$Beta$shape1[1]
+    b <- fit$Beta$shape2[1]
+    return(sprintf("dbeta(%0.6f, %0.6f)", a, b))
+  }
+
+  if (dist == "normal") {
+    mu <- fit$Normal$mean[1]
+    sd <- fit$Normal$sd[1]
+    tau <- 1/(sd*sd)
+    return(sprintf("dnorm(%0.6f, %0.6f)", mu, tau))
+  }
+
+  if (dist == "student.t") {
+    mu <- fit$Student.t$location[1]
+    scale <- fit$Student.t$scale[1]
+    df <- fit$Student.t$df[1]
+    tau <- 1/(scale*scale)
+    return(sprintf("dt(%0.6f, %0.6f, %0.6f)", mu, tau, df))
+  }
+
+  if (dist == "log.normal" || dist == "lognormal") {
+    mu <- fit$Log.normal$mean.log.X[1]
+    sd <- fit$Log.normal$sd.log.X[1]
+    tau <- 1/(sd*sd)
+    return(sprintf("dlnorm(%0.6f, %0.6f)", mu, tau))
+  }
+
+  stop("Distribution '", dist, "' cannot be represented in JAGS. Please use 'Gamma', 'Beta' 'Normal', 'Student.t' or 'Log.normal'")
+}
 
 
 
