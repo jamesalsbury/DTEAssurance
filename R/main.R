@@ -406,7 +406,7 @@ survival_test <- function(data, analysis_method = "LRT", alternative = "one.side
     }
   }
 
-  return(list(Signif = Signif, observed_HR = observed_HR))
+  return(list(Signif = Signif, observed_HR = observed_HR, Z = Z))
 
 }
 
@@ -643,39 +643,85 @@ calc_dte_assurance_interim <- function(n_c, n_t,
 }
 
 
-#' Update prior distributions with some interim data
+#' Update prior distributions using interim survival data
 #'
-#' @param data A dataframe containing survival data with columns: \code{survival_time}, \code{status}, and \code{group}
-#' @param control_distribution Distribution of the control group, either "Exponential" (default) or "Weibull"
-#' @param control_model A named list specifying the control group
+#' This function updates elicited priors (defined through SHELF objects and
+#' parametric prior distributions) using interim survival data under a
+#' delayed-effect, piecewise-exponential model for the treatment arm and an
+#' exponential or Weibull model for the control arm.
+#'
+#' @param data A data frame containing interim survival data with columns:
 #'   \itemize{
-#'     \item \code{lambda_c_SHELF}
-#'     \item \code{lambda_c_dist}
-#'     \item \code{gamma_c_SHELF}
-#'     \item \code{gamma_c_dist}
-#'     \item \code{s1_SHELF}
-#'     \item \code{s1_dist}
-#'     \item \code{parameter_mode}
-#'     \item \code{t_1}
-#'     }
-#' @param delay_SHELF SHELF object encoding belief for length of delay
-#' @param HR_SHELF SHELF object encoding belief for length of delay
-#' @param control_param_dist Distribution for the prior for the control group
-#' @param delay_param_dist Distribution for the prior for length of delay
-#' @param HR_param_dist Distribution for the prior for the control group
-#' @param n_samples Length of MCMC samples
+#'     \item \code{survival_time} Observed time from randomisation to event/censoring.
+#'     \item \code{status} Event indicator (1 = event, 0 = censored).
+#'     \item \code{group} Group identifier (e.g., "Control", "Treatment").
+#'   }
 #'
-#' @return A dataframe with three columns (four if `control_distribution` is "Weibull"):
-#' \describe{
-#'   \item{lambda_c}{Posterior samples for lambda_c}
-#'   \item{delay_time}{Posterior samples for lambda_c}
+#' @param control_distribution Distributional form assumed for the control arm:
+#'   either \code{"Exponential"} (default) or \code{"Weibull"}.
+#'
+#' @param control_model A named list specifying the elicited prior for the control arm.
+#'   Expected elements depend on the distribution:
+#'   \itemize{
+#'     \item \code{lambda_c_SHELF}, \code{lambda_c_dist} Prior for baseline hazard (Exponential).
+#'     \item \code{gamma_c_SHELF}, \code{gamma_c_dist} Prior for Weibull shape (if applicable).
+#'     \item \code{s1_SHELF}, \code{s1_dist} Prior for survival at time \code{t_1}.
+#'     \item \code{parameter_mode} Character string indicating which parameterisation
+#'           is used when eliciting Weibull priors.
+#'     \item \code{t_1} Time point at which survival probability was elicited.
+#'   }
+#'
+#' @param delay_SHELF A SHELF elicitation object encoding prior belief about the
+#'   length of the delay period \eqn{\tau} in the treatment arm.
+#'
+#' @param HR_SHELF A SHELF elicitation object encoding prior belief about the
+#'   post-delay hazard ratio.
+#'
+#' @param delay_param_dist Parametric form chosen to represent the prior for the delay time.
+#'
+#' @param HR_param_dist Parametric form chosen to represent the prior for the post-delay HR.
+#'
+#' @param n_samples Number of posterior samples to generate (default: 1000).
+#'
+#' @return A data frame containing Monte Carlo samples from the updated (posterior)
+#'   distribution of the model parameters. Columns normally include:
+#'   \itemize{
+#'     \item \code{lambda_c} Posterior samples for the control hazard parameter.
+#'     \item \code{delay_time} Posterior samples for the delay/changepoint time \eqn{\tau}.
+#'     \item \code{HR} Posterior samples for the post-delay hazard ratio.
+#'     \item \code{gamma_c} (only if \code{control_distribution = "Weibull"})
+#'           Posterior samples for the Weibull shape parameter.
+#'   }
+#'
+#' @details
+#' The function performs Bayesian updating under a delayed-effect model:
+#' \deqn{
+#' h_T(t) =
+#' \begin{cases}
+#'   \lambda_c, & t \le \tau \\
+#'   \lambda_c \times HR, & t > \tau
+#' \end{cases}
 #' }
-#' Class: \code{data.frame}
 #'
-#' @examples
+#' Priors for \code{lambda_c}, \code{tau}, and \code{HR} are constructed from
+#' elicited distributions using the SHELF framework, then updated through
+#' sampling-based posterior inference.
 #'
 #' @export
-
+#'
+#' @examples
+#' \dontrun{
+#' posterior_df <- update_priors(
+#'   data = interim_data,
+#'   control_distribution = "Exponential",
+#'   control_model = control_prior_list,
+#'   delay_SHELF = delay_shelf_obj,
+#'   HR_SHELF = hr_shelf_obj,
+#'   delay_param_dist = "lognormal",
+#'   HR_param_dist = "lognormal",
+#'   n_samples = 2000
+#' )
+#' }
 update_priors <- function(data,
                           control_distribution = "Exponential",
                           control_model,
@@ -684,6 +730,7 @@ update_priors <- function(data,
                           delay_param_dist,
                           HR_param_dist,
                           n_samples = 1000) {
+
 
   if (control_distribution == "Exponential"){
 
@@ -815,7 +862,7 @@ data_list <- list(df_time = df$survival_time,
                   m = n_total)
 
 if (control_model$parameter_mode == "Landmark"){
-  data_list$t_1 <- t_1
+  data_list$t_1 <- control_model$t_1
 }
 
 model = jags.model(textConnection(modelstring), data = data_list, quiet = T)
@@ -837,5 +884,204 @@ posterior_df <- as.data.frame(as.matrix(output))
 return(posterior_df)
 
 }
+
+#' Calculate Bayesian Predictive Probability given interim data and posterior samples
+#'
+#' @param df A data frame containing interim survival data, censored at \code{df_cens_time}, with columns:
+#'   \itemize{
+#'     \item \code{time} Final observed/event time at the interim (on the analysis time scale).
+#'     \item \code{group} Treatment group indicator (e.g. "Control", "Treatment").
+#'     \item \code{rec_time} Recruitment (calendar) time.
+#'     \item \code{pseudo_time} \code{time + rec_time} (calendar time at event/censoring).
+#'     \item \code{status} Event indicator at the interim (1 = event, 0 = censored).
+#'     \item \code{survival_time} Observed follow-up time from randomisation to event/censoring at the interim.
+#'   }
+#' @param posterior_df A data frame of posterior samples with columns:
+#'   \code{lambda_c}, \code{delay_time} and \code{HR}, corresponding to the control hazard,
+#'   the delay (changepoint) time and the post-delay hazard ratio, respectively.
+#' @param n_c_planned Planned maximum number of patients in the control group.
+#' @param n_t_planned Planned maximum number of patients in the treatment group.
+#' @param rec_time_planned Planned maximum recruitment calendar time for the full trial.
+#' @param df_cens_time Calendar time at which \code{df} has been censored (interim analysis time).
+#' @param censoring_model A named list specifying the censoring mechanism for the future data:
+#'   \itemize{
+#'     \item \code{method}: one of \code{"Time"}, \code{"Events"}, or \code{"IF"}.
+#'     \item \code{time}, \code{events}, \code{IF}: parameters for the corresponding method.
+#'   }
+#' @param analysis_model A named list specifying the final analysis and decision rule:
+#'   \itemize{
+#'     \item \code{method}: e.g. \code{"LRT"}, \code{"WLRT"}, or \code{"MW"}.
+#'     \item \code{alpha}: one-sided type I error level.
+#'     \item \code{alternative_hypothesis}: direction of the alternative (e.g. \code{"one.sided"}).
+#'     \item \code{rho}, \code{gamma}, \code{t_star}, \code{s_star}: additional parameters for WLRT or MW (if applicable).
+#'   }
+#' @param n_sims Number of predictive simulations to run (default is 1000).
+#'
+#' @return A single numeric value giving the Bayesian predictive probability of success at the final analysis under the specified design, censoring model and analysis model.
+#'
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#'   BPP_func(df, posterior_df, n_c_planned = 500, n_t_planned = 500,
+#'            rec_time_planned = 34, df_cens_time = 20,
+#'            censoring_model = list(method = "Events", events = 1200),
+#'            analysis_model = list(method = "LRT",
+#'                                  alpha = 0.025,
+#'                                  alternative_hypothesis = "one.sided"))
+#' }
+BPP_func <- function(df, posterior_df, n_c_planned, n_t_planned,
+                     rec_time_planned, df_cens_time,
+                     censoring_model, analysis_model,
+                     n_sims = 500) {
+
+
+  #The number of unenrolled patients in each group
+  n_unenrolled_control <- (n_c_planned) - sum(df$group=="Control")
+  n_unenrolled_treatment <- (n_t_planned) - sum(df$group=="Treatment")
+
+  #Extract realisations from the MCMC
+  lambda_c_samples <- posterior_df$lambda_c
+  delay_time_samples <- posterior_df$delay_time
+  post_delay_HR_samples <- posterior_df$HR
+
+  BPP_df <- data.frame(success = numeric(n_sims),
+                       Z_val = numeric(n_sims))
+
+  for (j in 1:n_sims){
+
+    #Sampling the recruitment times for the unenrolled patients
+    unenrolled_rec_times <- runif(n_unenrolled_control+n_unenrolled_treatment, cens_time, rec_time_planned)
+
+    idx <- sample(seq_len(nrow(posterior_df)), 1)
+    sampled_lambda_c      <- lambda_c_samples[idx]
+    sampled_delay_time    <- delay_time_samples[idx]
+    sampled_post_delay_HR <- post_delay_HR_samples[idx]
+    sampled_lambda_t <- sampled_lambda_c*sampled_post_delay_HR
+
+
+    #For the unenrolled data, we can sample the remaining data according to the updated (sampled) parameters
+    #First we do the control group
+    unenrolled_control_times <- rexp(n_unenrolled_control, sampled_lambda_c)
+
+    #Now we do the treatment group
+    CP <- exp(-(sampled_lambda_c*sampled_delay_time))
+    u <- runif(n_unenrolled_treatment)
+    unenrolled_treatment_times <- ifelse(u > CP,
+                                         (-log(u))/sampled_lambda_c,
+                                         (1/sampled_lambda_t)*(sampled_delay_time*sampled_lambda_t-log(u)-sampled_delay_time*sampled_lambda_c))
+
+    #Now combine them together
+    unenrolled_df <- data.frame(time = c(unenrolled_control_times, unenrolled_treatment_times),
+                                group = c(rep("Control", n_unenrolled_control), rep("Treatment", n_unenrolled_treatment)),
+                                rec_time = unenrolled_rec_times)
+
+    unenrolled_df$pseudo_time <- unenrolled_df$time + unenrolled_df$rec_time
+
+
+
+    #Extracting the observations that were censored at the IA
+    censored_df <- df[df$status==0,]
+
+    #Number of censored observations in each group
+    n_censored_control <- sum(censored_df$group=="Control")
+    n_censored_treatment <- sum(censored_df$group=="Treatment")
+
+    #Extracting the censored observations in the control group
+    control_censored_df <- censored_df %>%
+      filter(group=="Control")
+
+    #Adding a exp(lambda_c) value to the censored value
+    control_censored_df$final_time <- control_censored_df$survival_time + rexp(n_censored_control, rate = sampled_lambda_c)
+
+    #Calculating the pseudo time
+    control_censored_df$final_pseudo_time <- control_censored_df$rec_time + control_censored_df$final_time
+
+    # Subset: treatment patients censored before the delay
+    censored_treatment_before_delay <- censored_df %>%
+      filter(group == "Treatment") %>%
+      filter(survival_time <= sampled_delay_time)
+
+    n_before <- nrow(censored_treatment_before_delay)
+
+    # Conditional uniform U ~ Unif(0,1)
+    u <- runif(n_before)
+
+    # Correct conditional probability that event occurs before sampled_delay_time
+    p_before <- 1 - exp(-sampled_lambda_c * (sampled_delay_time - censored_treatment_before_delay$survival_time))
+
+    # Early event time (conditional truncated exponential)
+    t_event_before <- censored_treatment_before_delay$survival_time + (-log(1 - u * p_before)) / sampled_lambda_c
+
+    # Late event time (conditional on surviving to sampled_delay_time)
+    t_event_after <- sampled_delay_time + (-log(u) - sampled_lambda_c * (sampled_delay_time - censored_treatment_before_delay$survival_time)) / sampled_lambda_t
+
+    # Branch: before vs after sampled_delay_time
+    censored_treatment_before_delay_times <-
+      ifelse(u <= p_before,
+             t_event_before - censored_treatment_before_delay$survival_time,      # residual time
+             t_event_after - censored_treatment_before_delay$survival_time)        # residual time
+
+    # Store final times
+    censored_treatment_before_delay$final_time <- censored_treatment_before_delay$survival_time + censored_treatment_before_delay_times
+
+    censored_treatment_before_delay$final_pseudo_time <- censored_treatment_before_delay$rec_time + censored_treatment_before_delay$final_time
+
+
+    #Extracting the observations in the treatment group which will not be influenced by the delay (their observation time is bigger than the sampled delay time)
+    censored_treatment_after_delay <- censored_df %>%
+      filter(group=="Treatment") %>%
+      filter(survival_time > sampled_delay_time)
+
+    #For the observations not influenced by the delay, we sample a Exp(sampled_lambda_c) time and add it to the current survival time
+    censored_treatment_after_delay$final_time <- censored_treatment_after_delay$survival_time + rexp(nrow(censored_treatment_after_delay), rate = sampled_lambda_t)
+
+    censored_treatment_after_delay$final_pseudo_time <- censored_treatment_after_delay$rec_time + censored_treatment_after_delay$final_time
+
+
+    non_censored_df <- df %>%
+      filter(status == 1)
+
+    final_non_censored_df <- non_censored_df[,1:4]
+    final_unenrolled_df <- unenrolled_df
+    final_control_censored_df <- control_censored_df[c("final_time", "group", "rec_time", "final_pseudo_time")]
+    final_censored_treatment_before_delay <- censored_treatment_before_delay[c("final_time", "group", "rec_time", "final_pseudo_time")]
+    final_censored_treatment_after_delay <- censored_treatment_after_delay[c("final_time", "group", "rec_time", "final_pseudo_time")]
+
+    colnames(final_control_censored_df) <- c("time", "group", "rec_time", "pseudo_time")
+    colnames(final_censored_treatment_before_delay) <- c("time", "group", "rec_time", "pseudo_time")
+    colnames(final_censored_treatment_after_delay) <- c("time", "group", "rec_time", "pseudo_time")
+
+
+    final_df <- rbind(final_non_censored_df, final_unenrolled_df, final_control_censored_df, final_censored_treatment_before_delay, final_censored_treatment_after_delay)
+
+    # --- Apply censoring ---
+    if (censoring_model$method == "Time") {
+      censored <- cens_data(final_df, cens_method = "Time", cens_time = censoring_model$time)
+    } else if (censoring_model$method == "Events") {
+      censored <- cens_data(final_df, cens_method = "Events", cens_events = censoring_model$events)
+    } else if (censoring_model$method == "IF") {
+      censored <- cens_data(final_df, cens_method = "IF", cens_IF = censoring_model$IF)
+    }
+
+    # --- Run statistical test ---
+    test_result <- survival_test(censored$data,
+                                 analysis_method = analysis_model$method,
+                                 alpha = analysis_model$alpha,
+                                 alternative = analysis_model$alternative_hypothesis,
+                                 rho = analysis_model$rho,
+                                 gamma = analysis_model$gamma,
+                                 t_star = analysis_model$t_star,
+                                 s_star = analysis_model$s_star)
+
+
+    BPP_df[j,] <- c(test_result$Signif, test_result$Z)
+
+  }
+
+  return(list(BPP_df = BPP_df))
+
+}
+
 
 
