@@ -82,7 +82,8 @@ df <- data.frame(
 )
 result <- survival_test(df, analysis_method = "LRT", alpha = 0.05)
 str(result)
-#> List of 2
+#> List of 3
 #>  $ Signif     : logi FALSE
 #>  $ observed_HR: num 0.646
+#>  $ Z          : num 1.21
 ```

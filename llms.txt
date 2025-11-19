@@ -206,6 +206,9 @@ result <- calc_dte_assurance_interim(n_c = 300, n_t = 300,
 
 ## All functions
 
+- [`BPP_func()`](https://jamesalsbury.github.io/DTEAssurance/reference/BPP_func.md)
+  : Calculate Bayesian Predictive Probability given interim data and
+  posterior samples
 - [`INTEREST`](https://jamesalsbury.github.io/DTEAssurance/reference/INTEREST.md)
   : INTEREST data set
 - [`MCMC_sample`](https://jamesalsbury.github.io/DTEAssurance/reference/MCMC_sample.md)
@@ -234,4 +237,6 @@ result <- calc_dte_assurance_interim(n_c = 300, n_t = 300,
   or Weibull distributions.
 - [`survival_test()`](https://jamesalsbury.github.io/DTEAssurance/reference/survival_test.md)
   : Calculate statistical significance on a survival dataset
+- [`update_priors()`](https://jamesalsbury.github.io/DTEAssurance/reference/update_priors.md)
+  : Update prior distributions using interim survival data
 
