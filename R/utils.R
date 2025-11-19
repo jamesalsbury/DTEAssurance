@@ -563,6 +563,63 @@ make_prior_name_jags <- function(fit, dist) {
 }
 
 
+make_prior_name_stan <- function(fit, dist) {
+  dist <- tolower(dist)
+
+  # Return list with:
+  # $prior     -> valid Stan prior statement
+  # $constraint -> optional <lower=...,upper=...> for parameter block
+
+  if (dist == "gamma") {
+    shape <- fit$Gamma$shape[1]
+    rate  <- fit$Gamma$rate[1]
+    return(list(
+      prior      = sprintf("gamma(%0.6f, %0.6f)", shape, rate),
+      constraint = "<lower=0>"
+    ))
+  }
+
+  if (dist == "beta") {
+    a <- fit$Beta$shape1[1]
+    b <- fit$Beta$shape2[1]
+    return(list(
+      prior      = sprintf("beta(%0.6f, %0.6f)", a, b),
+      constraint = "<lower=0, upper=1>"
+    ))
+  }
+
+  if (dist == "normal") {
+    mu <- fit$Normal$mean[1]
+    sd <- fit$Normal$sd[1]
+    return(list(
+      prior      = sprintf("normal(%0.6f, %0.6f)", mu, sd),
+      constraint = ""
+    ))
+  }
+
+  if (dist == "student.t") {
+    mu    <- fit$Student.t$location[1]
+    scale <- fit$Student.t$scale[1]
+    df    <- fit$Student.t$df[1]
+    return(list(
+      prior      = sprintf("student_t(%0.6f, %0.6f, %0.6f)", df, mu, scale),
+      constraint = ""
+    ))
+  }
+
+  if (dist == "log.normal" || dist == "lognormal") {
+    mu <- fit$Log.normal$mean.log.X[1]
+    sd <- fit$Log.normal$sd.log.X[1]
+    return(list(
+      prior      = sprintf("lognormal(%0.6f, %0.6f)", mu, sd),
+      constraint = "<lower=0>"
+    ))
+  }
+
+  stop("Distribution '", dist, "' cannot be represented in Stan.")
+}
+
+
 
 #' Pipe operator
 #'
