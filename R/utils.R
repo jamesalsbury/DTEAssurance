@@ -575,7 +575,7 @@ make_prior_name_stan <- function(fit, dist) {
     rate  <- fit$Gamma$rate[1]
     return(list(
       prior      = sprintf("gamma(%0.6f, %0.6f)", shape, rate),
-      constraint = "<lower=0>"
+      constraint = "<lower=1e-6>"
     ))
   }
 
@@ -584,7 +584,7 @@ make_prior_name_stan <- function(fit, dist) {
     b <- fit$Beta$shape2[1]
     return(list(
       prior      = sprintf("beta(%0.6f, %0.6f)", a, b),
-      constraint = "<lower=0, upper=1>"
+      constraint = "<lower=1e-6, upper=1>"
     ))
   }
 
@@ -612,7 +612,7 @@ make_prior_name_stan <- function(fit, dist) {
     sd <- fit$Log.normal$sd.log.X[1]
     return(list(
       prior      = sprintf("lognormal(%0.6f, %0.6f)", mu, sd),
-      constraint = "<lower=0>"
+      constraint = "<lower=1e-6>"
     ))
   }
 

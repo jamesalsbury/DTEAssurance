@@ -661,7 +661,6 @@ calc_dte_assurance_interim <- function(n_c, n_t,
 #'   either \code{"Exponential"} (default) or \code{"Weibull"}.
 #'
 #' @param control_model A named list specifying the elicited prior for the control arm.
-#'   Expected elements depend on the distribution:
 #'   \itemize{
 #'     \item \code{lambda_c_SHELF}, \code{lambda_c_dist} Prior for baseline hazard (Exponential).
 #'     \item \code{gamma_c_SHELF}, \code{gamma_c_dist} Prior for Weibull shape (if applicable).
@@ -673,15 +672,13 @@ calc_dte_assurance_interim <- function(n_c, n_t,
 #'     \item \code{t_2} Second time point at which survival probability was elicited.
 #'   }
 #'
-#' @param delay_SHELF A SHELF elicitation object encoding prior belief about the
-#'   length of the delay period, \eqn{T}, in the treatment arm.
-#'
-#' @param HR_SHELF A SHELF elicitation object encoding prior belief about the
-#'   post-delay hazard ratio.
-#'
-#' @param delay_param_dist Parametric form chosen to represent the prior for the delay time.
-#'
-#' @param HR_param_dist Parametric form chosen to represent the prior for the post-delay HR.
+#'  @param effect_model A named list specifying beliefs about the treatment effect:
+#'   \itemize{
+#'     \item \code{delay_SHELF}, \code{HR_SHELF}: SHELF objects encoding beliefs
+#'     \item \code{delay_dist}, \code{HR_dist}: Distribution types ("hist" by default)
+#'     \item \code{P_S}: Probability that survival curves separate
+#'     \item \code{P_DTE}: Probability of delayed separation, conditional on separation
+#'   }
 #'
 #' @param n_samples Number of posterior samples to generate (default: 1000).
 #'
@@ -724,13 +721,16 @@ calc_dte_assurance_interim <- function(n_c, n_t,
 #'   n_samples = 2000
 #' )
 #' }
+#'
+#'
+#'
+
+
+
 update_priors <- function(data,
                           control_distribution = "Exponential",
                           control_model,
-                          delay_SHELF,
-                          HR_SHELF,
-                          delay_param_dist,
-                          HR_param_dist,
+                          effect_model,
                           n_samples = 1000) {
 
 
@@ -783,8 +783,8 @@ update_priors <- function(data,
   }
 
 
-  delay_jags <- make_prior_name_jags(delay_SHELF, delay_param_dist)
-  HR_jags <- make_prior_name_jags(HR_SHELF, HR_param_dist)
+  delay_jags <- make_prior_name_jags(effect_model$delay_SHELF, effect_model$delay_dist)
+  HR_jags <- make_prior_name_jags(effect_model$HR_SHELF, effect_model$HR_dist)
 
 
   if (control_distribution == "Exponential"){
@@ -812,10 +812,17 @@ model {
   }
 
 
-    HR ~ ", HR_jags, "
-    delay_time ~ ", delay_jags,
-  control_jags, "
-    lambda_t <- lambda_c*HR
+
+  Z ~ dcat(pi[])
+
+  HR_slab    ~ ", HR_jags, "
+  delay_slab ~ ", delay_jags, "
+  HR <- equals(Z, 1) * 1
+        + (1 - equals(Z, 1)) * HR_slab
+
+  delay_time <- equals(Z, 3) * delay_slab
+  ", control_jags, "
+  lambda_t <- lambda_c * HR
 
     }
 "
@@ -848,10 +855,21 @@ model {
       ifelse(df_time[i]<delay_time, -(lambda_c*df_time[i])^gamma_c, -(lambda_c*delay_time)^gamma_c-lambda_t^gamma_c*(df_time[i]^gamma_c-delay_time^gamma_c)))
   }
 
-    HR ~ ", HR_jags, "
-    delay_time ~ ", delay_jags,
-    control_jags, "
-    lambda_t <- lambda_c*pow(HR, 1/gamma_c)
+
+
+
+
+  Z ~ dcat(pi[])
+
+  HR_slab    ~ ", HR_jags, "
+  delay_slab ~ ", delay_jags, "
+  HR <- equals(Z, 1) * 1
+        + (1 - equals(Z, 1)) * HR_slab
+
+  delay_time <- equals(Z, 3) * delay_slab
+
+  ", control_jags, "
+  lambda_t <- lambda_c*pow(HR, 1/gamma_c)
 
     }
 "
@@ -870,6 +888,17 @@ data_list <- list(df_time = df$survival_time,
                   df_event = df$status,
                   n = n_control,
                   m = n_total)
+
+P_S <- effect_model$P_S
+P_DTE <- effect_model$P_DTE
+
+pi_vec <- c(
+  1 - P_S,              # 1: no separation
+  P_S * (1 - P_DTE),    # 2: immediate separation
+  P_S * P_DTE           # 3: delayed separation
+)
+
+data_list$pi <- pi_vec
 
 
 
@@ -1308,7 +1337,6 @@ update_priors_exp_stan <- function(data,
                                    delay_param_dist,
                                    HR_param_dist,
                                    n_samples = 1000,
-                                   chains = 4,
                                    iter_warmup = 500) {
 
   #---------------------------------------------------------------
@@ -1418,12 +1446,16 @@ delay_prior$prior
   # 5. Sample
   #---------------------------------------------------------------
   fit <- mod$sample(
-    data = stan_data,
-    chains = chains,
-    iter_warmup = iter_warmup,
-    iter_sampling = n_samples,
-    refresh = 0
+    data          = stan_data,
+    chains        = 1,
+    iter_warmup   = 100,
+    iter_sampling = 1000,
+    adapt_delta   = 0.9,   # slightly more conservative
+    max_treedepth = 10,
+    refresh       = 0
   )
+
+
 
   # Return as data frame
   posterior <- as.data.frame(fit$draws())
