@@ -51,10 +51,7 @@ exponential or Weibull model for the control arm.</p>
 <span>  <span class="va">data</span>,</span>
 <span>  control_distribution <span class="op">=</span> <span class="st">"Exponential"</span>,</span>
 <span>  <span class="va">control_model</span>,</span>
-<span>  <span class="va">delay_SHELF</span>,</span>
-<span>  <span class="va">HR_SHELF</span>,</span>
-<span>  <span class="va">delay_param_dist</span>,</span>
-<span>  <span class="va">HR_param_dist</span>,</span>
+<span>  <span class="va">effect_model</span>,</span>
 <span>  n_samples <span class="op">=</span> <span class="fl">1000</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -76,32 +73,19 @@ either <code>"Exponential"</code> (default) or <code>"Weibull"</code>.</p></dd>
 
 
 <dt id="arg-control-model">control_model<a class="anchor" aria-label="anchor" href="#arg-control-model"></a></dt>
-<dd><p>A named list specifying the elicited prior for the control arm.
-Expected elements depend on the distribution:</p><ul><li><p><code>lambda_c_SHELF</code>, <code>lambda_c_dist</code> Prior for baseline hazard (Exponential).</p></li>
+<dd><p>A named list specifying the elicited prior for the control arm.</p><ul><li><p><code>lambda_c_SHELF</code>, <code>lambda_c_dist</code> Prior for baseline hazard (Exponential).</p></li>
 <li><p><code>gamma_c_SHELF</code>, <code>gamma_c_dist</code> Prior for Weibull shape (if applicable).</p></li>
 <li><p><code>s1_SHELF</code>, <code>s1_dist</code> Prior for survival at time <code>t_1</code>.</p></li>
+<li><p><code>delta_SHELF</code>, <code>delta_dist</code> Prior for difference in survival between <code>t_1</code> and <code>t_2</code>.</p></li>
 <li><p><code>parameter_mode</code> Character string indicating which parameterisation
 is used when eliciting Weibull priors.</p></li>
-<li><p><code>t_1</code> Time point at which survival probability was elicited.</p></li>
+<li><p><code>t_1</code> First time point at which survival probability was elicited.</p></li>
+<li><p><code>t_2</code> Second time point at which survival probability was elicited.</p></li>
+</ul><p>@param effect_model A named list specifying beliefs about the treatment effect:</p><ul><li><p><code>delay_SHELF</code>, <code>HR_SHELF</code>: SHELF objects encoding beliefs</p></li>
+<li><p><code>delay_dist</code>, <code>HR_dist</code>: Distribution types ("hist" by default)</p></li>
+<li><p><code>P_S</code>: Probability that survival curves separate</p></li>
+<li><p><code>P_DTE</code>: Probability of delayed separation, conditional on separation</p></li>
 </ul></dd>
-
-
-<dt id="arg-delay-shelf">delay_SHELF<a class="anchor" aria-label="anchor" href="#arg-delay-shelf"></a></dt>
-<dd><p>A SHELF elicitation object encoding prior belief about the
-length of the delay period \(\tau\) in the treatment arm.</p></dd>
-
-
-<dt id="arg-hr-shelf">HR_SHELF<a class="anchor" aria-label="anchor" href="#arg-hr-shelf"></a></dt>
-<dd><p>A SHELF elicitation object encoding prior belief about the
-post-delay hazard ratio.</p></dd>
-
-
-<dt id="arg-delay-param-dist">delay_param_dist<a class="anchor" aria-label="anchor" href="#arg-delay-param-dist"></a></dt>
-<dd><p>Parametric form chosen to represent the prior for the delay time.</p></dd>
-
-
-<dt id="arg-hr-param-dist">HR_param_dist<a class="anchor" aria-label="anchor" href="#arg-hr-param-dist"></a></dt>
-<dd><p>Parametric form chosen to represent the prior for the post-delay HR.</p></dd>
 
 
 <dt id="arg-n-samples">n_samples<a class="anchor" aria-label="anchor" href="#arg-n-samples"></a></dt>
@@ -112,7 +96,7 @@ post-delay hazard ratio.</p></dd>
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A data frame containing Monte Carlo samples from the updated (posterior)
 distribution of the model parameters. Columns normally include:</p><ul><li><p><code>lambda_c</code> Posterior samples for the control hazard parameter.</p></li>
-<li><p><code>delay_time</code> Posterior samples for the delay/changepoint time \(\tau\).</p></li>
+<li><p><code>delay_time</code> Posterior samples for the delay/changepoint time \(T\).</p></li>
 <li><p><code>HR</code> Posterior samples for the post-delay hazard ratio.</p></li>
 <li><p><code>gamma_c</code> (only if <code>control_distribution = "Weibull"</code>)
 Posterior samples for the Weibull shape parameter.</p></li>
@@ -123,11 +107,11 @@ Posterior samples for the Weibull shape parameter.</p></li>
 $$
 h_T(t) =
 \begin{cases}
-  \lambda_c, &amp; t \le \tau \\
-  \lambda_c \times HR, &amp; t &gt; \tau
+  \lambda_c, &amp; t \le T \\
+  \lambda_c \times HR, &amp; t &gt; T
 \end{cases}
 $$</p>
-<p>Priors for <code>lambda_c</code>, <code>tau</code>, and <code>HR</code> are constructed from
+<p>Priors for <code>lambda_c</code>, <code>T</code>, and <code>HR</code> are constructed from
 elicited distributions using the SHELF framework, then updated through
 sampling-based posterior inference.</p>
     </div>
@@ -146,6 +130,9 @@ sampling-based posterior inference.</p>
 <span class="r-in"><span>  n_samples <span class="op">=</span> <span class="fl">2000</span></span></span>
 <span class="r-in"><span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="op">}</span> <span class="co"># }</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span></span></span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

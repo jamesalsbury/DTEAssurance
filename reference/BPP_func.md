@@ -7,44 +7,31 @@ posterior samples
 
 ``` r
 BPP_func(
-  df,
+  data,
   posterior_df,
+  control_distribution = "Exponential",
   n_c_planned,
   n_t_planned,
   rec_time_planned,
   df_cens_time,
   censoring_model,
   analysis_model,
-  n_sims = 1000
+  n_sims = 500
 )
 ```
 
 ## Arguments
-
-- df:
-
-  A data frame containing interim survival data, censored at
-  `df_cens_time`, with columns:
-
-  - `time` Final observed/event time at the interim (on the analysis
-    time scale).
-
-  - `group` Treatment group indicator (e.g. "Control", "Treatment").
-
-  - `rec_time` Recruitment (calendar) time.
-
-  - `pseudo_time` `time + rec_time` (calendar time at event/censoring).
-
-  - `status` Event indicator at the interim (1 = event, 0 = censored).
-
-  - `survival_time` Observed follow-up time from randomisation to
-    event/censoring at the interim.
 
 - posterior_df:
 
   A data frame of posterior samples with columns: `lambda_c`,
   `delay_time` and `HR`, corresponding to the control hazard, the delay
   (changepoint) time and the post-delay hazard ratio, respectively.
+
+- control_distribution:
+
+  Distributional form assumed for the control arm: either
+  `"Exponential"` (default) or `"Weibull"`.
 
 - n_c_planned:
 
@@ -87,6 +74,25 @@ BPP_func(
 - n_sims:
 
   Number of predictive simulations to run (default is 1000).
+
+- df:
+
+  A data frame containing interim survival data, censored at
+  `df_cens_time`, with columns:
+
+  - `time` Final observed/event time at the interim (on the analysis
+    time scale).
+
+  - `group` Treatment group indicator (e.g. "Control", "Treatment").
+
+  - `rec_time` Recruitment (calendar) time.
+
+  - `pseudo_time` `time + rec_time` (calendar time at event/censoring).
+
+  - `status` Event indicator at the interim (1 = event, 0 = censored).
+
+  - `survival_time` Observed follow-up time from randomisation to
+    event/censoring at the interim.
 
 ## Value
 

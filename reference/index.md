@@ -24,6 +24,11 @@
 - [`calc_dte_assurance_interim()`](https://jamesalsbury.github.io/DTEAssurance/reference/calc_dte_assurance_interim.md)
   : Calculates operating characteristics for a Group Sequential Trial
   with a Delayed Treatment Effect
+- [`calibrate_BPP_thresholds()`](https://jamesalsbury.github.io/DTEAssurance/reference/calibrate_BPP_thresholds.md)
+  : Function to calculate the 'optimal' BPP threshold value
+- [`calibrate_BPP_timing()`](https://jamesalsbury.github.io/DTEAssurance/reference/calibrate_BPP_timing.md)
+  : Function to calculate the 'optimal' information fraction to
+  calculate BPP
 - [`cens_data()`](https://jamesalsbury.github.io/DTEAssurance/reference/cens_data.md)
   : Censor a survival dataset
 - [`sim_dte()`](https://jamesalsbury.github.io/DTEAssurance/reference/sim_dte.md)

@@ -58,7 +58,7 @@ A list containing:
 
 - sample_size:
 
-  Number of subjects remaining after censoring
+  Number of patients remaining after censoring
 
 ## Examples
 

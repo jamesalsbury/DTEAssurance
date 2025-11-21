@@ -12,10 +12,7 @@ update_priors(
   data,
   control_distribution = "Exponential",
   control_model,
-  delay_SHELF,
-  HR_SHELF,
-  delay_param_dist,
-  HR_param_dist,
+  effect_model,
   n_samples = 1000
 )
 ```
@@ -40,7 +37,6 @@ update_priors(
 - control_model:
 
   A named list specifying the elicited prior for the control arm.
-  Expected elements depend on the distribution:
 
   - `lambda_c_SHELF`, `lambda_c_dist` Prior for baseline hazard
     (Exponential).
@@ -50,28 +46,27 @@ update_priors(
 
   - `s1_SHELF`, `s1_dist` Prior for survival at time `t_1`.
 
+  - `delta_SHELF`, `delta_dist` Prior for difference in survival between
+    `t_1` and `t_2`.
+
   - `parameter_mode` Character string indicating which parameterisation
     is used when eliciting Weibull priors.
 
-  - `t_1` Time point at which survival probability was elicited.
+  - `t_1` First time point at which survival probability was elicited.
 
-- delay_SHELF:
+  - `t_2` Second time point at which survival probability was elicited.
 
-  A SHELF elicitation object encoding prior belief about the length of
-  the delay period \\\tau\\ in the treatment arm.
+  @param effect_model A named list specifying beliefs about the
+  treatment effect:
 
-- HR_SHELF:
+  - `delay_SHELF`, `HR_SHELF`: SHELF objects encoding beliefs
 
-  A SHELF elicitation object encoding prior belief about the post-delay
-  hazard ratio.
+  - `delay_dist`, `HR_dist`: Distribution types ("hist" by default)
 
-- delay_param_dist:
+  - `P_S`: Probability that survival curves separate
 
-  Parametric form chosen to represent the prior for the delay time.
-
-- HR_param_dist:
-
-  Parametric form chosen to represent the prior for the post-delay HR.
+  - `P_DTE`: Probability of delayed separation, conditional on
+    separation
 
 - n_samples:
 
@@ -84,8 +79,7 @@ distribution of the model parameters. Columns normally include:
 
 - `lambda_c` Posterior samples for the control hazard parameter.
 
-- `delay_time` Posterior samples for the delay/changepoint time
-  \\\tau\\.
+- `delay_time` Posterior samples for the delay/changepoint time \\T\\.
 
 - `HR` Posterior samples for the post-delay hazard ratio.
 
@@ -95,10 +89,10 @@ distribution of the model parameters. Columns normally include:
 ## Details
 
 The function performs Bayesian updating under a delayed-effect model:
-\$\$ h_T(t) = \begin{cases} \lambda_c, & t \le \tau \\ \lambda_c \times
-HR, & t \> \tau \end{cases} \$\$
+\$\$ h_T(t) = \begin{cases} \lambda_c, & t \le T \\ \lambda_c \times HR,
+& t \> T \end{cases} \$\$
 
-Priors for `lambda_c`, `tau`, and `HR` are constructed from elicited
+Priors for `lambda_c`, `T`, and `HR` are constructed from elicited
 distributions using the SHELF framework, then updated through
 sampling-based posterior inference.
 
@@ -117,4 +111,6 @@ posterior_df <- update_priors(
   n_samples = 2000
 )
 } # }
+
+
 ```

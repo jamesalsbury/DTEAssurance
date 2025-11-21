@@ -1,6 +1,6 @@
 # Add recruitment time to a survival dataset
 
-Simulates recruitment timing for each subject in a survival dataset
+Simulates recruitment timing for each patient in a survival dataset
 using either a power model or a piecewise constant (PWC) model. The
 function appends recruitment times and pseudo survival times (time from
 recruitment to event or censoring).
@@ -53,7 +53,7 @@ A dataframe with two additional columns:
 
 - rec_time:
 
-  Simulated recruitment time for each subject
+  Simulated recruitment time for each patient
 
 - pseudo_time:
 
