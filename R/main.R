@@ -75,7 +75,7 @@ sim_dte <- function(n_c, n_t, lambda_c, delay_time, post_delay_HR, dist = "Expon
 #'   \item{data}{Censored dataframe with updated \code{status} and filtered rows}
 #'   \item{cens_events}{Number of events used for censoring (if applicable)}
 #'   \item{cens_time}{Time point used for censoring}
-#'   \item{sample_size}{Number of subjects remaining after censoring}
+#'   \item{sample_size}{Number of patients remaining after censoring}
 #' }
 #'
 #'
@@ -96,6 +96,7 @@ cens_data <- function(data,
                       cens_time = NULL,
                       cens_IF = NULL,
                       cens_events = NULL) {
+
 
   # Validate censoring method
   valid_methods <- c("Time", "Events", "IF")
@@ -412,7 +413,7 @@ survival_test <- function(data, analysis_method = "LRT", alternative = "one.side
 
 #' Add recruitment time to a survival dataset
 #'
-#' Simulates recruitment timing for each subject in a survival dataset using either a power model or a piecewise constant (PWC) model. The function appends recruitment times and pseudo survival times (time from recruitment to event or censoring).
+#' Simulates recruitment timing for each patient in a survival dataset using either a power model or a piecewise constant (PWC) model. The function appends recruitment times and pseudo survival times (time from recruitment to event or censoring).
 #'
 #' @param data A dataframe containing survival data with columns: \code{time}, \code{status}, and \code{group}
 #' @param rec_method Recruitment method: \code{"power"} for power model or \code{"PWC"} for piecewise constant model
@@ -423,7 +424,7 @@ survival_test <- function(data, analysis_method = "LRT", alternative = "one.side
 #'
 #' @return A dataframe with two additional columns:
 #' \describe{
-#'   \item{rec_time}{Simulated recruitment time for each subject}
+#'   \item{rec_time}{Simulated recruitment time for each patient}
 #'   \item{pseudo_time}{Time from recruitment to event or censoring}
 #' }
 #' Class: \code{data.frame}
@@ -541,8 +542,11 @@ add_recruitment_time <- function(data, rec_method,
 #'   \itemize{
 #'     \item \code{events}: Total number of events
 #'     \item \code{alpha_spending}: Cumulative alpha spending vector
+#'     \item \code{alpha_IF}: Information Fraction at which we look for efficacy
+#'     \item \code{futility_type}: \code{beta} (for beta-spending), \code{BPP} (for Bayesian Predictive Probability) or \code{none}
+#'     \item \code{futility_IF}: Information Fraction at which we look for futility
 #'     \item \code{beta_spending}: Cumulative beta spending vector
-#'     \item \code{IF_vec}: Vector of information fractions
+#'     \item \code{BPP_threshold}: BPP value at which we will stop for futility
 #'   }
 #' @param n_sims Number of simulations to run (default = 1000)
 #'
@@ -587,57 +591,65 @@ calc_dte_assurance_interim <- function(n_c, n_t,
                                        recruitment_model,
                                        GSD_model,
                                        n_sims = 1000) {
-  IF_list   <- lapply(GSD_model$IF_vec, function(x) as.numeric(strsplit(x, ",\\s*")[[1]]))
-  alpha_list <- lapply(GSD_model$alpha_spending, function(x) as.numeric(strsplit(x, ",\\s*")[[1]]))
-  beta_list <- lapply(GSD_model$beta_spending, function(x) as.numeric(strsplit(x, ",\\s*")[[1]]))
-  IF_labels <- GSD_model$IF_vec
 
   results <- future.apply::future_lapply(seq_len(n_sims), function(i) {
-    trial <- simulate_trial_with_recruitment(n_c, n_t, control_model, effect_model, recruitment_model)
 
-    #Pretend we are contuining to the end
+    # --- simulate one trial ---
+    trial <- simulate_trial_with_recruitment(
+      n_c, n_t, control_model, effect_model, recruitment_model
+    )
+
     trial_data <- trial[order(trial$pseudo_time),]
-    n_events <- GSD_model$events
-    t_interim <- trial_data$pseudo_time[n_events]
+    n_events   <- GSD_model$events
+    t_interim  <- trial_data$pseudo_time[n_events]
 
     eligible_df <- trial_data %>%
       dplyr::filter(.data$rec_time <= t_interim)
 
-
     # Censoring logic
     eligible_df$status <- eligible_df$pseudo_time < t_interim
-    eligible_df$survival_time <- ifelse(eligible_df$status, eligible_df$time, t_interim - eligible_df$rec_time)
+    eligible_df$survival_time <- ifelse(
+      eligible_df$status,
+      eligible_df$time,
+      t_interim - eligible_df$rec_time
+    )
 
-    fit     <- survival::coxph(Surv(survival_time, status) ~ group, data = eligible_df)
+    # Interim Cox model (for final decision)
+    fit         <- survival::coxph(Surv(survival_time, status) ~ group, data = eligible_df)
     fit_summary <- summary(fit)
-    z_stat <- -fit_summary$coefficients[, "z"]
+    z_stat      <- -fit_summary$coefficients[, "z"]
 
+    # --- Futility type: beta-spending ---
+    if (GSD_model$futility_type %in% c("beta", "none")) {
 
-    do.call(rbind, lapply(seq_along(IF_list), function(j) {
-      design <- rpact::getDesignGroupSequential(
-        typeOfDesign = "asUser",
-        informationRates = IF_list[[j]],
-        userAlphaSpending = alpha_list[[j]],
-        typeBetaSpending = "bsUser",
-        userBetaSpending = beta_list[[j]]
-      )
+      rpact_design <- make_rpact_design_from_GSD_model(GSD_model)
+      design       <- rpact_design$design
 
       outcome <- apply_GSD_to_trial(trial, design, GSD_model$events)
 
+      return(data.frame(
+        Trial          = i,
+        Decision       = outcome$decision,
+        StopTime       = outcome$stop_time,
+        SampleSize     = outcome$sample_size,
+        Final_Decision = ifelse(
+          z_stat > stats::qnorm(1 - 0.025),
+          "Successful",
+          "Unsuccessful"
+        )
+      ))
+    }
 
-      data.frame(
-        Trial = i,
-        IF = IF_labels[j],
-        Decision = outcome$decision,
-        StopTime = outcome$stop_time,
-        SampleSize = outcome$sample_size,
-        Final_Decision = ifelse(z_stat > stats::qnorm(1-0.025), "Successful", "Unsuccessful")
-      )
-    }))
+    # --- placeholder for future types ---
+    if (GSD_model$futility_type == "BPP") {
+      stop("BPP futility not implemented yet.")
+    }
+
+
   }, future.seed = TRUE)
 
+  # Combine into single data frame
   results_df <- do.call(rbind, results)
-
 
   return(results_df)
 }
@@ -733,7 +745,6 @@ update_priors <- function(data,
                           effect_model,
                           n_samples = 1000) {
 
-
   if (control_distribution == "Exponential"){
 
     if (control_model$parameter_mode == "Parameter"){
@@ -802,13 +813,13 @@ model {
   for (i in 1:n){
     zeros[i] ~ dpois(zeros.mean[i])
     zeros.mean[i] <-  -l[i] + C
-    l[i] <- ifelse(df_event[i]==1, log(lambda_c)-(lambda_c*df_time[i]), -(lambda_c*df_time[i]))
+    l[i] <- ifelse(data_event[i]==1, log(lambda_c)-(lambda_c*data_time[i]), -(lambda_c*data_time[i]))
   }
   for (i in (n+1):m){
     zeros[i] ~ dpois(zeros.mean[i])
     zeros.mean[i] <-  -l[i] + C
-    l[i] <- ifelse(df_event[i]==1, ifelse(df_time[i]<delay_time, log(lambda_c)-(lambda_c*df_time[i]), log(lambda_t)-lambda_t*(df_time[i]-delay_time)-(delay_time*lambda_c)),
-      ifelse(df_time[i]<delay_time, -(lambda_c*df_time[i]), -(lambda_c*delay_time)-lambda_t*(df_time[i]-delay_time)))
+    l[i] <- ifelse(data_event[i]==1, ifelse(data_time[i]<delay_time, log(lambda_c)-(lambda_c*data_time[i]), log(lambda_t)-lambda_t*(data_time[i]-delay_time)-(delay_time*lambda_c)),
+      ifelse(data_time[i]<delay_time, -(lambda_c*data_time[i]), -(lambda_c*delay_time)-lambda_t*(data_time[i]-delay_time)))
   }
 
 
@@ -846,13 +857,13 @@ model {
   for (i in 1:n){
     zeros[i] ~ dpois(zeros.mean[i])
     zeros.mean[i] <-  -l[i] + C
-    l[i] <- ifelse(df_event[i]==1, log(gamma_c)+gamma_c*log(lambda_c*df_time[i])-(lambda_c*df_time[i])^gamma_c-log(df_time[i]), -(lambda_c*df_time[i])^gamma_c)
+    l[i] <- ifelse(data_event[i]==1, log(gamma_c)+gamma_c*log(lambda_c*data_time[i])-(lambda_c*data_time[i])^gamma_c-log(data_time[i]), -(lambda_c*data_time[i])^gamma_c)
   }
   for (i in (n+1):m){
     zeros[i] ~ dpois(zeros.mean[i])
     zeros.mean[i] <-  -l[i] + C
-    l[i] <- ifelse(df_event[i]==1, ifelse(df_time[i]<delay_time, log(gamma_c)+gamma_c*log(lambda_c*df_time[i])-(lambda_c*df_time[i])^gamma_c-log(df_time[i]), log(gamma_c)+gamma_c*log(lambda_t)+(gamma_c-1)*log(df_time[i])-lambda_t^gamma_c*(df_time[i]^gamma_c-delay_time^gamma_c)-(delay_time*lambda_c)^gamma_c),
-      ifelse(df_time[i]<delay_time, -(lambda_c*df_time[i])^gamma_c, -(lambda_c*delay_time)^gamma_c-lambda_t^gamma_c*(df_time[i]^gamma_c-delay_time^gamma_c)))
+    l[i] <- ifelse(data_event[i]==1, ifelse(data_time[i]<delay_time, log(gamma_c)+gamma_c*log(lambda_c*data_time[i])-(lambda_c*data_time[i])^gamma_c-log(data_time[i]), log(gamma_c)+gamma_c*log(lambda_t)+(gamma_c-1)*log(data_time[i])-lambda_t^gamma_c*(data_time[i]^gamma_c-delay_time^gamma_c)-(delay_time*lambda_c)^gamma_c),
+      ifelse(data_time[i]<delay_time, -(lambda_c*data_time[i])^gamma_c, -(lambda_c*delay_time)^gamma_c-lambda_t^gamma_c*(data_time[i]^gamma_c-delay_time^gamma_c)))
   }
 
 
@@ -880,12 +891,12 @@ model {
   }
 
 
-df <- df[order(df$group),]
-n_control <- sum(df$group=="Control")
-n_total <- nrow(df)
+data <- data[order(data$group),]
+n_control <- sum(data$group=="Control")
+n_total <- nrow(data)
 
-data_list <- list(df_time = df$survival_time,
-                  df_event = df$status,
+data_list <- list(data_time = data$survival_time,
+                  data_event = data$status,
                   n = n_control,
                   m = n_total)
 
@@ -981,15 +992,15 @@ return(posterior_df)
 #'                                  alpha = 0.025,
 #'                                  alternative_hypothesis = "one.sided"))
 #' }
-BPP_func <- function(df, posterior_df, control_distribution = "Exponential", n_c_planned, n_t_planned,
+BPP_func <- function(data, posterior_df, control_distribution = "Exponential", n_c_planned, n_t_planned,
                      rec_time_planned, df_cens_time,
                      censoring_model, analysis_model,
                      n_sims = 500) {
 
 
   #The number of unenrolled patients in each group
-  n_unenrolled_control <- (n_c_planned) - sum(df$group=="Control")
-  n_unenrolled_treatment <- (n_t_planned) - sum(df$group=="Treatment")
+  n_unenrolled_control <- (n_c_planned) - sum(data$group=="Control")
+  n_unenrolled_treatment <- (n_t_planned) - sum(data$group=="Treatment")
 
   #Extract realisations from the MCMC
   lambda_c_samples <- posterior_df$lambda_c
@@ -1066,7 +1077,7 @@ BPP_func <- function(df, posterior_df, control_distribution = "Exponential", n_c
 
 
     #Extracting the observations that were censored at the IA
-    censored_df <- df[df$status==0,]
+    censored_df <- data[data$status==0,]
 
     #Number of censored observations in each group
     n_censored_control <- sum(censored_df$group=="Control")
@@ -1230,7 +1241,7 @@ BPP_func <- function(df, posterior_df, control_distribution = "Exponential", n_c
 
 
 
-    non_censored_df <- df %>%
+    non_censored_df <- data %>%
       filter(status == 1)
 
     final_non_censored_df <- non_censored_df[,1:4]
@@ -1330,137 +1341,318 @@ BPP_func <- function(df, posterior_df, control_distribution = "Exponential", n_c
 
 }
 
-update_priors_exp_stan <- function(data,
-                                   control_model,
-                                   delay_SHELF,
-                                   HR_SHELF,
-                                   delay_param_dist,
-                                   HR_param_dist,
-                                   n_samples = 1000,
-                                   iter_warmup = 500) {
 
-  #---------------------------------------------------------------
-  # 1. Convert priors (for Stan syntax)
-  #---------------------------------------------------------------
-  # Control lambda_c prior
-  control_prior <- make_prior_name_stan(control_model$lambda_c_SHELF,
-                                        control_model$lambda_c_dist)
 
-  # delay prior
-  delay_prior   <- make_prior_name_stan(delay_SHELF, delay_param_dist)
+#' Function to calculate the 'optimal' information fraction to calculate BPP
+#'
+#' @param n_c Number of control patients
+#' @param n_t Number of treatment patients
+#' @param control_model A named list specifying the control arm survival distribution:
+#'   \itemize{
+#'     \item \code{dist}: Distribution type ("Exponential" or "Weibull")
+#'     \item \code{parameter_mode}: Either "Fixed" or "Distribution"
+#'     \item \code{fixed_type}: If "Fixed", specify as "Parameters" or "Landmark"
+#'     \item \code{lambda}, \code{gamma}: Scale and shape parameters
+#'     \item \code{t1}, \code{t2}: Landmark times
+#'     \item \code{surv_t1}, \code{surv_t2}: Survival probabilities at landmarks
+#'     \item \code{t1_Beta_a}, \code{t1_Beta_b}, \code{diff_Beta_a}, \code{diff_Beta_b}: Beta prior parameters
+#'   }
+#' @param effect_model A named list specifying beliefs about the treatment effect:
+#'   \itemize{
+#'     \item \code{delay_SHELF}, \code{HR_SHELF}: SHELF objects encoding beliefs
+#'     \item \code{delay_dist}, \code{HR_dist}: Distribution types ("hist" by default)
+#'     \item \code{P_S}: Probability that survival curves separate
+#'     \item \code{P_DTE}: Probability of delayed separation, conditional on separation
+#'   }
+#'  @param recruitment_model A named list specifying the recruitment process:
+#'   \itemize{
+#'     \item \code{method}: "power" or "PWC"
+#'     \item \code{period}, \code{power}: Parameters for power model
+#'     \item \code{rate}, \code{duration}: Comma-separated strings for PWC model
+#'   }
+#'   @param BPP_model A named list specifying the censoring mechanism for the future data:
+#'   \itemize{
+#'     \item \code{events}: Number of events which is 100% information fraction
+#'     \item \code{IF}: The information fraction at which to censor and calculate BPP
+#'   }
+#' @param analysis_model A named list specifying the final analysis and decision rule:
+#'   \itemize{
+#'     \item \code{method}: e.g. \code{"LRT"}, \code{"WLRT"}, or \code{"MW"}.
+#'     \item \code{alpha}: one-sided type I error level.
+#'     \item \code{alternative_hypothesis}: direction of the alternative (e.g. \code{"one.sided"}).
+#'     \item \code{rho}, \code{gamma}, \code{t_star}, \code{s_star}: additional parameters for WLRT or MW (if applicable).
+#'   }
+#' @param n_sims Number of data sets to simulate (default is 100).
+#'
+#' @return A vector of length `n_sims` corresponding to the value of BPP for each simulated trial
+#'
+#' @export
+#'
+calibrate_BPP_timing <- function(n_c, n_t,
+                                 control_model,
+                                 effect_model,
+                                 recruitment_model,
+                                 BPP_model,
+                                 analysis_model,
+                                 n_sims = 100){
 
-  # HR prior
-  HR_prior      <- make_prior_name_stan(HR_SHELF, HR_param_dist)
+  future::plan(multisession)
+  result <- future.apply::future_lapply(
+    seq_len(n_sims),
+    FUN = single_calibration_rep,
+    n_c = n_c,
+    n_t = n_t,
+    control_model = control_model,
+    effect_model = effect_model,
+    recruitment_model = recruitment_model,
+    BPP_model = BPP_model,
+    analysis_model = analysis_model,
+    future.seed = TRUE
+  )
 
-  #---------------------------------------------------------------
-  # 2. Build dynamic Stan code
-  #---------------------------------------------------------------
-  stan_code <- sprintf("
-data {
-  int<lower=1> N;
-  vector<lower=0>[N] time;
-  array[N] int<lower=0, upper=1> event;
-  array[N] int<lower=0, upper=1> trt;
+  success_means <- vapply(
+    result,
+    FUN = function(x) mean(x$BPP_outcome$BPP_df$success),
+    FUN.VALUE = numeric(1)
+  )
+
+
+  return(list(success_means = success_means))
+
 }
 
-parameters {
-  real%s lambda_c;
-  real%s HR;
-  real%s delay_time;
-}
 
-transformed parameters {
-  real lambda_t = lambda_c * HR;
-}
+#' Function to calculate the 'optimal' BPP threshold value
+#'
+#' @param n_c Number of control patients
+#' @param n_t Number of treatment patients
+#' @param control_model A named list specifying the control arm survival distribution:
+#'   \itemize{
+#'     \item \code{dist}: Distribution type ("Exponential" or "Weibull")
+#'     \item \code{parameter_mode}: Either "Fixed" or "Distribution"
+#'     \item \code{fixed_type}: If "Fixed", specify as "Parameters" or "Landmark"
+#'     \item \code{lambda}, \code{gamma}: Scale and shape parameters
+#'     \item \code{t1}, \code{t2}: Landmark times
+#'     \item \code{surv_t1}, \code{surv_t2}: Survival probabilities at landmarks
+#'     \item \code{t1_Beta_a}, \code{t1_Beta_b}, \code{diff_Beta_a}, \code{diff_Beta_b}: Beta prior parameters
+#'   }
+#' @param effect_model A named list specifying beliefs about the treatment effect:
+#'   \itemize{
+#'     \item \code{delay_SHELF}, \code{HR_SHELF}: SHELF objects encoding beliefs
+#'     \item \code{delay_dist}, \code{HR_dist}: Distribution types ("hist" by default)
+#'     \item \code{P_S}: Probability that survival curves separate
+#'     \item \code{P_DTE}: Probability of delayed separation, conditional on separation
+#'   }
+#'  @param recruitment_model A named list specifying the recruitment process:
+#'   \itemize{
+#'     \item \code{method}: "power" or "PWC"
+#'     \item \code{period}, \code{power}: Parameters for power model
+#'     \item \code{rate}, \code{duration}: Comma-separated strings for PWC model
+#'   }
+#'   @param BPP_model A named list specifying the censoring mechanism for the future data:
+#'   \itemize{
+#'     \item \code{events}: Number of events which is 100% information fraction
+#'     \item \code{IF}: The information fraction at which to censor and calculate BPP
+#'   }
+#' @param analysis_model A named list specifying the final analysis and decision rule:
+#'   \itemize{
+#'     \item \code{method}: e.g. \code{"LRT"}, \code{"WLRT"}, or \code{"MW"}.
+#'     \item \code{alpha}: one-sided type I error level.
+#'     \item \code{alternative_hypothesis}: direction of the alternative (e.g. \code{"one.sided"}).
+#'     \item \code{rho}, \code{gamma}, \code{t_star}, \code{s_star}: additional parameters for WLRT or MW (if applicable).
+#'   }
+#'   @param data_generating_model A named list specifying the data-generating mechanisms
+#'   \itemize{
+#'     \item \code{null_model}: \code{lambda_c}
+#'     \item \code{fixed_delay}: \code{lambda_c}, \code{delay_time} and \code{post_delay_HR}
+#'     \item \code{no_delay}: \code{lambda_c} and \code{HR}
+#'   }
+#' @param n_sims Number of data sets to simulate (default is 100).
+#'
+#' @return A vector of length `n_sims` corresponding to the value of BPP for each simulated trial
+#'
+#' @export
+#'
 
-model {
+calibrate_BPP_thresholds <- function(n_c,
+                                     n_t,
+                                     control_model,
+                                     effect_model,
+                                     recruitment_model,
+                                     BPP_model,
+                                     analysis_model,
+                                     data_generating_model,
+                                     n_sims = 100){
 
-  // Priors
-  lambda_c ~ %s;
-  HR ~ %s;
-  delay_time ~ %s;
 
-  // Likelihood
-  for (i in 1:N) {
-    if (trt[i] == 0) {
+  BPP_df <- data.frame(null = numeric(n_sims),
+                       fixed = numeric(n_sims),
+                       no_delay = numeric(n_sims))
 
-      // CONTROL exponential
-      if (event[i] == 1)
-        target += log(lambda_c) - lambda_c * time[i];
-      else
-        target += -lambda_c * time[i];
+  ##### Do the null_model first
+  for (i in 1:n_sims){
 
-    } else {
+    # --- Simulate survival data ---
+    data <- sim_dte(n_c, n_t, data_generating_model$null_model$lambda_c, delay_time = 0, post_delay_HR = 1,
+                    dist = "Exponential")
 
-      // TREATMENT: delayed effect
-      real u = fmin(time[i], delay_time);
-      real v = fmax(0, time[i] - delay_time);
+    # --- Add recruitment time ---
+    data <- add_recruitment_time(data,
+                                 rec_method = recruitment_model$method,
+                                 rec_period = recruitment_model$period,
+                                 rec_power = recruitment_model$power,
+                                 rec_rate = recruitment_model$rate,
+                                 rec_duration = recruitment_model$duration)
 
-      if (event[i] == 1) {
-        if (time[i] < delay_time) {
-          target += log(lambda_c) - lambda_c * time[i];
-        } else {
-          target += log(lambda_t)
-                    - lambda_c * delay_time
-                    - lambda_t * v;
-        }
-      } else {
-        target += -(lambda_c * u + lambda_t * v);
-      }
-    }
+
+    censored_data <- cens_data(data, cens_method = "Events", cens_events = BPP_model$events*BPP_model$IF)
+
+    data <- censored_data$data
+
+    posterior_samples <- DTEAssurance::update_priors(data, control_distribution = "Exponential",
+                                                     control_model = list(s1_SHELF = SHELF::fitdist(c(qbeta(0.25, control_model$t1_Beta_a, control_model$t1_Beta_b),
+                                                                                                      qbeta(0.5, control_model$t1_Beta_a, control_model$t1_Beta_b),
+                                                                                                      qbeta(0.75, control_model$t1_Beta_a, control_model$t1_Beta_b)),
+                                                                                                    probs = c(0.25, 0.5, 0.75), lower = 0, upper = 1),
+                                                                          s1_dist = "Beta",
+                                                                          t_1 = 12,
+                                                                          parameter_mode = "Landmark"),
+                                                     effect_model = effect_model,
+                                                     n_samples = 100)
+
+    BPP_outcome <-  DTEAssurance::BPP_func(data,
+                                           posterior_samples,
+                                           control_distribution = "Exponential",
+                                           n_c_planned = n_c,
+                                           n_t_planned = n_t,
+                                           rec_time_planned = recruitment_model$period,
+                                           df_cens_time = censored_data$cens_time,
+                                           censoring_model = list(method = "Events", events = BPP_model$events),
+                                           analysis_model = analysis_model,
+                                           n_sims = 50)
+
+    BPP_df$null[i] <- mean(BPP_outcome$BPP_df$success)
+
+
   }
-}
-",
-control_prior$constraint,
-HR_prior$constraint,
-delay_prior$constraint,
-control_prior$prior,
-HR_prior$prior,
-delay_prior$prior
-  )
 
-  #---------------------------------------------------------------
-  # 3. Prepare Stan data
-  #---------------------------------------------------------------
-  stan_data <- list(
-    N = nrow(data),
-    time = data$survival_time,
-    event = data$status,
-    trt = ifelse(data$group == "Treatment", 1, 0)
-  )
 
-  #---------------------------------------------------------------
-  # 4. Cached compilation of Stan model
-  #---------------------------------------------------------------
-  if (!exists(".cached_stan_exp_model", envir = .GlobalEnv)) {
-    tmpfile <- tempfile(fileext = ".stan")
-    writeLines(stan_code, tmpfile)
-    assign(".cached_stan_exp_model",
-           cmdstanr::cmdstan_model(tmpfile),
-           envir = .GlobalEnv)
+  ##### Now the fixed delay model
+  for (i in 1:n_sims){
+
+    # --- Simulate survival data ---
+    data <- sim_dte(n_c, n_t,
+                    data_generating_model$fixed_delay$lambda_c,
+                    delay_time = data_generating_model$fixed_delay$delay_time,
+                    post_delay_HR = data_generating_model$fixed_delay$post_delay_HR,
+                    dist = "Exponential")
+
+    # --- Add recruitment time ---
+    data <- add_recruitment_time(data,
+                                 rec_method = recruitment_model$method,
+                                 rec_period = recruitment_model$period,
+                                 rec_power = recruitment_model$power,
+                                 rec_rate = recruitment_model$rate,
+                                 rec_duration = recruitment_model$duration)
+
+
+    censored_data <- cens_data(data, cens_method = "Events", cens_events = BPP_model$events*BPP_model$IF)
+
+    data <- censored_data$data
+
+    posterior_samples <- DTEAssurance::update_priors(data, control_distribution = "Exponential",
+                                                     control_model = list(s1_SHELF = SHELF::fitdist(c(qbeta(0.25, control_model$t1_Beta_a, control_model$t1_Beta_b),
+                                                                                                      qbeta(0.5, control_model$t1_Beta_a, control_model$t1_Beta_b),
+                                                                                                      qbeta(0.75, control_model$t1_Beta_a, control_model$t1_Beta_b)),
+                                                                                                    probs = c(0.25, 0.5, 0.75), lower = 0, upper = 1),
+                                                                          s1_dist = "Beta",
+                                                                          t_1 = 12,
+                                                                          parameter_mode = "Landmark"),
+                                                     effect_model = effect_model,
+                                                     n_samples = 100)
+
+    BPP_outcome <-  DTEAssurance::BPP_func(data,
+                                           posterior_samples,
+                                           control_distribution = "Exponential",
+                                           n_c_planned = n_c,
+                                           n_t_planned = n_t,
+                                           rec_time_planned = recruitment_model$period,
+                                           df_cens_time = censored_data$cens_time,
+                                           censoring_model = list(method = "Events", events = BPP_model$events),
+                                           analysis_model = analysis_model,
+                                           n_sims = 50)
+
+    BPP_df$fixed[i] <- mean(BPP_outcome$BPP_df$success)
+
+
   }
 
-  mod <- get(".cached_stan_exp_model", envir = .GlobalEnv)
+  ##### And now the no delay model
+  for (i in 1:n_sims){
 
-  #---------------------------------------------------------------
-  # 5. Sample
-  #---------------------------------------------------------------
-  fit <- mod$sample(
-    data          = stan_data,
-    chains        = 1,
-    iter_warmup   = 100,
-    iter_sampling = 1000,
-    adapt_delta   = 0.9,   # slightly more conservative
-    max_treedepth = 10,
-    refresh       = 0
-  )
+    # --- Simulate survival data ---
+    data <- sim_dte(n_c, n_t,
+                    data_generating_model$no_delay$lambda_c,
+                    delay_time = 0,
+                    post_delay_HR = data_generating_model$no_delay$HR,
+                    dist = "Exponential")
+
+    # --- Add recruitment time ---
+    data <- add_recruitment_time(data,
+                                 rec_method = recruitment_model$method,
+                                 rec_period = recruitment_model$period,
+                                 rec_power = recruitment_model$power,
+                                 rec_rate = recruitment_model$rate,
+                                 rec_duration = recruitment_model$duration)
 
 
+    censored_data <- cens_data(data, cens_method = "Events", cens_events = BPP_model$events*BPP_model$IF)
 
-  # Return as data frame
-  posterior <- as.data.frame(fit$draws())
+    data <- censored_data$data
 
-  return(posterior)
+    posterior_samples <- DTEAssurance::update_priors(data, control_distribution = "Exponential",
+                                                     control_model = list(s1_SHELF = SHELF::fitdist(c(qbeta(0.25, control_model$t1_Beta_a, control_model$t1_Beta_b),
+                                                                                                      qbeta(0.5, control_model$t1_Beta_a, control_model$t1_Beta_b),
+                                                                                                      qbeta(0.75, control_model$t1_Beta_a, control_model$t1_Beta_b)),
+                                                                                                    probs = c(0.25, 0.5, 0.75), lower = 0, upper = 1),
+                                                                          s1_dist = "Beta",
+                                                                          t_1 = 12,
+                                                                          parameter_mode = "Landmark"),
+                                                     effect_model = effect_model,
+                                                     n_samples = 100)
+
+    BPP_outcome <-  DTEAssurance::BPP_func(data,
+                                           posterior_samples,
+                                           control_distribution = "Exponential",
+                                           n_c_planned = n_c,
+                                           n_t_planned = n_t,
+                                           rec_time_planned = recruitment_model$period,
+                                           df_cens_time = censored_data$cens_time,
+                                           censoring_model = list(method = "Events", events = BPP_model$events),
+                                           analysis_model = analysis_model,
+                                           n_sims = 50)
+
+    BPP_df$no_delay[i] <- mean(BPP_outcome$BPP_df$success)
+
+
+  }
+
+
+  return(list(BPP_df = BPP_df))
+
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 

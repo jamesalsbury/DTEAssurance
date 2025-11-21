@@ -5,31 +5,25 @@
 \title{Calculate Bayesian Predictive Probability given interim data and posterior samples}
 \usage{
 BPP_func(
-  df,
+  data,
   posterior_df,
+  control_distribution = "Exponential",
   n_c_planned,
   n_t_planned,
   rec_time_planned,
   df_cens_time,
   censoring_model,
   analysis_model,
-  n_sims = 1000
+  n_sims = 500
 )
 }
 \arguments{
-\item{df}{A data frame containing interim survival data, censored at \code{df_cens_time}, with columns:
-\itemize{
-\item \code{time} Final observed/event time at the interim (on the analysis time scale).
-\item \code{group} Treatment group indicator (e.g. "Control", "Treatment").
-\item \code{rec_time} Recruitment (calendar) time.
-\item \code{pseudo_time} \code{time + rec_time} (calendar time at event/censoring).
-\item \code{status} Event indicator at the interim (1 = event, 0 = censored).
-\item \code{survival_time} Observed follow-up time from randomisation to event/censoring at the interim.
-}}
-
 \item{posterior_df}{A data frame of posterior samples with columns:
 \code{lambda_c}, \code{delay_time} and \code{HR}, corresponding to the control hazard,
 the delay (changepoint) time and the post-delay hazard ratio, respectively.}
+
+\item{control_distribution}{Distributional form assumed for the control arm:
+either \code{"Exponential"} (default) or \code{"Weibull"}.}
 
 \item{n_c_planned}{Planned maximum number of patients in the control group.}
 
@@ -54,6 +48,16 @@ the delay (changepoint) time and the post-delay hazard ratio, respectively.}
 }}
 
 \item{n_sims}{Number of predictive simulations to run (default is 1000).}
+
+\item{df}{A data frame containing interim survival data, censored at \code{df_cens_time}, with columns:
+\itemize{
+\item \code{time} Final observed/event time at the interim (on the analysis time scale).
+\item \code{group} Treatment group indicator (e.g. "Control", "Treatment").
+\item \code{rec_time} Recruitment (calendar) time.
+\item \code{pseudo_time} \code{time + rec_time} (calendar time at event/censoring).
+\item \code{status} Event indicator at the interim (1 = event, 0 = censored).
+\item \code{survival_time} Observed follow-up time from randomisation to event/censoring at the interim.
+}}
 }
 \value{
 A single numeric value giving the Bayesian predictive probability of success at the final analysis under the specified design, censoring model and analysis model.

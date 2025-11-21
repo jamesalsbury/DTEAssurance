@@ -8,35 +8,39 @@ simulate_one_trial <- function(i, j,
                                recruitment_model,
                                analysis_model) {
 
-  data <- simulate_trial_with_recruitment(n_c, n_t, control_model, effect_model, recruitment_model)
+  # --- Simulate underlying event/recruitment process ---
+  data <- simulate_trial_with_recruitment(
+    n_c = n_c,
+    n_t = n_t,
+    control_model = control_model,
+    effect_model = effect_model,
+    recruitment_model = recruitment_model
+  )
 
   # --- Apply censoring ---
-  if (censoring_model$method == "Time") {
-    censored <- cens_data(data, cens_method = "Time", cens_time = censoring_model$time)
-  } else if (censoring_model$method == "Events") {
-    censored <- cens_data(data, cens_method = "Events", cens_events = censoring_model$events)
-  } else if (censoring_model$method == "IF") {
-    censored <- cens_data(data, cens_method = "IF", cens_IF = censoring_model$IF)
-  }
+  censored <- apply_censoring(data, censoring_model)
 
   # --- Run statistical test ---
-  test_result <- survival_test(censored$data,
-                               analysis_method = analysis_model$method,
-                               alpha = analysis_model$alpha,
-                               alternative = analysis_model$alternative_hypothesis,
-                               rho = analysis_model$rho,
-                               gamma = analysis_model$gamma,
-                               t_star = analysis_model$t_star,
-                               s_star = analysis_model$s_star)
+  test_result <- survival_test(
+    censored$data,
+    analysis_method = analysis_model$method,
+    alpha = analysis_model$alpha,
+    alternative = analysis_model$alternative_hypothesis,
+    rho = analysis_model$rho,
+    gamma = analysis_model$gamma,
+    t_star = analysis_model$t_star,
+    s_star = analysis_model$s_star
+  )
 
-  # --- Return results ---
-  return(list(
-    Signif = test_result$Signif,
-    observed_HR = test_result$observed_HR,
-    sample_size = censored$sample_size,
-    cens_time = censored$cens_time
-  ))
+  # --- Output ---
+  list(
+    Signif       = test_result$Signif,
+    observed_HR  = test_result$observed_HR,
+    sample_size  = censored$sample_size,
+    cens_time    = censored$cens_time
+  )
 }
+
 
 
 simulate_trial_with_recruitment <- function(n_c, n_t,
@@ -333,7 +337,7 @@ calc_BPP_hist <- function(n_c, n_t,
     stopFut <- FALSE
 
     if (IF_list[1] <= IF){
-      data_after_cens <- cens_data(data, cens_method = "Events", cens_events = cens_events * IF_list[1])
+      data_after_cens <- DTEAssurance::cens_data(data, cens_method = "Events", cens_events = cens_events * IF_list[1])
       coxmodel <- survival::coxph(survival::Surv(.data$survival_time, .data$status) ~ .data$group, data = data_after_cens$data)
       Z_Score <- -(stats::coef(summary(coxmodel))[, 4])
 
@@ -346,7 +350,7 @@ calc_BPP_hist <- function(n_c, n_t,
       if (stopFut) outerBPPVec[i] <- 0
     } else {
 
-      data_after_cens <- cens_data(data, cens_method = "Events", cens_events = cens_events * IF)
+      data_after_cens <- DTEAssurance::cens_data(data, cens_method = "Events", cens_events = cens_events * IF)
       data <- data_after_cens$data
       data <- data[order(data$group), ]
 
@@ -617,6 +621,173 @@ make_prior_name_stan <- function(fit, dist) {
   }
 
   stop("Distribution '", dist, "' cannot be represented in Stan.")
+}
+
+
+single_calibration_rep <- function(i,
+                                    n_c, n_t,
+                                    control_model,
+                                    effect_model,
+                                    recruitment_model,
+                                    BPP_model,
+                                    analysis_model) {
+
+    data <- DTEAssurance:::simulate_trial_with_recruitment(
+      n_c = n_c,
+      n_t = n_t,
+      control_model = control_model,
+      effect_model = effect_model,
+      recruitment_model = recruitment_model
+    )
+
+    censored_data <- DTEAssurance::cens_data(data, cens_method = "Events", cens_events = BPP_model$events*BPP_model$IF)
+
+    data <- censored_data$data
+
+    posterior_samples <- DTEAssurance::update_priors(data, control_distribution = "Exponential",
+                                                     control_model = list(s1_SHELF = SHELF::fitdist(c(qbeta(0.25, control_model$t1_Beta_a, control_model$t1_Beta_b),
+                                                                                                      qbeta(0.5, control_model$t1_Beta_a, control_model$t1_Beta_b),
+                                                                                                      qbeta(0.75, control_model$t1_Beta_a, control_model$t1_Beta_b)),
+                                                                                                    probs = c(0.25, 0.5, 0.75), lower = 0, upper = 1),
+                                                                          s1_dist = "Beta",
+                                                                          t_1 = 12,
+                                                                          parameter_mode = "Landmark"),
+                                                     effect_model = effect_model,
+                                                     n_samples = 100)
+
+    BPP_outcome <-  DTEAssurance::BPP_func(data,
+                                           posterior_samples,
+                                           control_distribution = "Exponential",
+                                           n_c_planned = n_c,
+                                           n_t_planned = n_t,
+                                           rec_time_planned = recruitment_model$period,
+                                           df_cens_time = censored_data$cens_time,
+                                           censoring_model = list(method = "Events", events = BPP_model$events),
+                                           analysis_model = analysis_model,
+                                           n_sims = 50)
+
+
+    return(list(BPP_outcome = BPP_outcome))
+
+
+}
+
+
+make_rpact_design_from_GSD_model <- function(GSD_model) {
+
+  #---------------------------------------------------------
+  # 1. Extract alpha components
+  #---------------------------------------------------------
+  alpha_IF       <- GSD_model$alpha_IF
+  alpha_spending <- GSD_model$alpha_spending
+
+  #---------------------------------------------------------
+  # 2. Determine futility type
+  #---------------------------------------------------------
+  fut_type <- GSD_model$futility_type
+
+  if (fut_type == "beta") {
+    beta_IF        <- GSD_model$futility_IF
+    beta_spending  <- GSD_model$beta_spending
+  }
+
+  #---------------------------------------------------------
+  # 3. Create unified information rates
+  #---------------------------------------------------------
+  if (fut_type == "beta") {
+    IF_all <- sort(unique(c(alpha_IF, beta_IF)))
+  } else if (fut_type == "none") {
+    # no futility → IFs come only from efficacy side
+    IF_all <- sort(unique(alpha_IF))
+  } else {
+    stop("Unknown futility type in GSD_model")
+  }
+
+  K <- length(IF_all)
+
+  #---------------------------------------------------------
+  # 4. Expand alpha spending across all IAs
+  #    Carry-forward rule for non-alpha looks
+  #---------------------------------------------------------
+  alpha_spending_full <- numeric(K)
+  alpha_index <- 1
+
+  for (k in seq_len(K)) {
+    if (alpha_index <= length(alpha_IF) &&
+        IF_all[k] == alpha_IF[alpha_index]) {
+      alpha_spending_full[k] <- alpha_spending[alpha_index]
+      alpha_index <- alpha_index + 1
+    } else {
+      # carry previous value or zero at start
+      if (k == 1) {
+        alpha_spending_full[k] <- 0
+      } else {
+        alpha_spending_full[k] <- alpha_spending_full[k - 1]
+      }
+    }
+  }
+
+  #---------------------------------------------------------
+  # 5. Expand beta spending across all IAs
+  #---------------------------------------------------------
+  beta_spending_full <- numeric(K)
+
+  if (fut_type == "beta") {
+    beta_index <- 1
+
+    for (k in seq_len(K)) {
+      if (beta_index <= length(beta_IF) &&
+          IF_all[k] == beta_IF[beta_index]) {
+        # cumulative beta spending at this futility look
+        beta_spending_full[k] <- beta_spending[beta_index]
+        beta_index <- beta_index + 1
+      } else {
+        # carry forward cumulative beta
+        if (k == 1) {
+          beta_spending_full[k] <- 0
+        } else {
+          beta_spending_full[k] <- beta_spending_full[k - 1]
+        }
+      }
+    }
+  }
+
+
+  if (fut_type == "none") {
+    # No futility monitoring → beta spending = 0 at all looks
+    beta_spending_full <- rep(0, K)
+  }
+
+  #---------------------------------------------------------
+  # 6. Build the rpact design
+  #---------------------------------------------------------
+  if (fut_type == "beta"){
+    design <- rpact::getDesignGroupSequential(
+      typeOfDesign      = "asUser",
+      informationRates  = IF_all,
+      userAlphaSpending = alpha_spending_full,
+      typeBetaSpending  = "bsUser",
+      userBetaSpending  = beta_spending_full
+    )
+  }
+
+
+  if (fut_type == "none"){
+    design <- rpact::getDesignGroupSequential(
+      typeOfDesign      = "asUser",
+      informationRates  = IF_all,
+      userAlphaSpending = alpha_spending_full,
+      typeBetaSpending  = "none"
+    )
+  }
+
+
+  return(list(
+    design              = design,
+    IF_all              = IF_all,
+    alpha_spending_full = alpha_spending_full,
+    beta_spending_full  = beta_spending_full
+  ))
 }
 
 

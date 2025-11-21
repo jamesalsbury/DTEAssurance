@@ -8,10 +8,7 @@ update_priors(
   data,
   control_distribution = "Exponential",
   control_model,
-  delay_SHELF,
-  HR_SHELF,
-  delay_param_dist,
-  HR_param_dist,
+  effect_model,
   n_samples = 1000
 )
 }
@@ -27,25 +24,24 @@ update_priors(
 either \code{"Exponential"} (default) or \code{"Weibull"}.}
 
 \item{control_model}{A named list specifying the elicited prior for the control arm.
-Expected elements depend on the distribution:
 \itemize{
 \item \code{lambda_c_SHELF}, \code{lambda_c_dist} Prior for baseline hazard (Exponential).
 \item \code{gamma_c_SHELF}, \code{gamma_c_dist} Prior for Weibull shape (if applicable).
 \item \code{s1_SHELF}, \code{s1_dist} Prior for survival at time \code{t_1}.
+\item \code{delta_SHELF}, \code{delta_dist} Prior for difference in survival between \code{t_1} and \code{t_2}.
 \item \code{parameter_mode} Character string indicating which parameterisation
 is used when eliciting Weibull priors.
-\item \code{t_1} Time point at which survival probability was elicited.
+\item \code{t_1} First time point at which survival probability was elicited.
+\item \code{t_2} Second time point at which survival probability was elicited.
+}
+
+@param effect_model A named list specifying beliefs about the treatment effect:
+\itemize{
+\item \code{delay_SHELF}, \code{HR_SHELF}: SHELF objects encoding beliefs
+\item \code{delay_dist}, \code{HR_dist}: Distribution types ("hist" by default)
+\item \code{P_S}: Probability that survival curves separate
+\item \code{P_DTE}: Probability of delayed separation, conditional on separation
 }}
-
-\item{delay_SHELF}{A SHELF elicitation object encoding prior belief about the
-length of the delay period \eqn{\tau} in the treatment arm.}
-
-\item{HR_SHELF}{A SHELF elicitation object encoding prior belief about the
-post-delay hazard ratio.}
-
-\item{delay_param_dist}{Parametric form chosen to represent the prior for the delay time.}
-
-\item{HR_param_dist}{Parametric form chosen to represent the prior for the post-delay HR.}
 
 \item{n_samples}{Number of posterior samples to generate (default: 1000).}
 }
@@ -54,7 +50,7 @@ A data frame containing Monte Carlo samples from the updated (posterior)
 distribution of the model parameters. Columns normally include:
 \itemize{
 \item \code{lambda_c} Posterior samples for the control hazard parameter.
-\item \code{delay_time} Posterior samples for the delay/changepoint time \eqn{\tau}.
+\item \code{delay_time} Posterior samples for the delay/changepoint time \eqn{T}.
 \item \code{HR} Posterior samples for the post-delay hazard ratio.
 \item \code{gamma_c} (only if \code{control_distribution = "Weibull"})
 Posterior samples for the Weibull shape parameter.
@@ -71,12 +67,12 @@ The function performs Bayesian updating under a delayed-effect model:
 \deqn{
 h_T(t) =
 \begin{cases}
-  \lambda_c, & t \le \tau \\
-  \lambda_c \times HR, & t > \tau
+  \lambda_c, & t \le T \\
+  \lambda_c \times HR, & t > T
 \end{cases}
 }
 
-Priors for \code{lambda_c}, \code{tau}, and \code{HR} are constructed from
+Priors for \code{lambda_c}, \code{T}, and \code{HR} are constructed from
 elicited distributions using the SHELF framework, then updated through
 sampling-based posterior inference.
 }
@@ -93,4 +89,7 @@ posterior_df <- update_priors(
   n_samples = 2000
 )
 }
+
+
+
 }

@@ -29,13 +29,13 @@ add_recruitment_time(
 \value{
 A dataframe with two additional columns:
 \describe{
-\item{rec_time}{Simulated recruitment time for each subject}
+\item{rec_time}{Simulated recruitment time for each patient}
 \item{pseudo_time}{Time from recruitment to event or censoring}
 }
 Class: \code{data.frame}
 }
 \description{
-Simulates recruitment timing for each subject in a survival dataset using either a power model or a piecewise constant (PWC) model. The function appends recruitment times and pseudo survival times (time from recruitment to event or censoring).
+Simulates recruitment timing for each patient in a survival dataset using either a power model or a piecewise constant (PWC) model. The function appends recruitment times and pseudo survival times (time from recruitment to event or censoring).
 }
 \examples{
 set.seed(123)

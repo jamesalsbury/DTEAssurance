@@ -29,7 +29,7 @@ A list containing:
 \item{data}{Censored dataframe with updated \code{status} and filtered rows}
 \item{cens_events}{Number of events used for censoring (if applicable)}
 \item{cens_time}{Time point used for censoring}
-\item{sample_size}{Number of subjects remaining after censoring}
+\item{sample_size}{Number of patients remaining after censoring}
 }
 }
 \description{
