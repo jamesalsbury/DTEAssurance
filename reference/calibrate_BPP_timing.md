@@ -12,7 +12,7 @@ calibrate_BPP_timing(
   control_model,
   effect_model,
   recruitment_model,
-  BPP_model,
+  IA_model,
   analysis_model,
   n_sims = 100
 )
@@ -69,7 +69,7 @@ calibrate_BPP_timing(
 
   - `rate`, `duration`: Comma-separated strings for PWC model
 
-  @param BPP_model A named list specifying the censoring mechanism for
+  @param IA_model A named list specifying the censoring mechanism for
   the future data:
 
   - `events`: Number of events which is 100% information fraction

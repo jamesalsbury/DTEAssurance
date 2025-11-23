@@ -80,9 +80,16 @@ calc_dte_assurance_interim(
 
   - `alpha_spending`: Cumulative alpha spending vector
 
+  - `alpha_IF`: Information Fraction at which we look for efficacy
+
+  - `futility_type`: `beta` (for beta-spending), `BPP` (for Bayesian
+    Predictive Probability) or `none`
+
+  - `futility_IF`: Information Fraction at which we look for futility
+
   - `beta_spending`: Cumulative beta spending vector
 
-  - `IF_vec`: Vector of information fractions
+  - `BPP_threshold`: BPP value at which we will stop for futility
 
 - n_sims:
 
@@ -142,7 +149,7 @@ result <- calc_dte_assurance_interim(n_c = 300, n_t = 300,
                         GSD_model = GSD_model,
                         n_sims = 10)
 #> Warning: Caught simpleError. Canceling all iterations ...
-#> Error in if (GSD_model$futility_type %in% c("beta", "none")) {    rpact_design <- make_rpact_design_from_GSD_model(GSD_model)    design <- rpact_design$design    outcome <- apply_GSD_to_trial(trial, design, GSD_model$events)    return(data.frame(Trial = i, Decision = outcome$decision,         StopTime = outcome$stop_time, SampleSize = outcome$sample_size,         Final_Decision = ifelse(z_stat > stats::qnorm(1 - 0.025),             "Successful", "Unsuccessful")))}: argument is of length zero
+#> Error in if (GSD_model$futility_type %in% c("beta", "none")) {    rpact_design <- make_rpact_design_from_GSD_model(GSD_model)    design <- rpact_design$design    outcome <- apply_GSD_to_trial(trial, GSD_model = GSD_model,         design, GSD_model$events)    return(data.frame(Trial = i, Decision = outcome$decision,         StopTime = outcome$stop_time, SampleSize = outcome$sample_size,         Final_Decision = ifelse(z_stat > stats::qnorm(1 - 0.025),             "Successful", "Unsuccessful")))}: argument is of length zero
 str(result)
 #> function (future, ...)  
 ```

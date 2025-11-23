@@ -47,13 +47,7 @@ exponential or Weibull model for the control arm.</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">update_priors</span><span class="op">(</span></span>
-<span>  <span class="va">data</span>,</span>
-<span>  control_distribution <span class="op">=</span> <span class="st">"Exponential"</span>,</span>
-<span>  <span class="va">control_model</span>,</span>
-<span>  <span class="va">effect_model</span>,</span>
-<span>  n_samples <span class="op">=</span> <span class="fl">1000</span></span>
-<span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">update_priors</span><span class="op">(</span><span class="va">data</span>, <span class="va">control_model</span>, <span class="va">effect_model</span>, n_samples <span class="op">=</span> <span class="fl">1000</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -67,20 +61,14 @@ exponential or Weibull model for the control arm.</p>
 </ul></dd>
 
 
-<dt id="arg-control-distribution">control_distribution<a class="anchor" aria-label="anchor" href="#arg-control-distribution"></a></dt>
-<dd><p>Distributional form assumed for the control arm:
-either <code>"Exponential"</code> (default) or <code>"Weibull"</code>.</p></dd>
-
-
 <dt id="arg-control-model">control_model<a class="anchor" aria-label="anchor" href="#arg-control-model"></a></dt>
-<dd><p>A named list specifying the elicited prior for the control arm.</p><ul><li><p><code>lambda_c_SHELF</code>, <code>lambda_c_dist</code> Prior for baseline hazard (Exponential).</p></li>
-<li><p><code>gamma_c_SHELF</code>, <code>gamma_c_dist</code> Prior for Weibull shape (if applicable).</p></li>
-<li><p><code>s1_SHELF</code>, <code>s1_dist</code> Prior for survival at time <code>t_1</code>.</p></li>
-<li><p><code>delta_SHELF</code>, <code>delta_dist</code> Prior for difference in survival between <code>t_1</code> and <code>t_2</code>.</p></li>
-<li><p><code>parameter_mode</code> Character string indicating which parameterisation
-is used when eliciting Weibull priors.</p></li>
-<li><p><code>t_1</code> First time point at which survival probability was elicited.</p></li>
-<li><p><code>t_2</code> Second time point at which survival probability was elicited.</p></li>
+<dd><p>A named list specifying the control arm survival distribution:</p><ul><li><p><code>dist</code>: Distribution type ("Exponential" or "Weibull")</p></li>
+<li><p><code>parameter_mode</code>: Either "Fixed" or "Distribution"</p></li>
+<li><p><code>fixed_type</code>: If "Fixed", specify as "Parameters" or "Landmark"</p></li>
+<li><p><code>lambda</code>, <code>gamma</code>: Scale and shape parameters</p></li>
+<li><p><code>t1</code>, <code>t2</code>: Landmark times</p></li>
+<li><p><code>surv_t1</code>, <code>surv_t2</code>: Survival probabilities at landmarks</p></li>
+<li><p><code>t1_Beta_a</code>, <code>t1_Beta_b</code>, <code>diff_Beta_a</code>, <code>diff_Beta_b</code>: Beta prior parameters</p></li>
 </ul><p>@param effect_model A named list specifying beliefs about the treatment effect:</p><ul><li><p><code>delay_SHELF</code>, <code>HR_SHELF</code>: SHELF objects encoding beliefs</p></li>
 <li><p><code>delay_dist</code>, <code>HR_dist</code>: Distribution types ("hist" by default)</p></li>
 <li><p><code>P_S</code>: Probability that survival curves separate</p></li>

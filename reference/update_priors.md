@@ -8,13 +8,7 @@ exponential or Weibull model for the control arm.
 ## Usage
 
 ``` r
-update_priors(
-  data,
-  control_distribution = "Exponential",
-  control_model,
-  effect_model,
-  n_samples = 1000
-)
+update_priors(data, control_model, effect_model, n_samples = 1000)
 ```
 
 ## Arguments
@@ -29,32 +23,24 @@ update_priors(
 
   - `group` Group identifier (e.g., "Control", "Treatment").
 
-- control_distribution:
-
-  Distributional form assumed for the control arm: either
-  `"Exponential"` (default) or `"Weibull"`.
-
 - control_model:
 
-  A named list specifying the elicited prior for the control arm.
+  A named list specifying the control arm survival distribution:
 
-  - `lambda_c_SHELF`, `lambda_c_dist` Prior for baseline hazard
-    (Exponential).
+  - `dist`: Distribution type ("Exponential" or "Weibull")
 
-  - `gamma_c_SHELF`, `gamma_c_dist` Prior for Weibull shape (if
-    applicable).
+  - `parameter_mode`: Either "Fixed" or "Distribution"
 
-  - `s1_SHELF`, `s1_dist` Prior for survival at time `t_1`.
+  - `fixed_type`: If "Fixed", specify as "Parameters" or "Landmark"
 
-  - `delta_SHELF`, `delta_dist` Prior for difference in survival between
-    `t_1` and `t_2`.
+  - `lambda`, `gamma`: Scale and shape parameters
 
-  - `parameter_mode` Character string indicating which parameterisation
-    is used when eliciting Weibull priors.
+  - `t1`, `t2`: Landmark times
 
-  - `t_1` First time point at which survival probability was elicited.
+  - `surv_t1`, `surv_t2`: Survival probabilities at landmarks
 
-  - `t_2` Second time point at which survival probability was elicited.
+  - `t1_Beta_a`, `t1_Beta_b`, `diff_Beta_a`, `diff_Beta_b`: Beta prior
+    parameters
 
   @param effect_model A named list specifying beliefs about the
   treatment effect:
