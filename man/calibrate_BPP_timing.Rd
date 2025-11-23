@@ -10,7 +10,7 @@ calibrate_BPP_timing(
   control_model,
   effect_model,
   recruitment_model,
-  BPP_model,
+  IA_model,
   analysis_model,
   n_sims = 100
 )
@@ -44,7 +44,7 @@ calibrate_BPP_timing(
 \item \code{period}, \code{power}: Parameters for power model
 \item \code{rate}, \code{duration}: Comma-separated strings for PWC model
 }
-@param BPP_model A named list specifying the censoring mechanism for the future data:
+@param IA_model A named list specifying the censoring mechanism for the future data:
 \itemize{
 \item \code{events}: Number of events which is 100\% information fraction
 \item \code{IF}: The information fraction at which to censor and calculate BPP

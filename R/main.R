@@ -625,7 +625,7 @@ calc_dte_assurance_interim <- function(n_c, n_t,
       rpact_design <- make_rpact_design_from_GSD_model(GSD_model)
       design       <- rpact_design$design
 
-      outcome <- apply_GSD_to_trial(trial, design, GSD_model$events)
+      outcome <- apply_GSD_to_trial(trial, GSD_model = GSD_model, design, GSD_model$events)
 
       return(data.frame(
         Trial          = i,
@@ -642,8 +642,38 @@ calc_dte_assurance_interim <- function(n_c, n_t,
 
     # --- placeholder for future types ---
     if (GSD_model$futility_type == "BPP") {
-      stop("BPP futility not implemented yet.")
+
+      # Build rpact design (still needed for efficacy boundaries)
+      rpact_design <- make_rpact_design_from_GSD_model(GSD_model)
+      design       <- rpact_design$design
+
+      outcome <- apply_GSD_to_trial(
+        n_c = n_c,
+        n_t = n_t,
+        trial_data        = trial,
+        design            = design,
+        total_events      = GSD_model$events,
+        GSD_model         = GSD_model,
+        control_model     = control_model,        # elicited prior
+        effect_model      = effect_model,         # elicited prior
+        recruitment_model = recruitment_model,
+        analysis_model    = analysis_model,
+        n_BPP_sims        = 50                    # or whatever you choose
+      )
+
+      return(data.frame(
+        Trial          = i,
+        Decision       = outcome$decision,
+        StopTime       = outcome$stop_time,
+        SampleSize     = outcome$sample_size,
+        Final_Decision = ifelse(
+          z_stat > stats::qnorm(1 - 0.025),
+          "Successful",
+          "Unsuccessful"
+        )
+      ))
     }
+
 
 
   }, future.seed = TRUE)
@@ -669,21 +699,17 @@ calc_dte_assurance_interim <- function(n_c, n_t,
 #'     \item \code{group} Group identifier (e.g., "Control", "Treatment").
 #'   }
 #'
-#' @param control_distribution Distributional form assumed for the control arm:
-#'   either \code{"Exponential"} (default) or \code{"Weibull"}.
 #'
-#' @param control_model A named list specifying the elicited prior for the control arm.
+#' @param control_model A named list specifying the control arm survival distribution:
 #'   \itemize{
-#'     \item \code{lambda_c_SHELF}, \code{lambda_c_dist} Prior for baseline hazard (Exponential).
-#'     \item \code{gamma_c_SHELF}, \code{gamma_c_dist} Prior for Weibull shape (if applicable).
-#'     \item \code{s1_SHELF}, \code{s1_dist} Prior for survival at time \code{t_1}.
-#'     \item \code{delta_SHELF}, \code{delta_dist} Prior for difference in survival between `t_1` and `t_2`.
-#'     \item \code{parameter_mode} Character string indicating which parameterisation
-#'           is used when eliciting Weibull priors.
-#'     \item \code{t_1} First time point at which survival probability was elicited.
-#'     \item \code{t_2} Second time point at which survival probability was elicited.
+#'     \item \code{dist}: Distribution type ("Exponential" or "Weibull")
+#'     \item \code{parameter_mode}: Either "Fixed" or "Distribution"
+#'     \item \code{fixed_type}: If "Fixed", specify as "Parameters" or "Landmark"
+#'     \item \code{lambda}, \code{gamma}: Scale and shape parameters
+#'     \item \code{t1}, \code{t2}: Landmark times
+#'     \item \code{surv_t1}, \code{surv_t2}: Survival probabilities at landmarks
+#'     \item \code{t1_Beta_a}, \code{t1_Beta_b}, \code{diff_Beta_a}, \code{diff_Beta_b}: Beta prior parameters
 #'   }
-#'
 #'  @param effect_model A named list specifying beliefs about the treatment effect:
 #'   \itemize{
 #'     \item \code{delay_SHELF}, \code{HR_SHELF}: SHELF objects encoding beliefs
@@ -737,68 +763,34 @@ calc_dte_assurance_interim <- function(n_c, n_t,
 #'
 #'
 
-
-
 update_priors <- function(data,
-                          control_distribution = "Exponential",
                           control_model,
                           effect_model,
                           n_samples = 1000) {
 
-  if (control_distribution == "Exponential"){
+  if (control_model$dist == "Exponential"){
 
-    if (control_model$parameter_mode == "Parameter"){
-
-      control_jags <- make_prior_name_jags(control_model$lambda_c_SHELF, control_model$lambda_c_dist)
-
-      control_jags <- paste0("lambda_c ~ ", control_jags)
-    }
-
-    if (control_model$parameter_mode == "Landmark"){
-
-      control_jags <- make_prior_name_jags(control_model$s1_SHELF, control_model$s1_dist)
-
-      control_jags <- paste0("s1 ~ ", control_jags,
-                              "lambda_c <- -log(s1)/t_1")
-    }
-  }
-
-  if (control_distribution == "Weibull"){
-
-    if (control_model$parameter_mode == "Parameter"){
-
-      control_jags_lambda_c <- make_prior_name_jags(control_model$lambda_c_SHELF, control_model$lambda_c_dist)
-
-      control_jags_gamma_c <- make_prior_name_jags(control_model$gamma_c_SHELF, control_model$gamma_c_dist)
-
-      control_jags <- paste0("lambda_c ~ ", control_jags_lambda_c,
-                             "gamma_c ~ ", control_jags_gamma_c)
-
-    }
-
-    if (control_model$parameter_mode == "Landmark"){
-
-      control_jags_s1 <- make_prior_name_jags(control_model$s1_SHELF, control_model$s1_dist)
-      control_jags_delta <- make_prior_name_jags(control_model$delta_SHELF, control_model$delta_dist)
-
-      lambda_c <-
-
-      control_jags <- paste0("s1 ~ ",control_jags_s1,
-                             "delta ~ ", control_jags_delta,
-                             "gamma_c <- log(log(s1) / log(s1 - delta) ) / log(t_1 / t_2)",
-                             "lambda_c <- (-log(s1))^(1 / gamma_c) / t_1")
-
-    }
-
+    control_jags <- paste0(
+      "s1 ~ dbeta(", control_model$t1_Beta_a, ", ", control_model$t1_Beta_b, ")\n",
+      "lambda_c <- -log(s1)/t1\n"
+    )
 
   }
 
+  if (control_model$dist == "Weibull"){
+
+
+      control_jags <- paste0("s1 ~ dbeta(", control_model$t1_Beta_a, ", ", control_model$t1_Beta_b, ")",
+                             "delta ~ ", control_model$diff_Beta_a, ", ", control_model$diff_Beta_b, ")",
+                             "gamma_c <- log(log(s1) / log(s1 - delta) ) / log(t1 / t2)",
+                             "lambda_c <- (-log(s1))^(1 / gamma_c) / t1")
+
+  }
 
   delay_jags <- make_prior_name_jags(effect_model$delay_SHELF, effect_model$delay_dist)
   HR_jags <- make_prior_name_jags(effect_model$HR_SHELF, effect_model$HR_dist)
 
-
-  if (control_distribution == "Exponential"){
+  if (control_model$dist == "Exponential"){
 
     modelstring <- paste0("
 
@@ -842,7 +834,7 @@ model {
   }
 
 
-  if (control_distribution == "Weibull"){
+  if (control_model$dist == "Weibull"){
 
     modelstring <- paste0("
 
@@ -912,25 +904,23 @@ pi_vec <- c(
 data_list$pi <- pi_vec
 
 
-
-if (control_model$parameter_mode == "Landmark"){
-  if (control_distribution == "Exponential"){
-    data_list$t_1 <- control_model$t_1
+  if (control_model$dist == "Exponential"){
+    data_list$t1 <- control_model$t1
   }
 
-  if (control_distribution == "Weibull"){
-    data_list$t_1 <- control_model$t_1
-    data_list$t_2 <- control_model$t_2
+  if (control_model$dist == "Weibull"){
+    data_list$t1 <- control_model$t1
+    data_list$t2 <- control_model$t2
   }
 
-}
+
 
 model = jags.model(textConnection(modelstring), data = data_list, quiet = T)
 
 
 update(model, n.iter=100)
 
-var_names <- if (control_distribution == "Exponential") {
+var_names <- if (control_model$dist == "Exponential") {
   c("lambda_c", "HR", "delay_time")
 } else {
   c("lambda_c", "gamma_c", "HR", "delay_time")
@@ -998,6 +988,7 @@ BPP_func <- function(data, posterior_df, control_distribution = "Exponential", n
                      n_sims = 500) {
 
 
+  print(n_c_planned)
   #The number of unenrolled patients in each group
   n_unenrolled_control <- (n_c_planned) - sum(data$group=="Control")
   n_unenrolled_treatment <- (n_t_planned) - sum(data$group=="Treatment")
@@ -1015,6 +1006,12 @@ BPP_func <- function(data, posterior_df, control_distribution = "Exponential", n
                        Z_val = numeric(n_sims))
 
   for (j in 1:n_sims){
+
+
+    print(n_unenrolled_control)
+    print(n_unenrolled_treatment)
+    print(df_cens_time)
+    print(rec_time_planned)
 
     #Sampling the recruitment times for the unenrolled patients
     unenrolled_rec_times <- runif(n_unenrolled_control+n_unenrolled_treatment, df_cens_time, rec_time_planned)
@@ -1370,7 +1367,7 @@ BPP_func <- function(data, posterior_df, control_distribution = "Exponential", n
 #'     \item \code{period}, \code{power}: Parameters for power model
 #'     \item \code{rate}, \code{duration}: Comma-separated strings for PWC model
 #'   }
-#'   @param BPP_model A named list specifying the censoring mechanism for the future data:
+#'   @param IA_model A named list specifying the censoring mechanism for the future data:
 #'   \itemize{
 #'     \item \code{events}: Number of events which is 100% information fraction
 #'     \item \code{IF}: The information fraction at which to censor and calculate BPP
@@ -1392,7 +1389,7 @@ calibrate_BPP_timing <- function(n_c, n_t,
                                  control_model,
                                  effect_model,
                                  recruitment_model,
-                                 BPP_model,
+                                 IA_model,
                                  analysis_model,
                                  n_sims = 100){
 
@@ -1405,7 +1402,7 @@ calibrate_BPP_timing <- function(n_c, n_t,
     control_model = control_model,
     effect_model = effect_model,
     recruitment_model = recruitment_model,
-    BPP_model = BPP_model,
+    IA_model = IA_model,
     analysis_model = analysis_model,
     future.seed = TRUE
   )
@@ -1449,7 +1446,7 @@ calibrate_BPP_timing <- function(n_c, n_t,
 #'     \item \code{period}, \code{power}: Parameters for power model
 #'     \item \code{rate}, \code{duration}: Comma-separated strings for PWC model
 #'   }
-#'   @param BPP_model A named list specifying the censoring mechanism for the future data:
+#'   @param IA_model A named list specifying the censoring mechanism for the future data:
 #'   \itemize{
 #'     \item \code{events}: Number of events which is 100% information fraction
 #'     \item \code{IF}: The information fraction at which to censor and calculate BPP
@@ -1479,7 +1476,7 @@ calibrate_BPP_thresholds <- function(n_c,
                                      control_model,
                                      effect_model,
                                      recruitment_model,
-                                     BPP_model,
+                                     IA_model,
                                      analysis_model,
                                      data_generating_model,
                                      n_sims = 100){
@@ -1505,29 +1502,23 @@ calibrate_BPP_thresholds <- function(n_c,
                                  rec_duration = recruitment_model$duration)
 
 
-    censored_data <- cens_data(data, cens_method = "Events", cens_events = BPP_model$events*BPP_model$IF)
+    censored_data <- cens_data(data, cens_method = "Events", cens_events = IA_model$events*IA_model$IF)
 
     data <- censored_data$data
 
-    posterior_samples <- DTEAssurance::update_priors(data, control_distribution = "Exponential",
-                                                     control_model = list(s1_SHELF = SHELF::fitdist(c(qbeta(0.25, control_model$t1_Beta_a, control_model$t1_Beta_b),
-                                                                                                      qbeta(0.5, control_model$t1_Beta_a, control_model$t1_Beta_b),
-                                                                                                      qbeta(0.75, control_model$t1_Beta_a, control_model$t1_Beta_b)),
-                                                                                                    probs = c(0.25, 0.5, 0.75), lower = 0, upper = 1),
-                                                                          s1_dist = "Beta",
-                                                                          t_1 = 12,
-                                                                          parameter_mode = "Landmark"),
+    posterior_samples <- DTEAssurance::update_priors(data,
+                                                     control_model = control_model,
                                                      effect_model = effect_model,
                                                      n_samples = 100)
 
     BPP_outcome <-  DTEAssurance::BPP_func(data,
                                            posterior_samples,
-                                           control_distribution = "Exponential",
+                                           control_distribution = control_model$dist,
                                            n_c_planned = n_c,
                                            n_t_planned = n_t,
                                            rec_time_planned = recruitment_model$period,
                                            df_cens_time = censored_data$cens_time,
-                                           censoring_model = list(method = "Events", events = BPP_model$events),
+                                           censoring_model = list(method = "Events", events = IA_model$events),
                                            analysis_model = analysis_model,
                                            n_sims = 50)
 
@@ -1556,29 +1547,23 @@ calibrate_BPP_thresholds <- function(n_c,
                                  rec_duration = recruitment_model$duration)
 
 
-    censored_data <- cens_data(data, cens_method = "Events", cens_events = BPP_model$events*BPP_model$IF)
+    censored_data <- cens_data(data, cens_method = "Events", cens_events = IA_model$events*IA_model$IF)
 
     data <- censored_data$data
 
-    posterior_samples <- DTEAssurance::update_priors(data, control_distribution = "Exponential",
-                                                     control_model = list(s1_SHELF = SHELF::fitdist(c(qbeta(0.25, control_model$t1_Beta_a, control_model$t1_Beta_b),
-                                                                                                      qbeta(0.5, control_model$t1_Beta_a, control_model$t1_Beta_b),
-                                                                                                      qbeta(0.75, control_model$t1_Beta_a, control_model$t1_Beta_b)),
-                                                                                                    probs = c(0.25, 0.5, 0.75), lower = 0, upper = 1),
-                                                                          s1_dist = "Beta",
-                                                                          t_1 = 12,
-                                                                          parameter_mode = "Landmark"),
+    posterior_samples <- DTEAssurance::update_priors(data,
+                                                     control_model = control_model,
                                                      effect_model = effect_model,
                                                      n_samples = 100)
 
     BPP_outcome <-  DTEAssurance::BPP_func(data,
                                            posterior_samples,
-                                           control_distribution = "Exponential",
+                                           control_distribution = control_model$dist,
                                            n_c_planned = n_c,
                                            n_t_planned = n_t,
                                            rec_time_planned = recruitment_model$period,
                                            df_cens_time = censored_data$cens_time,
-                                           censoring_model = list(method = "Events", events = BPP_model$events),
+                                           censoring_model = list(method = "Events", events = IA_model$events),
                                            analysis_model = analysis_model,
                                            n_sims = 50)
 
@@ -1606,29 +1591,23 @@ calibrate_BPP_thresholds <- function(n_c,
                                  rec_duration = recruitment_model$duration)
 
 
-    censored_data <- cens_data(data, cens_method = "Events", cens_events = BPP_model$events*BPP_model$IF)
+    censored_data <- cens_data(data, cens_method = "Events", cens_events = IA_model$events*IA_model$IF)
 
     data <- censored_data$data
 
-    posterior_samples <- DTEAssurance::update_priors(data, control_distribution = "Exponential",
-                                                     control_model = list(s1_SHELF = SHELF::fitdist(c(qbeta(0.25, control_model$t1_Beta_a, control_model$t1_Beta_b),
-                                                                                                      qbeta(0.5, control_model$t1_Beta_a, control_model$t1_Beta_b),
-                                                                                                      qbeta(0.75, control_model$t1_Beta_a, control_model$t1_Beta_b)),
-                                                                                                    probs = c(0.25, 0.5, 0.75), lower = 0, upper = 1),
-                                                                          s1_dist = "Beta",
-                                                                          t_1 = 12,
-                                                                          parameter_mode = "Landmark"),
+    posterior_samples <- DTEAssurance::update_priors(data,
+                                                     control_model = control_model,
                                                      effect_model = effect_model,
                                                      n_samples = 100)
 
     BPP_outcome <-  DTEAssurance::BPP_func(data,
                                            posterior_samples,
-                                           control_distribution = "Exponential",
+                                           control_distribution = control_model$dist,
                                            n_c_planned = n_c,
                                            n_t_planned = n_t,
                                            rec_time_planned = recruitment_model$period,
                                            df_cens_time = censored_data$cens_time,
-                                           censoring_model = list(method = "Events", events = BPP_model$events),
+                                           censoring_model = list(method = "Events", events = IA_model$events),
                                            analysis_model = analysis_model,
                                            n_sims = 50)
 

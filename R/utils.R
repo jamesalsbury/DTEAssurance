@@ -128,117 +128,170 @@ simulate_trial_with_recruitment <- function(n_c, n_t,
 }
 
 
-apply_GSD_to_trial <- function(trial_data, design, total_events) {
+apply_GSD_to_trial <- function(n_c,
+                               n_t,
+                               trial_data,
+                               design = NULL,
+                               total_events,
+                               GSD_model,          # added
+                               control_model = NULL,       # needed for BPP
+                               effect_model = NULL,
+                               recruitment_model = NULL,
+                               analysis_model = NULL,
+                               n_BPP_sims = 50) {
+
+
 
   trial_data <- trial_data[order(trial_data$pseudo_time),]
 
-  # Interim setup
-  info_rates        <- design$informationRates
-  event_thresholds  <- ceiling(info_rates * total_events)
-  n_interims        <- length(info_rates)
+  if (GSD_model$futility_type %in% c("beta", "none")) {
 
-  # Initialize tracking
-  decision          <- "Continue"
-  stop_time         <- NA
-  boundary_crossed  <- NA
-  interim_results   <- vector("list", n_interims)
+    info_rates <- design$informationRates
 
-  for (i in seq_len(n_interims - 1)) {
-    n_events <- event_thresholds[i]
+  } else if (GSD_model$futility_type == "BPP") {
 
-    # Interim calendar time is defined by the nth event
-    t_interim <- trial_data$pseudo_time[n_events]
-
-    eligible_df <- trial_data %>%
-      dplyr::filter(.data$rec_time <= t_interim)
-
-    # Censoring logic
-    eligible_df$status <- eligible_df$pseudo_time < t_interim
-    eligible_df$survival_time <- ifelse(eligible_df$status, eligible_df$time, t_interim - eligible_df$rec_time)
-
-    fit     <- survival::coxph(Surv(survival_time, status) ~ group, data = eligible_df)
-    fit_summary <- summary(fit)
-    z_stat <- -fit_summary$coefficients[, "z"]
-
-   # cat("The ", i, "z is: ", z_stat, "\n")
-
-
-    eff_bound <- design$criticalValues[i]
-    fut_bound <- if (i <= length(design$futilityBounds)) design$futilityBounds[i] else NA
-
-    if (!is.na(eff_bound) && z_stat > eff_bound) {
-      decision         <- "Stop for efficacy"
-      stop_time        <- t_interim
-      boundary_crossed <- "Efficacy"
-      break
-    } else if (!is.na(fut_bound) && z_stat < fut_bound) {
-      decision         <- "Stop for futility"
-      stop_time        <- t_interim
-      boundary_crossed <- "Futility"
-      break
-    }
-
-    interim_results[[i]] <- list(
-      interim         = i,
-      n_events        = n_events,
-      z_stat          = z_stat,
-      efficacy_bound  = eff_bound,
-      futility_bound  = fut_bound
-    )
+    info_rates <- sort(unique(
+      c(GSD_model$alpha_IF,
+        GSD_model$futility_IF)
+    ))
   }
 
 
 
-  # Final analysis
-  if (is.na(stop_time) || !is.finite(stop_time)) {
-    i <- n_interims
-    n_events <- event_thresholds[i]
+  event_thresholds  <- ceiling(info_rates * total_events)
+  n_interims        <- length(info_rates)
 
-    # Interim calendar time is defined by the nth event
+  decision          <- "Continue"
+  stop_time         <- NA
+
+  for (i in seq_len(n_interims - 1)) {
+
+    IF_here  <- info_rates[i]
+    n_events <- event_thresholds[i]
     t_interim <- trial_data$pseudo_time[n_events]
 
-    eligible_df <- trial_data %>%
+    eligible_df <- trial_data |>
       dplyr::filter(.data$rec_time <= t_interim)
 
-    # Censoring logic
     eligible_df$status <- eligible_df$pseudo_time < t_interim
-    eligible_df$survival_time <- ifelse(eligible_df$status, eligible_df$time, t_interim - eligible_df$rec_time)
+    eligible_df$survival_time <- ifelse(
+      eligible_df$status, eligible_df$time, t_interim - eligible_df$rec_time
+    )
 
-    fit     <- survival::coxph(Surv(survival_time, status) ~ group, data = eligible_df)
-    fit_summary <- summary(fit)
-    z_stat <- -fit_summary$coefficients[, "z"]
+    # Z-statistic at this IA
+    fit  <- survival::coxph(Surv(survival_time, status) ~ group, data = eligible_df)
+    z_stat <- -summary(fit)$coefficients[, "z"]
 
-    #cat("The final z is: ", z_stat, "\n")
+    ## ---- efficacy boundary (map IF_here to rpact design) ----
+    eff_idx <- which(abs(design$informationRates - IF_here) < 1e-8)
 
-        eff_bound <- design$criticalValues[i]
+    if (length(eff_idx) == 1) {
+      eff_bound <- design$criticalValues[eff_idx]
+    } else {
+      eff_bound <- NA
+    }
 
-        if (!is.na(z_stat) && z_stat > eff_bound) {
-          decision         <- "Successful at final"
-          boundary_crossed <- "Efficacy"
-        } else {
-          decision         <- "Unsuccessful at final"
-          boundary_crossed <- NA
-        }
+    # 1) Efficacy check (if this IF is an alpha look)
+    if (!is.na(eff_bound) && z_stat > eff_bound) {
+      decision  <- "Stop for efficacy"
+      stop_time <- t_interim
+      break
+    }
 
+    # 2) Beta-spending futility (unchanged logic, only if futility_type == "beta")
+    if (!is.null(GSD_model) &&
+        GSD_model$futility_type == "beta") {
+
+      fut_idx <- which(abs(design$informationRates - IF_here) < 1e-8)
+
+      fut_bound <- if (length(fut_idx) == 1 &&
+                       fut_idx <= length(design$futilityBounds)) {
+        design$futilityBounds[fut_idx]
+      } else {
+        NA
+      }
+
+      if (!is.na(fut_bound) && z_stat < fut_bound) {
+        decision  <- "Stop for futility (beta)"
         stop_time <- t_interim
+        break
+      }
+    }
 
-        interim_results[[i]] <- list(
-          interim         = i,
-          n_events        = n_events,
-          z_stat          = z_stat,
-          efficacy_bound  = eff_bound,
-          futility_bound  = NA
-        )
+    # 3) BPP futility (if this IF is a futility look)
+    if (!is.null(GSD_model) &&
+        GSD_model$futility_type == "BPP" &&
+        IF_here %in% GSD_model$futility_IF) {
+
+      posterior_samples <- DTEAssurance::update_priors(
+        eligible_df,
+        control_model = control_model,
+        effect_model  = effect_model,
+        n_samples = 100
+      )
+
+      BPP_out <- DTEAssurance::BPP_func(
+        eligible_df,
+        posterior_samples,
+        control_distribution = control_model$dist,
+        n_c_planned = n_c,
+        n_t_planned = n_t,
+        rec_time_planned = recruitment_model$period,
+        df_cens_time = t_interim,
+        censoring_model = list(method = "Events", events = GSD_model$events),
+        analysis_model = analysis_model,
+        n_sims = n_BPP_sims
+      )
+
+      BPP_val <- mean(BPP_out$BPP_df$success)
+
+      if (BPP_val < GSD_model$BPP_threshold) {
+        decision  <- "Stop for futility (BPP)"
+        stop_time <- t_interim
+        break
+      }
+    }
+
+  } # end loop
+
+
+  # -------------------------------
+  # 4) Final analysis (unchanged)
+  # -------------------------------
+  if (is.na(stop_time)) {
+    i <- n_interims
+    n_events <- event_thresholds[i]
+    t_interim <- trial_data$pseudo_time[n_events]
+
+    eligible_df <- trial_data |>
+      dplyr::filter(.data$rec_time <= t_interim)
+
+    eligible_df$status <- eligible_df$pseudo_time < t_interim
+    eligible_df$survival_time <- ifelse(
+      eligible_df$status, eligible_df$time, t_interim - eligible_df$rec_time
+    )
+
+    fit  <- survival::coxph(Surv(survival_time, status) ~ group, data = eligible_df)
+    z_stat <- -summary(fit)$coefficients[, "z"]
+
+    eff_bound <- design$criticalValues[i]
+
+    decision <- ifelse(z_stat > eff_bound,
+                       "Successful at final",
+                       "Unsuccessful at final")
+
+    stop_time <- t_interim
   }
 
   sample_size <- sum(trial_data$rec_time <= stop_time)
 
   return(list(
-    decision         = decision,
-    stop_time        = stop_time,
+    decision    = decision,
+    stop_time   = stop_time,
     sample_size = sample_size
   ))
 }
+
 
 
 summarize_gsd_results <- function(gsd_outcomes) {
@@ -629,7 +682,7 @@ single_calibration_rep <- function(i,
                                     control_model,
                                     effect_model,
                                     recruitment_model,
-                                    BPP_model,
+                                    IA_model,
                                     analysis_model) {
 
     data <- DTEAssurance:::simulate_trial_with_recruitment(
@@ -640,29 +693,22 @@ single_calibration_rep <- function(i,
       recruitment_model = recruitment_model
     )
 
-    censored_data <- DTEAssurance::cens_data(data, cens_method = "Events", cens_events = BPP_model$events*BPP_model$IF)
+    censored_data <- DTEAssurance::cens_data(data, cens_method = "Events", cens_events = IA_model$events*IA_model$IF)
 
     data <- censored_data$data
 
-    posterior_samples <- DTEAssurance::update_priors(data, control_distribution = "Exponential",
-                                                     control_model = list(s1_SHELF = SHELF::fitdist(c(qbeta(0.25, control_model$t1_Beta_a, control_model$t1_Beta_b),
-                                                                                                      qbeta(0.5, control_model$t1_Beta_a, control_model$t1_Beta_b),
-                                                                                                      qbeta(0.75, control_model$t1_Beta_a, control_model$t1_Beta_b)),
-                                                                                                    probs = c(0.25, 0.5, 0.75), lower = 0, upper = 1),
-                                                                          s1_dist = "Beta",
-                                                                          t_1 = 12,
-                                                                          parameter_mode = "Landmark"),
+    posterior_samples <- DTEAssurance::update_priors(data, control_model = control_model,
                                                      effect_model = effect_model,
                                                      n_samples = 100)
 
     BPP_outcome <-  DTEAssurance::BPP_func(data,
                                            posterior_samples,
-                                           control_distribution = "Exponential",
+                                           control_distribution = control_model$dist,
                                            n_c_planned = n_c,
                                            n_t_planned = n_t,
                                            rec_time_planned = recruitment_model$period,
                                            df_cens_time = censored_data$cens_time,
-                                           censoring_model = list(method = "Events", events = BPP_model$events),
+                                           censoring_model = list(method = "Events", events = IA_model$events),
                                            analysis_model = analysis_model,
                                            n_sims = 50)
 
@@ -675,93 +721,73 @@ single_calibration_rep <- function(i,
 
 make_rpact_design_from_GSD_model <- function(GSD_model) {
 
-  #---------------------------------------------------------
-  # 1. Extract alpha components
-  #---------------------------------------------------------
+  # 1. Extract alpha
   alpha_IF       <- GSD_model$alpha_IF
   alpha_spending <- GSD_model$alpha_spending
 
-  #---------------------------------------------------------
-  # 2. Determine futility type
-  #---------------------------------------------------------
+  # 2. Futility type
   fut_type <- GSD_model$futility_type
 
+  # 3. Combined IF grid
   if (fut_type == "beta") {
-    beta_IF        <- GSD_model$futility_IF
-    beta_spending  <- GSD_model$beta_spending
-  }
 
-  #---------------------------------------------------------
-  # 3. Create unified information rates
-  #---------------------------------------------------------
-  if (fut_type == "beta") {
+    beta_IF       <- GSD_model$futility_IF
+    beta_spending <- GSD_model$beta_spending
     IF_all <- sort(unique(c(alpha_IF, beta_IF)))
-  } else if (fut_type == "none") {
-    # no futility → IFs come only from efficacy side
+
+  } else if (fut_type %in% c("none", "BPP")) {
+
+    # For "none" and "BPP", futility boundaries not needed
     IF_all <- sort(unique(alpha_IF))
+
   } else {
     stop("Unknown futility type in GSD_model")
   }
 
   K <- length(IF_all)
 
-  #---------------------------------------------------------
-  # 4. Expand alpha spending across all IAs
-  #    Carry-forward rule for non-alpha looks
-  #---------------------------------------------------------
+  #==================================================
+  # 4. Expand alpha
+  #==================================================
   alpha_spending_full <- numeric(K)
-  alpha_index <- 1
-
+  idx <- 1
   for (k in seq_len(K)) {
-    if (alpha_index <= length(alpha_IF) &&
-        IF_all[k] == alpha_IF[alpha_index]) {
-      alpha_spending_full[k] <- alpha_spending[alpha_index]
-      alpha_index <- alpha_index + 1
+    if (idx <= length(alpha_IF) && IF_all[k] == alpha_IF[idx]) {
+      alpha_spending_full[k] <- alpha_spending[idx]
+      idx <- idx + 1
     } else {
-      # carry previous value or zero at start
-      if (k == 1) {
-        alpha_spending_full[k] <- 0
-      } else {
-        alpha_spending_full[k] <- alpha_spending_full[k - 1]
-      }
+      alpha_spending_full[k] <- if (k == 1) 0 else alpha_spending_full[k-1]
     }
   }
 
-  #---------------------------------------------------------
-  # 5. Expand beta spending across all IAs
-  #---------------------------------------------------------
-  beta_spending_full <- numeric(K)
-
+  #==================================================
+  # 5. Expand beta
+  #==================================================
   if (fut_type == "beta") {
-    beta_index <- 1
+
+    beta_spending_full <- numeric(K)
+    idx <- 1
 
     for (k in seq_len(K)) {
-      if (beta_index <= length(beta_IF) &&
-          IF_all[k] == beta_IF[beta_index]) {
-        # cumulative beta spending at this futility look
-        beta_spending_full[k] <- beta_spending[beta_index]
-        beta_index <- beta_index + 1
+      if (idx <= length(beta_IF) && IF_all[k] == beta_IF[idx]) {
+        beta_spending_full[k] <- beta_spending[idx]   # cumulative
+        idx <- idx + 1
       } else {
-        # carry forward cumulative beta
-        if (k == 1) {
-          beta_spending_full[k] <- 0
-        } else {
-          beta_spending_full[k] <- beta_spending_full[k - 1]
-        }
+        beta_spending_full[k] <- if (k == 1) 0 else beta_spending_full[k-1]
       }
     }
-  }
 
+  } else if (fut_type %in% c("none", "BPP")) {
 
-  if (fut_type == "none") {
-    # No futility monitoring → beta spending = 0 at all looks
+    # No futility boundaries for rpact
     beta_spending_full <- rep(0, K)
   }
 
-  #---------------------------------------------------------
-  # 6. Build the rpact design
-  #---------------------------------------------------------
-  if (fut_type == "beta"){
+  #==================================================
+  # 6. Build rpact design
+  #==================================================
+  if (fut_type == "beta") {
+
     design <- rpact::getDesignGroupSequential(
       typeOfDesign      = "asUser",
       informationRates  = IF_all,
@@ -769,10 +795,9 @@ make_rpact_design_from_GSD_model <- function(GSD_model) {
       typeBetaSpending  = "bsUser",
       userBetaSpending  = beta_spending_full
     )
-  }
 
+  } else {  # fut_type == "none" or "BPP"
 
-  if (fut_type == "none"){
     design <- rpact::getDesignGroupSequential(
       typeOfDesign      = "asUser",
       informationRates  = IF_all,
@@ -781,7 +806,6 @@ make_rpact_design_from_GSD_model <- function(GSD_model) {
     )
   }
 
-
   return(list(
     design              = design,
     IF_all              = IF_all,
@@ -789,6 +813,7 @@ make_rpact_design_from_GSD_model <- function(GSD_model) {
     beta_spending_full  = beta_spending_full
   ))
 }
+
 
 
 

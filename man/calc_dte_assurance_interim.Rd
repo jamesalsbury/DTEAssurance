@@ -49,8 +49,11 @@ calc_dte_assurance_interim(
 \itemize{
 \item \code{events}: Total number of events
 \item \code{alpha_spending}: Cumulative alpha spending vector
+\item \code{alpha_IF}: Information Fraction at which we look for efficacy
+\item \code{futility_type}: \code{beta} (for beta-spending), \code{BPP} (for Bayesian Predictive Probability) or \code{none}
+\item \code{futility_IF}: Information Fraction at which we look for futility
 \item \code{beta_spending}: Cumulative beta spending vector
-\item \code{IF_vec}: Vector of information fractions
+\item \code{BPP_threshold}: BPP value at which we will stop for futility
 }}
 
 \item{n_sims}{Number of simulations to run (default = 1000)}

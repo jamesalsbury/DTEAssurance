@@ -4,13 +4,7 @@
 \alias{update_priors}
 \title{Update prior distributions using interim survival data}
 \usage{
-update_priors(
-  data,
-  control_distribution = "Exponential",
-  control_model,
-  effect_model,
-  n_samples = 1000
-)
+update_priors(data, control_model, effect_model, n_samples = 1000)
 }
 \arguments{
 \item{data}{A data frame containing interim survival data with columns:
@@ -20,21 +14,16 @@ update_priors(
 \item \code{group} Group identifier (e.g., "Control", "Treatment").
 }}
 
-\item{control_distribution}{Distributional form assumed for the control arm:
-either \code{"Exponential"} (default) or \code{"Weibull"}.}
-
-\item{control_model}{A named list specifying the elicited prior for the control arm.
+\item{control_model}{A named list specifying the control arm survival distribution:
 \itemize{
-\item \code{lambda_c_SHELF}, \code{lambda_c_dist} Prior for baseline hazard (Exponential).
-\item \code{gamma_c_SHELF}, \code{gamma_c_dist} Prior for Weibull shape (if applicable).
-\item \code{s1_SHELF}, \code{s1_dist} Prior for survival at time \code{t_1}.
-\item \code{delta_SHELF}, \code{delta_dist} Prior for difference in survival between \code{t_1} and \code{t_2}.
-\item \code{parameter_mode} Character string indicating which parameterisation
-is used when eliciting Weibull priors.
-\item \code{t_1} First time point at which survival probability was elicited.
-\item \code{t_2} Second time point at which survival probability was elicited.
+\item \code{dist}: Distribution type ("Exponential" or "Weibull")
+\item \code{parameter_mode}: Either "Fixed" or "Distribution"
+\item \code{fixed_type}: If "Fixed", specify as "Parameters" or "Landmark"
+\item \code{lambda}, \code{gamma}: Scale and shape parameters
+\item \code{t1}, \code{t2}: Landmark times
+\item \code{surv_t1}, \code{surv_t2}: Survival probabilities at landmarks
+\item \code{t1_Beta_a}, \code{t1_Beta_b}, \code{diff_Beta_a}, \code{diff_Beta_b}: Beta prior parameters
 }
-
 @param effect_model A named list specifying beliefs about the treatment effect:
 \itemize{
 \item \code{delay_SHELF}, \code{HR_SHELF}: SHELF objects encoding beliefs
