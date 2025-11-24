@@ -78,10 +78,18 @@
 <li><p><code>delay_dist</code>, <code>HR_dist</code>: Distribution types ("hist" by default)</p></li>
 <li><p><code>P_S</code>: Probability that survival curves separate</p></li>
 <li><p><code>P_DTE</code>: Probability of delayed separation, conditional on separation</p></li>
-</ul><p>@param recruitment_model A named list specifying the recruitment process:</p><ul><li><p><code>method</code>: "power" or "PWC"</p></li>
+</ul></dd>
+
+
+<dt id="arg-recruitment-model">recruitment_model<a class="anchor" aria-label="anchor" href="#arg-recruitment-model"></a></dt>
+<dd><p>A named list specifying the recruitment process:</p><ul><li><p><code>method</code>: "power" or "PWC"</p></li>
 <li><p><code>period</code>, <code>power</code>: Parameters for power model</p></li>
 <li><p><code>rate</code>, <code>duration</code>: Comma-separated strings for PWC model</p></li>
-</ul><p>@param IA_model A named list specifying the censoring mechanism for the future data:</p><ul><li><p><code>events</code>: Number of events which is 100% information fraction</p></li>
+</ul></dd>
+
+
+<dt id="arg-ia-model">IA_model<a class="anchor" aria-label="anchor" href="#arg-ia-model"></a></dt>
+<dd><p>A named list specifying the censoring mechanism for the future data:</p><ul><li><p><code>events</code>: Number of events which is 100% information fraction</p></li>
 <li><p><code>IF</code>: The information fraction at which to censor and calculate BPP</p></li>
 </ul></dd>
 

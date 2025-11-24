@@ -60,8 +60,9 @@ calibrate_BPP_timing(
   - `P_DTE`: Probability of delayed separation, conditional on
     separation
 
-  @param recruitment_model A named list specifying the recruitment
-  process:
+- recruitment_model:
+
+  A named list specifying the recruitment process:
 
   - `method`: "power" or "PWC"
 
@@ -69,8 +70,9 @@ calibrate_BPP_timing(
 
   - `rate`, `duration`: Comma-separated strings for PWC model
 
-  @param IA_model A named list specifying the censoring mechanism for
-  the future data:
+- IA_model:
+
+  A named list specifying the censoring mechanism for the future data:
 
   - `events`: Number of events which is 100% information fraction
 

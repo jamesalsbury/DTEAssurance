@@ -146,8 +146,10 @@ result <- calc_dte_assurance(n_c = 300, n_t = 300,
                                      recruitment_model = recruitment_model,
                                      analysis_model = analysis_model,
                                      n_sims = 10)
-#> Warning: Caught simpleError. Canceling all iterations ...
-#> Error in apply_censoring(data, censoring_model): could not find function "apply_censoring"
 str(result)
-#> function (future, ...)  
+#> List of 4
+#>  $ assurance  : num 0.9
+#>  $ CI         : num [1, 1:2] 0.555 0.997
+#>  $ duration   : num 12
+#>  $ sample_size: num 600
 ```
