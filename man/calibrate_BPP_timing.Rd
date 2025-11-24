@@ -37,14 +37,16 @@ calibrate_BPP_timing(
 \item \code{delay_dist}, \code{HR_dist}: Distribution types ("hist" by default)
 \item \code{P_S}: Probability that survival curves separate
 \item \code{P_DTE}: Probability of delayed separation, conditional on separation
-}
-@param recruitment_model A named list specifying the recruitment process:
+}}
+
+\item{recruitment_model}{A named list specifying the recruitment process:
 \itemize{
 \item \code{method}: "power" or "PWC"
 \item \code{period}, \code{power}: Parameters for power model
 \item \code{rate}, \code{duration}: Comma-separated strings for PWC model
-}
-@param IA_model A named list specifying the censoring mechanism for the future data:
+}}
+
+\item{IA_model}{A named list specifying the censoring mechanism for the future data:
 \itemize{
 \item \code{events}: Number of events which is 100\% information fraction
 \item \code{IF}: The information fraction at which to censor and calculate BPP

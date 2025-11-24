@@ -18,7 +18,13 @@ simulate_one_trial <- function(i, j,
   )
 
   # --- Apply censoring ---
-  censored <- apply_censoring(data, censoring_model)
+  if (censoring_model$method == "Time") {
+    censored <- cens_data(data, cens_method = "Time", cens_time = censoring_model$time)
+  } else if (censoring_model$method == "Events") {
+    censored <- cens_data(data, cens_method = "Events", cens_events = censoring_model$events)
+  } else if (censoring_model$method == "IF") {
+    censored <- cens_data(data, cens_method = "IF", cens_IF = censoring_model$IF)
+  }
 
   # --- Run statistical test ---
   test_result <- survival_test(
@@ -131,7 +137,7 @@ simulate_trial_with_recruitment <- function(n_c, n_t,
 apply_GSD_to_trial <- function(n_c,
                                n_t,
                                trial_data,
-                               design = NULL,
+                               design,
                                total_events,
                                GSD_model,          # added
                                control_model = NULL,       # needed for BPP
@@ -713,7 +719,7 @@ single_calibration_rep <- function(i,
                                            n_sims = 50)
 
 
-    return(list(BPP_outcome = BPP_outcome))
+    return(list(BPP_outcome = BPP_outcome, cens_time = censored_data$cens_time))
 
 
 }

@@ -625,7 +625,7 @@ calc_dte_assurance_interim <- function(n_c, n_t,
       rpact_design <- make_rpact_design_from_GSD_model(GSD_model)
       design       <- rpact_design$design
 
-      outcome <- apply_GSD_to_trial(trial, GSD_model = GSD_model, design, GSD_model$events)
+      outcome <- apply_GSD_to_trial(trial_data = trial, GSD_model = GSD_model, design = design, total_events = GSD_model$events)
 
       return(data.frame(
         Trial          = i,
@@ -988,7 +988,6 @@ BPP_func <- function(data, posterior_df, control_distribution = "Exponential", n
                      n_sims = 500) {
 
 
-  print(n_c_planned)
   #The number of unenrolled patients in each group
   n_unenrolled_control <- (n_c_planned) - sum(data$group=="Control")
   n_unenrolled_treatment <- (n_t_planned) - sum(data$group=="Treatment")
@@ -1007,11 +1006,6 @@ BPP_func <- function(data, posterior_df, control_distribution = "Exponential", n
 
   for (j in 1:n_sims){
 
-
-    print(n_unenrolled_control)
-    print(n_unenrolled_treatment)
-    print(df_cens_time)
-    print(rec_time_planned)
 
     #Sampling the recruitment times for the unenrolled patients
     unenrolled_rec_times <- runif(n_unenrolled_control+n_unenrolled_treatment, df_cens_time, rec_time_planned)
@@ -1361,13 +1355,13 @@ BPP_func <- function(data, posterior_df, control_distribution = "Exponential", n
 #'     \item \code{P_S}: Probability that survival curves separate
 #'     \item \code{P_DTE}: Probability of delayed separation, conditional on separation
 #'   }
-#'  @param recruitment_model A named list specifying the recruitment process:
+#' @param recruitment_model A named list specifying the recruitment process:
 #'   \itemize{
 #'     \item \code{method}: "power" or "PWC"
 #'     \item \code{period}, \code{power}: Parameters for power model
 #'     \item \code{rate}, \code{duration}: Comma-separated strings for PWC model
 #'   }
-#'   @param IA_model A named list specifying the censoring mechanism for the future data:
+#' @param IA_model A named list specifying the censoring mechanism for the future data:
 #'   \itemize{
 #'     \item \code{events}: Number of events which is 100% information fraction
 #'     \item \code{IF}: The information fraction at which to censor and calculate BPP
@@ -1393,8 +1387,7 @@ calibrate_BPP_timing <- function(n_c, n_t,
                                  analysis_model,
                                  n_sims = 100){
 
-  future::plan(multisession)
-  result <- future.apply::future_lapply(
+  result <- lapply(
     seq_len(n_sims),
     FUN = single_calibration_rep,
     n_c = n_c,
@@ -1403,9 +1396,9 @@ calibrate_BPP_timing <- function(n_c, n_t,
     effect_model = effect_model,
     recruitment_model = recruitment_model,
     IA_model = IA_model,
-    analysis_model = analysis_model,
-    future.seed = TRUE
+    analysis_model = analysis_model
   )
+
 
   success_means <- vapply(
     result,
@@ -1413,8 +1406,13 @@ calibrate_BPP_timing <- function(n_c, n_t,
     FUN.VALUE = numeric(1)
   )
 
+  cens_time <- vapply(result,
+                           function (x) x$cens_time,
+                           FUN.VALUE =numeric(1)
+  )
 
-  return(list(success_means = success_means))
+
+  return(list(success_means = success_means, cens_time  = cens_time))
 
 }
 
