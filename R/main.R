@@ -1438,13 +1438,13 @@ calibrate_BPP_timing <- function(n_c, n_t,
 #'     \item \code{P_S}: Probability that survival curves separate
 #'     \item \code{P_DTE}: Probability of delayed separation, conditional on separation
 #'   }
-#'  @param recruitment_model A named list specifying the recruitment process:
+#' @param recruitment_model A named list specifying the recruitment process:
 #'   \itemize{
 #'     \item \code{method}: "power" or "PWC"
 #'     \item \code{period}, \code{power}: Parameters for power model
 #'     \item \code{rate}, \code{duration}: Comma-separated strings for PWC model
 #'   }
-#'   @param IA_model A named list specifying the censoring mechanism for the future data:
+#' @param IA_model A named list specifying the censoring mechanism for the future data:
 #'   \itemize{
 #'     \item \code{events}: Number of events which is 100% information fraction
 #'     \item \code{IF}: The information fraction at which to censor and calculate BPP
@@ -1456,7 +1456,7 @@ calibrate_BPP_timing <- function(n_c, n_t,
 #'     \item \code{alternative_hypothesis}: direction of the alternative (e.g. \code{"one.sided"}).
 #'     \item \code{rho}, \code{gamma}, \code{t_star}, \code{s_star}: additional parameters for WLRT or MW (if applicable).
 #'   }
-#'   @param data_generating_model A named list specifying the data-generating mechanisms
+#' @param data_generating_model A named list specifying the data-generating mechanisms
 #'   \itemize{
 #'     \item \code{null_model}: \code{lambda_c}
 #'     \item \code{fixed_delay}: \code{lambda_c}, \code{delay_time} and \code{post_delay_HR}
