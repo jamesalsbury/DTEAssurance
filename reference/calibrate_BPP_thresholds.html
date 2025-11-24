@@ -79,10 +79,18 @@
 <li><p><code>delay_dist</code>, <code>HR_dist</code>: Distribution types ("hist" by default)</p></li>
 <li><p><code>P_S</code>: Probability that survival curves separate</p></li>
 <li><p><code>P_DTE</code>: Probability of delayed separation, conditional on separation</p></li>
-</ul><p>@param recruitment_model A named list specifying the recruitment process:</p><ul><li><p><code>method</code>: "power" or "PWC"</p></li>
+</ul></dd>
+
+
+<dt id="arg-recruitment-model">recruitment_model<a class="anchor" aria-label="anchor" href="#arg-recruitment-model"></a></dt>
+<dd><p>A named list specifying the recruitment process:</p><ul><li><p><code>method</code>: "power" or "PWC"</p></li>
 <li><p><code>period</code>, <code>power</code>: Parameters for power model</p></li>
 <li><p><code>rate</code>, <code>duration</code>: Comma-separated strings for PWC model</p></li>
-</ul><p>@param IA_model A named list specifying the censoring mechanism for the future data:</p><ul><li><p><code>events</code>: Number of events which is 100% information fraction</p></li>
+</ul></dd>
+
+
+<dt id="arg-ia-model">IA_model<a class="anchor" aria-label="anchor" href="#arg-ia-model"></a></dt>
+<dd><p>A named list specifying the censoring mechanism for the future data:</p><ul><li><p><code>events</code>: Number of events which is 100% information fraction</p></li>
 <li><p><code>IF</code>: The information fraction at which to censor and calculate BPP</p></li>
 </ul></dd>
 
@@ -92,7 +100,11 @@
 <li><p><code>alpha</code>: one-sided type I error level.</p></li>
 <li><p><code>alternative_hypothesis</code>: direction of the alternative (e.g. <code>"one.sided"</code>).</p></li>
 <li><p><code>rho</code>, <code>gamma</code>, <code>t_star</code>, <code>s_star</code>: additional parameters for WLRT or MW (if applicable).</p></li>
-</ul><p>@param data_generating_model A named list specifying the data-generating mechanisms</p><ul><li><p><code>null_model</code>: <code>lambda_c</code></p></li>
+</ul></dd>
+
+
+<dt id="arg-data-generating-model">data_generating_model<a class="anchor" aria-label="anchor" href="#arg-data-generating-model"></a></dt>
+<dd><p>A named list specifying the data-generating mechanisms</p><ul><li><p><code>null_model</code>: <code>lambda_c</code></p></li>
 <li><p><code>fixed_delay</code>: <code>lambda_c</code>, <code>delay_time</code> and <code>post_delay_HR</code></p></li>
 <li><p><code>no_delay</code>: <code>lambda_c</code> and <code>HR</code></p></li>
 </ul></dd>
