@@ -32,7 +32,6 @@ default_table <- function(n) {
     Stage = 1:n,
     IF = seq(1/n, 1, length.out = n),
     `α-spending` = seq(0.025/n, 0.025, length.out = n),
-    `β-spending` = seq(0.1/n, 0.1, length.out = n),
     check.names = FALSE
   )
 }
@@ -368,10 +367,10 @@ ui <- fluidPage(
                             numericInput("total_events", "Number of Events", value = 300)
                             ),
                      column(6,
-                            numericInput("n_designs", "Number of Designs", value = 1, min = 1, max = 20)
+                            numericInput("n_stages", "Number of Stages", value = 2)
                             )
                    ),
-                   uiOutput("design_blocks"),
+                   rHandsontableOutput("alpha_spending_table"),
                    numericInput("n_sims", "Number of simulations", value=1000),
                    actionButton("calc_GSD_assurance", label  = "Calculate")
                  ),
@@ -659,85 +658,34 @@ server <- function(input, output, session) {
 
   # Simulate Logic ---------------------------------
 
+  alpha_df_init <- data.frame(
+    Stage        = 1:2,
+    IF    = c(0.5, 1.0),
+    `α-spending` = c(0.0125, 0.025)
+  )
 
-  # Store table data for each design
-  tables <- reactiveValues()
+  # store current table
+  alpha_df <- reactiveVal(alpha_df_init)
 
-  # Dynamic UI
-  output$design_blocks <- renderUI({
-    n <- input$n_designs
-    blocks <- lapply(1:n, function(i) {
-      fluidRow(
-        column(3,
-               numericInput(paste0("n_interims_", i),
-                            "Stages",
-                            value = 2, min = 1, max = 20)
-        ),
-        column(9,
-               rHandsontableOutput(paste0("hot_", i))
-        )
-      )
-    })
-    do.call(tagList, blocks)
+
+  output$alpha_spending_table <- renderRHandsontable({
+    rhandsontable(alpha_df(),
+                  rowHeaders = FALSE,
+                  width = 300, height = 150) %>%
+      hot_col("Stage", readOnly = TRUE) %>%
+      hot_col("IF", type = "numeric", format = "0.00")
   })
 
-  observe({
-    n <- input$n_designs
-    lapply(1:n, function(i) {
-      output[[paste0("hot_", i)]] <- renderRHandsontable({
-        n_interims <- input[[paste0("n_interims_", i)]]
-        if (is.null(n_interims)) return(NULL)
-
-        # If table doesn't exist yet, create it
-        if (is.null(tables[[paste0("design_", i)]])) {
-          tables[[paste0("design_", i)]] <- default_table(n_interims)
-        } else {
-          # Adjust rows if n_interims changed
-          old_data <- tables[[paste0("design_", i)]]
-          n_old <- nrow(old_data)
-          if (n_interims > n_old) {
-            new_rows <- default_table(n_interims)[(n_old+1):n_interims, ]
-            old_data <- rbind(old_data, new_rows)
-          } else if (n_interims < n_old) {
-            old_data <- old_data[1:n_interims, ]
-          }
-          tables[[paste0("design_", i)]] <- old_data
-        }
-
-        rhandsontable(tables[[paste0("design_", i)]], rowHeaders = NULL) %>%
-          hot_col("Stage", readOnly = TRUE)  # Stage column not editable
-      })
-    })
-  })
-
-  # Capture edits
-  observe({
-    n <- input$n_designs
-    lapply(1:n, function(i) {
-      observeEvent(input[[paste0("hot_", i)]], {
-        tbl <- hot_to_r(input[[paste0("hot_", i)]])
-        tables[[paste0("design_", i)]] <- tbl
-      })
-    })
-  })
-
-  observe({
-    extracted_tables <- lapply(1:input$n_designs, function(i) tables[[paste0("design_", i)]])
-    IF_vector <- sapply(extracted_tables, function(df) paste(df$IF, collapse = ", "))
-    updateSelectInput(session, "Boundary_IA", choices = IF_vector)
-  })
 
   observe({
 
 
     output$boundary_plot <- renderPlotly({
 
-      extracted_tables <- lapply(1:input$n_designs, function(i) tables[[paste0("design_", i)]])
-      alpha_vector <- sapply(extracted_tables, function(df) paste(df$`α-spending`, collapse = ", "))
-      beta_vector <- sapply(extracted_tables, function(df) paste(df$`β-spending`, collapse = ", "))
-      IF_vector <- sapply(extracted_tables, function(df) paste(df$IF, collapse = ", "))
-
-      chosen_design <- which(input$Boundary_IA==IF_vector)
+      df <- hot_to_r(input$alpha_spending_table)
+      print(df)
+      #alpha_vector <- `α-spending`, collapse = ", "))
+      #IF_vector <- sapply(extracted_tables, function(df) paste(df$IF, collapse = ", "))
 
       design <- rpact::getDesignGroupSequential(
         typeOfDesign = "asUser",
@@ -924,31 +872,29 @@ server <- function(input, output, session) {
                         input$total_events)
 
 
-
-    extracted_tables <- lapply(1:input$n_designs, function(i) tables[[paste0("design_", i)]])
-
-    alpha_vector <- sapply(extracted_tables, function(df) paste(df$`α-spending`, collapse = ", "))
-    beta_vector <- sapply(extracted_tables, function(df) paste(df$`β-spending`, collapse = ", "))
-    IF_vector <- sapply(extracted_tables, function(df) paste(df$IF, collapse = ", "))
-
-    base_call <- paste0(base_call,
-                        ", \n alpha_spending = c(",
-                        paste0('"', alpha_vector, '"', collapse = ", "),
-                        ")")
-
-
-    base_call <- paste0(base_call,
-                        ", \n beta_spending = c(",
-                        paste0('"', beta_vector, '"', collapse = ", "),
-                        ")")
-
-
-    base_call <- paste0(base_call,
-                        ", \n IF_vec = c(",
-                        paste0('"', IF_vector, '"', collapse = ", "),
-                        ")), \n n_sims = ",
-                        input$n_sims,
-                        ")")
+#
+#     alpha_vector <- sapply(extracted_tables, function(df) paste(df$`α-spending`, collapse = ", "))
+#     beta_vector <- sapply(extracted_tables, function(df) paste(df$`β-spending`, collapse = ", "))
+#     IF_vector <- sapply(extracted_tables, function(df) paste(df$IF, collapse = ", "))
+#
+#     base_call <- paste0(base_call,
+#                         ", \n alpha_spending = c(",
+#                         paste0('"', alpha_vector, '"', collapse = ", "),
+#                         ")")
+#
+#
+#     base_call <- paste0(base_call,
+#                         ", \n beta_spending = c(",
+#                         paste0('"', beta_vector, '"', collapse = ", "),
+#                         ")")
+#
+#
+#     base_call <- paste0(base_call,
+#                         ", \n IF_vec = c(",
+#                         paste0('"', IF_vector, '"', collapse = ", "),
+#                         ")), \n n_sims = ",
+#                         input$n_sims,
+#                         ")")
 
 
     return(base_call)
