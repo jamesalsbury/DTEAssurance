@@ -266,6 +266,7 @@ apply_GSD_to_trial <- function(n_c,
   # -------------------------------
   if (is.na(stop_time)) {
 
+<<<<<<< HEAD
     # the final alpha look is always the last critical value
     eff_idx <- length(design$criticalValues)
     eff_bound <- design$criticalValues[eff_idx]
@@ -274,6 +275,10 @@ apply_GSD_to_trial <- function(n_c,
     n_events <- event_thresholds[length(info_rates)]
 
     print(n_events)
+=======
+
+    n_events <- event_thresholds[length(info_rates)]
+>>>>>>> 2d6bf2ea0a5896501ed7b1753fe76d544c5bc7d9
     t_interim <- trial_data$pseudo_time[n_events]
 
     eligible_df <- trial_data |>
@@ -287,6 +292,11 @@ apply_GSD_to_trial <- function(n_c,
     fit  <- survival::coxph(Surv(survival_time, status) ~ group, data = eligible_df)
     z_stat <- -summary(fit)$coefficients[, "z"]
 
+<<<<<<< HEAD
+=======
+    eff_bound <- design$criticalValues[length(design$criticalValues)]
+
+>>>>>>> 2d6bf2ea0a5896501ed7b1753fe76d544c5bc7d9
     decision <- ifelse(z_stat > eff_bound,
                        "Successful at final",
                        "Unsuccessful at final")
@@ -826,6 +836,133 @@ make_rpact_design_from_GSD_model <- function(GSD_model) {
     beta_spending_full  = beta_spending_full
   ))
 }
+
+
+generate_model_inputs <- function(Scenario, Design) {
+
+
+  n_c <- 400
+  n_t <- 400
+
+
+  recruitment_model <- list(method = "power",
+                            period = 24,
+                            power = 1)
+
+  if (Scenario %in% c(1,2,3)){
+    control_model <- list(dist = "Exponential",
+                          parameter_mode = "Distribution",
+                          t1 = 12,
+                          t1_Beta_a = 3968503,
+                          t1_Beta_b = 6031497)
+
+  }
+
+
+
+
+  if (Scenario == 1){
+    effect_model <- list(delay_SHELF = SHELF::fitdist(c(3, 4, 5), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 12),
+                         delay_dist = "gamma",
+                         HR_SHELF = SHELF::fitdist(c(0.55, 0.6, 0.7), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 1),
+                         HR_dist = "gamma",
+                         P_S = 0,
+                         P_DTE = 0)
+  }
+
+  if (Scenario == 2){
+    effect_model <- list(delay_SHELF = SHELF::fitdist(c(3.999, 4, 4.01), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 12),
+                         delay_dist = "gamma",
+                         HR_SHELF = SHELF::fitdist(c(0.599, 0.6, 0.601), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 1),
+                         HR_dist = "gamma",
+                         P_S = 1,
+                         P_DTE = 1)
+  }
+
+  if (Scenario == 3){
+    effect_model <- list(delay_SHELF = SHELF::fitdist(c(3.999, 4, 4.01), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 12),
+                         delay_dist = "gamma",
+                         HR_SHELF = SHELF::fitdist(c(0.599, 0.6, 0.601), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 1),
+                         HR_dist = "gamma",
+                         P_S = 1,
+                         P_DTE = 0)
+  }
+
+  if (Scenario == 4){
+
+    control_model <- list(dist = "Exponential",
+                          parameter_mode = "Distribution",
+                          t1 = 12,
+                          t1_Beta_a = 10.2,
+                          t1_Beta_b = 15.1)
+
+    effect_model <- list(delay_SHELF = SHELF::fitdist(c(3, 4, 5), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 12),
+                         delay_dist = "gamma",
+                         HR_SHELF = SHELF::fitdist(c(0.55, 0.6, 0.7), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 1),
+                         HR_dist = "gamma",
+                         P_S = 0.9,
+                         P_DTE = 0.8)
+
+  }
+
+  if (Design == 1){
+
+    censoring_model <- list(
+      method = "Events",
+      events = 650
+    )
+
+    analysis_model <- list(
+      method = "LRT",
+      alternative_hypothesis = "one.sided",
+      alpha = 0.025
+    )
+
+  }
+
+
+  if (Design == 2){
+
+    GSD_model <- list(events = 650,
+                      alpha_spending = c(0.0125, 0.025),
+                      alpha_IF = c(0.75, 1),
+                      futility_type = "none")
+
+
+  }
+
+
+  if (Design == 3){
+
+
+    GSD_model <- list(events = 650,
+                      alpha_spending = c(0.0125, 0.025),
+                      alpha_IF = c(0.75, 1),
+                      futility_type = "BPP",
+                      futility_IF = 0.5,
+                      BPP_threshold = 0.2)
+
+
+    analysis_model <- list(method = "LRT",
+                           alternative_hypothesis = "one.sided",
+                           alpha = 0.025)
+
+
+  }
+
+  list(
+    n_c = n_c,
+    n_t = n_t,
+    recruitment_model = recruitment_model,
+    control_model = control_model,
+    effect_model = effect_model,
+    censoring_model = if (exists("censoring_model")) censoring_model else NULL,
+    GSD_model = if (exists("GSD_model")) GSD_model else NULL,
+    analysis_model = if (exists("analysis_model")) analysis_model else NULL
+  )
+
+}
+
 
 
 
