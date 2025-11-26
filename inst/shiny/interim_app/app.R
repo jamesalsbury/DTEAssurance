@@ -78,9 +78,9 @@ ui <- fluidPage(
                      selectInput("ExpChoice", "Choice", choices = c("Fixed", "Distribution"), selected = "Fixed"),
                      conditionalPanel(
                        condition = "input.ExpChoice == 'Fixed'",
-                       selectInput("ExpRateorTime", "Input type", choices = c("Parameter", "Landmark")),
+                       selectInput("ExpRateorTime", "Input type", choices = c("Parameters", "Landmark")),
                        conditionalPanel(
-                         condition = "input.ExpRateorTime == 'Parameter'",
+                         condition = "input.ExpRateorTime == 'Parameters'",
                          numericInput("ExpRate", label =  HTML(paste0("Rate (\u03bb",tags$sub("c"), ")")), value = 0.08, min=0),
                          bsTooltip(id = "ExpRate", title = "Rate parameter")
                        ),
@@ -371,6 +371,18 @@ ui <- fluidPage(
                             )
                    ),
                    rHandsontableOutput("alpha_spending_table"),
+                   selectInput("fut_method", "Type of Futility", choices = c("None"="none", "Beta-Spending"="Beta", "BPP" = "BPP"), selected = "none"),
+                   conditionalPanel(
+                     condition = "input.fut_method == 'BPP'",
+                     fluidRow(
+                       column(6,
+                              numericInput("BPP_timing", label =  "BPP timing", value = 0.5)
+                       ),
+                       column(6,
+                              numericInput("BPP_threshold", label =  "BPP threshold", value = 0.2)
+                       )
+                     )
+                   ),
                    numericInput("n_sims", "Number of simulations", value=1000),
                    actionButton("calc_GSD_assurance", label  = "Calculate")
                  ),
@@ -431,7 +443,6 @@ ui <- fluidPage(
                                                 multiple = TRUE)),
                           DTOutput("sim_table")),
                  tabPanel("Plots",
-                          selectInput("Boundary_IA", "Choose the IF (to view)", choices = NULL),
                           plotlyOutput("boundary_plot"),
                           br(), br(),
                           plotOutput("Prop_Barchart"))
@@ -589,7 +600,7 @@ server <- function(input, output, session) {
       updateTextInput(session, inputId = "ExpChoice", value = inputData$control_parameters)
       if (inputData$control_parameters=="Fixed"){
         updateTextInput(session, inputId = "ExpRateorTime", value = inputData$fixed_parameters_type)
-        if (inputData$fixed_parameters_type=="Parameter"){
+        if (inputData$fixed_parameters_type=="Parameters"){
           updateTextInput(session, inputId = "ExpRate", value = inputData$lambda_c)
         } else if (inputData$fixed_parameters_type == "Landmark"){
           updateTextInput(session, inputId = "ExpTime", value = inputData$t1)
@@ -655,26 +666,46 @@ server <- function(input, output, session) {
 
   })
 
-
-  # Simulate Logic ---------------------------------
-
-  alpha_df_init <- data.frame(
-    Stage        = 1:2,
-    IF    = c(0.5, 1.0),
-    `α-spending` = c(0.0125, 0.025)
-  )
-
-  # store current table
-  alpha_df <- reactiveVal(alpha_df_init)
-
-
+    # ---- render rhandsontable ----
   output$alpha_spending_table <- renderRHandsontable({
-    rhandsontable(alpha_df(),
-                  rowHeaders = FALSE,
-                  width = 300, height = 150) %>%
-      hot_col("Stage", readOnly = TRUE) %>%
-      hot_col("IF", type = "numeric", format = "0.00")
-  })
+
+    req(input$n_stages)
+    k <- input$n_stages
+
+      if (input$fut_method %in% c("none", "BPP")) {
+
+        df <- data.frame(
+          Stage          = 1:k,
+          IF             = seq_len(k) / k,
+          alpha.spending = (1:k)/k * 0.025,
+          check.names    = FALSE
+        )
+
+        rhandsontable(df, rowHeaders = FALSE) %>%
+          hot_col("Stage", readOnly = TRUE) %>%
+          hot_col("IF", type = "numeric", format = "0.00") %>%
+          hot_col("alpha.spending", type = "numeric", format = "0.0000")
+
+      } else if (input$fut_method == "Beta") {
+
+        df <- data.frame(
+          Stage          = 1:k,
+          IF             = seq_len(k) / k,
+          alpha.spending = (1:k)/k * 0.025,
+          beta.spending  = (1:k)/k * 0.01,
+          check.names    = FALSE
+        )
+
+        rhandsontable(df, rowHeaders = FALSE) %>%
+          hot_col("Stage", readOnly = TRUE) %>%
+          hot_col("IF", type = "numeric", format = "0.00") %>%
+          hot_col("alpha.spending", type = "numeric", format = "0.0000") %>%
+          hot_col("beta.spending", type = "numeric", format = "0.0000")
+      }
+
+    })
+
+
 
 
   observe({
@@ -683,50 +714,56 @@ server <- function(input, output, session) {
     output$boundary_plot <- renderPlotly({
 
       df <- hot_to_r(input$alpha_spending_table)
-      print(df)
-      #alpha_vector <- `α-spending`, collapse = ", "))
-      #IF_vector <- sapply(extracted_tables, function(df) paste(df$IF, collapse = ", "))
+      alpha_vector <- df$`alpha.spending`
+      IF_vector <- df$IF
 
-      design <- rpact::getDesignGroupSequential(
-        typeOfDesign = "asUser",
-        informationRates = as.numeric(trimws(unlist(strsplit(IF_vector[chosen_design], ",")))),
-        userAlphaSpending = as.numeric(trimws(unlist(strsplit(alpha_vector[chosen_design], ",")))),
-        typeBetaSpending = "bsUser",
-        userBetaSpending = as.numeric(trimws(unlist(strsplit(beta_vector[chosen_design], ",")))))
+      if (input$fut_method %in% c("none", "BPP")){
+        design <- rpact::getDesignGroupSequential(
+          typeOfDesign = "asUser",
+          informationRates = IF_vector,
+          userAlphaSpending = alpha_vector,
+          typeBetaSpending = "none")
 
+      efficacy_boundary <- data.frame(IF = IF_vector,
+                                    Z_Stat = design$criticalValues)
 
-         boundaryDFEff <- data.frame(IF = as.numeric(trimws(unlist(strsplit(IF_vector[chosen_design], ",")))),
-                                  zStat = design$criticalValues)
+      # Calculate dynamic y-axis limits
+      full_Z_Stat <- c(0, efficacy_boundary$Z_Stat)
+      ylim <- range(full_Z_Stat)
 
+      # Extend the limits by 10% on each side
+      buffer <- 0.1 * (ylim[2] - ylim[1])
+      extended_ylim <- c(ylim[1] - buffer, ylim[2] + buffer)
 
-        boundaryDFFut <- data.frame(IF = as.numeric(trimws(unlist(strsplit(IF_vector[chosen_design], ",")))),
-                                zStat = c(design$futilityBounds, design$criticalValues[length(design$criticalValues)]))
+      #print(extended_ylim)
 
-        # Calculate dynamic y-axis limits
-        all_zStat <- c(boundaryDFEff$zStat, boundaryDFFut$zStat)
-        ylim <- range(all_zStat)
-
-        # Extend the limits by 10% on each side
-        buffer <- 0.1 * (ylim[2] - ylim[1])
-        extended_ylim <- c(ylim[1] - buffer, ylim[2] + buffer)
-
-        # Create the plot using plotly
-        p <- plot_ly() %>%
-          add_trace(data = boundaryDFEff, x = ~IF, y = ~zStat, type = 'scatter', mode = 'lines+markers',
-                    line = list(color = 'red', width = 3),
-                    marker = list(color = 'red', size = 10, symbol = 'circle'),
-                    name = "Critical value") %>%
-          add_trace(data = boundaryDFFut, x = ~IF, y = ~zStat, type = 'scatter', mode = 'lines+markers',
-                    line = list(color = 'blue', width = 3),
-                    marker = list(color = 'blue', size = 10, symbol = 'circle'),
-                    name = "Futility bound") %>%
-          layout(yaxis = list(range = extended_ylim, title = "Futility Bound and Critical Value"),
-                 title = "Boundaries",
-                 xaxis = list(title = "Information Fraction"))
+      # Create the plot using plotly
+      p <- plot_ly() %>%
+        add_trace(data = efficacy_boundary, x = ~IF, y = ~Z_Stat, type = 'scatter', mode = 'lines+markers',
+                  line = list(color = 'red', width = 3),
+                  marker = list(color = 'red', size = 10, symbol = 'circle'),
+                  name = "Critical value") %>%
+        layout(yaxis = list(range = extended_ylim, title = "Futility Bound and Critical Value"),
+               title = "Boundaries",
+               xaxis = list(title = "Information Fraction"))
 
 
-        # Show the plot
-       p
+      # Show the plot
+      p
+
+        }
+
+
+
+
+
+
+
+
+        # boundaryDFFut <- data.frame(IF = as.numeric(trimws(unlist(strsplit(IF_vector[chosen_design], ",")))),
+        #                         zStat = c(design$futilityBounds, design$criticalValues[length(design$criticalValues)]))
+
+
 
       })
 
@@ -753,7 +790,7 @@ server <- function(input, output, session) {
                             ", \n fixed_type = \"",
                             input$ExpRateorTime,
                             "\"")
-        if (input$ExpRateorTime == "Parameter"){
+        if (input$ExpRateorTime == "Parameters"){
           base_call <-  paste0(base_call, ", \n lambda = ",
                                input$ExpRate)
         } else if (input$ExpRateorTime == "Landmark"){
@@ -871,30 +908,56 @@ server <- function(input, output, session) {
                         "), \n GSD_model = list(events = ",
                         input$total_events)
 
+    df <- hot_to_r(input$alpha_spending_table)
 
-#
-#     alpha_vector <- sapply(extracted_tables, function(df) paste(df$`α-spending`, collapse = ", "))
-#     beta_vector <- sapply(extracted_tables, function(df) paste(df$`β-spending`, collapse = ", "))
-#     IF_vector <- sapply(extracted_tables, function(df) paste(df$IF, collapse = ", "))
-#
-#     base_call <- paste0(base_call,
-#                         ", \n alpha_spending = c(",
-#                         paste0('"', alpha_vector, '"', collapse = ", "),
-#                         ")")
-#
-#
-#     base_call <- paste0(base_call,
-#                         ", \n beta_spending = c(",
-#                         paste0('"', beta_vector, '"', collapse = ", "),
-#                         ")")
-#
-#
-#     base_call <- paste0(base_call,
-#                         ", \n IF_vec = c(",
-#                         paste0('"', IF_vector, '"', collapse = ", "),
-#                         ")), \n n_sims = ",
-#                         input$n_sims,
-#                         ")")
+    alpha_vector <- df$`alpha.spending`
+    alpha_IF <- df$IF
+
+    base_call <- paste0(
+      base_call,
+      ", \n alpha_spending = c(", paste(alpha_vector, collapse = ", "), ")"
+    )
+
+    base_call <- paste0(
+      base_call,
+      ", \n alpha_IF = c(", paste(alpha_IF, collapse = ", "), ")"
+    )
+
+    base_call <- paste0(base_call,
+                        ", \n futility_type = \"", input$fut_method, "\"")
+
+
+
+
+      if (input$fut_method == "Beta"){
+
+        base_call <- paste0(base_call,
+                            ", \n futility_IF = c(", alpha_IF, ")")
+
+        beta_spending <- df$`beta.spending`
+
+        base_call <- paste0(base_call,
+                          ", \n beta_spending = c(", beta_spending, ")")
+
+
+      }
+
+      if (input$fut_method == "BPP"){
+
+        base_call <- paste0(base_call,
+                            ", \n futility_IF = ", input$BPP_timing)
+
+        base_call <- paste0(base_call,
+                            ", \n beta_threshold = ", input$BPP_threshold)
+      }
+
+
+
+
+    base_call <- paste0(base_call,
+                        "), \n n_sims = ",
+                        input$n_sims,
+                        ")")
 
 
     return(base_call)
@@ -1152,7 +1215,7 @@ server <- function(input, output, session) {
                                 ", \n fixed_parameters_type = \"",
                                 input$ExpRateorTime,
                                 "\"")
-            if (input$ExpRateorTime == "Parameter"){
+            if (input$ExpRateorTime == "Parameters"){
               base_call <-  paste0(base_call, ", \n lambda_c = ",
                                    input$ExpRate)
             } else if (input$ExpRateorTime == "Landmark"){
