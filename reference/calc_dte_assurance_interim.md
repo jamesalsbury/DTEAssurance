@@ -148,8 +148,7 @@ result <- calc_dte_assurance_interim(n_c = 300, n_t = 300,
                         recruitment_model = recruitment_model,
                         GSD_model = GSD_model,
                         n_sims = 10)
-#> Warning: Caught simpleError. Canceling all iterations ...
-#> Error in if (GSD_model$futility_type %in% c("beta", "none")) {    rpact_design <- make_rpact_design_from_GSD_model(GSD_model)    design <- rpact_design$design    outcome <- apply_GSD_to_trial(trial_data = trial, GSD_model = GSD_model,         design = design, total_events = GSD_model$events)    return(data.frame(Trial = i, Decision = outcome$decision,         StopTime = outcome$stop_time, SampleSize = outcome$sample_size,         Final_Decision = ifelse(z_stat > stats::qnorm(1 - 0.025),             "Successful", "Unsuccessful")))}: argument is of length zero
+#> Error in get(x, envir, mode, inherits): Identified global objects via static code inspection (function (i); {; trial <- simulate_trial_with_recruitment(n_c, n_t, control_model,; effect_model, recruitment_model); trial_data <- trial[order(trial$pseudo_time), ]; n_events <- GSD_model$events; ...; 0.025), "Successful", "Unsuccessful"))); }; }). argument "analysis_model" is missing, with no default
 str(result)
 #> function (future, ...)  
 ```
