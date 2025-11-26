@@ -265,8 +265,9 @@ apply_GSD_to_trial <- function(n_c,
   # 4) Final analysis (unchanged)
   # -------------------------------
   if (is.na(stop_time)) {
-    i <- n_interims
-    n_events <- event_thresholds[i]
+
+
+    n_events <- event_thresholds[length(info_rates)]
     t_interim <- trial_data$pseudo_time[n_events]
 
     eligible_df <- trial_data |>
@@ -280,7 +281,7 @@ apply_GSD_to_trial <- function(n_c,
     fit  <- survival::coxph(Surv(survival_time, status) ~ group, data = eligible_df)
     z_stat <- -summary(fit)$coefficients[, "z"]
 
-    eff_bound <- design$criticalValues[i]
+    eff_bound <- design$criticalValues[length(design$criticalValues)]
 
     decision <- ifelse(z_stat > eff_bound,
                        "Successful at final",
