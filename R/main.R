@@ -590,7 +590,7 @@ calc_dte_assurance_interim <- function(n_c, n_t,
                                        effect_model,
                                        recruitment_model,
                                        GSD_model,
-                                       analysis_model,
+                                       analysis_model = NULL,
                                        n_sims = 1000) {
 
   results <- future.apply::future_lapply(seq_len(n_sims), function(i) {
