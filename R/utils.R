@@ -266,19 +266,12 @@ apply_GSD_to_trial <- function(n_c,
   # -------------------------------
   if (is.na(stop_time)) {
 
-<<<<<<< HEAD
     # the final alpha look is always the last critical value
     eff_idx <- length(design$criticalValues)
     eff_bound <- design$criticalValues[eff_idx]
 
 
     n_events <- event_thresholds[length(info_rates)]
-
-    print(n_events)
-=======
-
-    n_events <- event_thresholds[length(info_rates)]
->>>>>>> 2d6bf2ea0a5896501ed7b1753fe76d544c5bc7d9
     t_interim <- trial_data$pseudo_time[n_events]
 
     eligible_df <- trial_data |>
@@ -292,19 +285,12 @@ apply_GSD_to_trial <- function(n_c,
     fit  <- survival::coxph(Surv(survival_time, status) ~ group, data = eligible_df)
     z_stat <- -summary(fit)$coefficients[, "z"]
 
-<<<<<<< HEAD
-=======
-    eff_bound <- design$criticalValues[length(design$criticalValues)]
-
->>>>>>> 2d6bf2ea0a5896501ed7b1753fe76d544c5bc7d9
     decision <- ifelse(z_stat > eff_bound,
                        "Successful at final",
                        "Unsuccessful at final")
 
     stop_time <- t_interim
   }
-
-  print(decision)
 
   sample_size <- sum(trial_data$rec_time <= stop_time)
 
