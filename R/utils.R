@@ -936,6 +936,16 @@ generate_model_inputs <- function(Scenario, Design) {
 
   }
 
+  if (Design == 4){
+
+    GSD_model <- list(events = 650,
+                      alpha_spending = c(0.0125, 0.025),
+                      alpha_IF = c(0.75, 1),
+                      futility_type = "Beta",
+                      futility_IF = c(0.5, 1),
+                      beta_spending = c(0.05, 0.1))
+  }
+
   list(
     n_c = n_c,
     n_t = n_t,

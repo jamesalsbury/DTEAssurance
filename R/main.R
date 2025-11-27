@@ -593,6 +593,17 @@ calc_dte_assurance_interim <- function(n_c, n_t,
                                        analysis_model = NULL,
                                        n_sims = 1000) {
 
+  if (!is.null(GSD_model$futility_type) &&
+      GSD_model$futility_type == "BPP" &&
+      !identical(control_model$parameter_mode, "Distribution")) {
+
+    stop(
+      "Invalid specification: when `GSD_model$futility_type` is \"BPP\", ",
+      "`control_model$parameter_mode` must be \"Distribution\"."
+    )
+  }
+
+
   results <- future.apply::future_lapply(seq_len(n_sims), function(i) {
 
     # --- simulate one trial ---
