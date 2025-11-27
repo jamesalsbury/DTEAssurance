@@ -1397,34 +1397,45 @@ calibrate_BPP_timing <- function(n_c, n_t,
                                  recruitment_model,
                                  IA_model,
                                  analysis_model,
-                                 n_sims = 100){
+                                 n_sims = 50){
 
-  result <- lapply(
-    seq_len(n_sims),
-    FUN = single_calibration_rep,
-    n_c = n_c,
-    n_t = n_t,
-    control_model = control_model,
-    effect_model = effect_model,
-    recruitment_model = recruitment_model,
-    IA_model = IA_model,
-    analysis_model = analysis_model
-  )
+  outcome_list <- vector("list", length(IA_model$IF))
 
+  for (i in 1:length(IA_model$IF)){
 
-  success_means <- vapply(
-    result,
-    FUN = function(x) mean(x$BPP_outcome$BPP_df$success),
-    FUN.VALUE = numeric(1)
-  )
-
-  cens_time <- vapply(result,
-                           function (x) x$cens_time,
-                           FUN.VALUE =numeric(1)
-  )
+    result <- lapply(
+      seq_len(n_sims),
+      FUN = single_calibration_rep,
+      n_c = n_c,
+      n_t = n_t,
+      control_model = control_model,
+      effect_model = effect_model,
+      recruitment_model = recruitment_model,
+      total_events = IA_model$events,
+      IF = IA_model$IF[i],
+      analysis_model = analysis_model
+    )
 
 
-  return(list(success_means = success_means, cens_time  = cens_time))
+    BPP_values <- vapply(
+      result,
+      FUN = function(x) mean(x$BPP_outcome$BPP_df$success),
+      FUN.VALUE = numeric(1)
+    )
+
+    cens_time <- vapply(result,
+                        function (x) x$cens_time,
+                        FUN.VALUE =numeric(1)
+    )
+
+
+    outcome_list[[i]]$BPP_values <- BPP_values
+    outcome_list[[i]]$cens_time <- cens_time
+  }
+
+
+
+  return(list(outcome_list = outcome_list))
 
 }
 

@@ -362,16 +362,27 @@ ui <- fluidPage(
                sidebarLayout(
                  sidebarPanel = sidebarPanel(
                    h3("GSD_model"),
+                   numericInput("total_events_simulate", "Number of Events", value = 300),
                    fluidRow(
-                     column(6,
-                            numericInput("total_events", "Number of Events", value = 300)
-                            ),
-                     column(6,
-                            numericInput("n_stages", "Number of Stages", value = 2)
-                            )
+                     column(4,
+                            numericInput("n_stages_alpha", "Number of Stages", value = 2)
+                     ),
+                     column(8,
+                            rHandsontableOutput("alpha_spending_table"),
+                     )
                    ),
-                   rHandsontableOutput("alpha_spending_table"),
                    selectInput("fut_method", "Type of Futility", choices = c("None"="none", "Beta-Spending"="Beta", "BPP" = "BPP"), selected = "none"),
+                   conditionalPanel(
+                     condition = "input.fut_method == 'Beta'",
+                     fluidRow(
+                       column(4,
+                              numericInput("n_stages_beta", "Number of Stages", value = 2)
+                              ),
+                       column(8,
+                              rHandsontableOutput("beta_spending_table"),
+                       ),
+                     )
+                   ),
                    conditionalPanel(
                      condition = "input.fut_method == 'BPP'",
                      fluidRow(
@@ -383,27 +394,27 @@ ui <- fluidPage(
                        )
                      )
                    ),
-                   numericInput("n_sims", "Number of simulations", value=1000),
+                   numericInput("n_sims_simulate", "Number of simulations", value=1000),
                    actionButton("calc_GSD_assurance", label  = "Calculate")
                  ),
                  mainPanel = mainPanel(
                    tags$h4(
-                     id = "toggleHeader",
+                     id = "toggleHeader_simulate",
                      style = "cursor: pointer; display: flex; align-items: center; justify-content: space-between;",
                      div(
                        style = "display: flex; align-items: center;",
-                       tags$span(id = "arrow", "►"),  # Arrow icon
+                       tags$span(id = "arrow_simulate", "►"),  # Arrow icon
                        " Show/hide the function"
                      ),
                  actionButton(
-                   inputId = "copy_btn",
+                   inputId = "copy_btn_simulate",
                    label = "📋 Copy",
                    class = "btn btn-sm btn-outline-primary"
                  )
                ),
 
                tags$div(
-                 id = "collapseText",
+                 id = "collapseText_simulate",
                  class = "collapse",
                  aceEditor(
                    outputId = "display_func_simulate",
@@ -417,10 +428,10 @@ ui <- fluidPage(
 
                tags$script(HTML("
     // Toggle collapse + arrow
-    $(document).on('click', '#toggleHeader', function(e) {
-      if (!$(e.target).is('#copy_btn')) {   // avoid toggle when clicking copy
-        $('#collapseText').collapse('toggle');
-        var arrow = $('#arrow');
+    $(document).on('click', '#toggleHeader_simulate', function(e) {
+      if (!$(e.target).is('#copy_btn_simulate')) {   // avoid toggle when clicking copy
+        $('#collapseText_simulate').collapse('toggle');
+        var arrow = $('#arrow_simulate');
         if (arrow.text() == '►') {
           arrow.text('▼');
         } else {
@@ -430,7 +441,7 @@ ui <- fluidPage(
     });
 
     // Copy-to-clipboard
-    $(document).on('click', '#copy_btn', function() {
+    $(document).on('click', '#copy_btn_simulate', function() {
       var editorText = ace.edit('display_func_simulate').getValue();
       navigator.clipboard.writeText(editorText);
     });
@@ -438,10 +449,7 @@ ui <- fluidPage(
 
                tabsetPanel(
                  tabPanel("Tables",
-                          hidden(selectizeInput("selected_columns_sim_table", "Metrics to View",
-                                                choices = c("Assurance", "Duration", "Sample Size"), selected = c("Assurance", "Duration", "Sample Size"),
-                                                multiple = TRUE)),
-                          DTOutput("sim_table")),
+                          tableOutput("sim_table")),
                  tabPanel("Plots",
                           plotlyOutput("boundary_plot"),
                           br(), br(),
@@ -450,18 +458,67 @@ ui <- fluidPage(
       )
                )
       ),
-      # Bayesian UI ---------------------------------
+      # BPP - Timing UI ---------------------------------
 
-      tabPanel("Bayesian",
+      tabPanel("BPP - Timing",
                sidebarLayout(
                  sidebarPanel = sidebarPanel(
-                   numericInput("IFBayesian", "Information Fraction", value = 0.5),
-                   numericInput("tEffBayesian", "Target Effect", value = 0.8),
-                   actionButton("calcBayesian", label  = "Calculate")
+                   numericInput("total_events_BPP_timing", "Number of Events", value = 300),
+                   textInput("BPP_Timing", "IFs to Look at", value = "0.2, 0.4, 0.6, 0.8"),
+                   numericInput("n_sims_BPP_Timing", "Number of simulations", value=10),
+                   actionButton("calc_BPP_Timing", label  = "Calculate")
                  ),
                  mainPanel = mainPanel(
-                   verbatimTextOutput("display_func_Bayesian"),
-                   plotOutput("BayesianPlot")
+                   tags$h4(
+                     id = "toggleHeader_BPP_Timing",
+                     style = "cursor: pointer; display: flex; align-items: center; justify-content: space-between;",
+                     div(
+                       style = "display: flex; align-items: center;",
+                       tags$span(id = "arrow_BPP_Timing", "►"),  # Arrow icon
+                       " Show/hide the function"
+                     ),
+                     actionButton(
+                       inputId = "copy_btn_BPP_Timing",
+                       label = "📋 Copy",
+                       class = "btn btn-sm btn-outline-primary"
+                     )
+                   ),
+
+                   tags$div(
+                     id = "collapseText_BPP_Timing",
+                     class = "collapse",
+                     aceEditor(
+                       outputId = "display_func_BPP_Timing",
+                       value = "",
+                       mode = "r",
+                       theme = "monokai",
+                       readOnly = TRUE,
+                       height = "400px"
+                     )
+                   ),
+
+                   tags$script(HTML("
+    // Toggle collapse + arrow
+    $(document).on('click', '#toggleHeader_BPP_Timing', function(e) {
+      if (!$(e.target).is('#copy_btn_BPP_Timing')) {   // avoid toggle when clicking copy
+        $('#collapseText_BPP_Timing').collapse('toggle');
+        var arrow = $('#arrow_BPP_Timing');
+        if (arrow.text() == '►') {
+          arrow.text('▼');
+        } else {
+          arrow.text('►');
+        }
+      }
+    });
+
+    // Copy-to-clipboard
+    $(document).on('click', '#copy_btn_BPP_Timing', function() {
+      var editorText = ace.edit('display_func_BPP_Timing').getValue();
+      navigator.clipboard.writeText(editorText);
+    });
+  ")),
+
+
                  )
                )
       ),
@@ -666,14 +723,12 @@ server <- function(input, output, session) {
 
   })
 
-    # ---- render rhandsontable ----
-  output$alpha_spending_table <- renderRHandsontable({
+  # Simulate Logic ---------------------------------
 
-    req(input$n_stages)
-    k <- input$n_stages
+    output$alpha_spending_table <- renderRHandsontable({
 
-      if (input$fut_method %in% c("none", "BPP")) {
-
+    req(input$n_stages_alpha)
+    k <- input$n_stages_alpha
         df <- data.frame(
           Stage          = 1:k,
           IF             = seq_len(k) / k,
@@ -686,25 +741,25 @@ server <- function(input, output, session) {
           hot_col("IF", type = "numeric", format = "0.00") %>%
           hot_col("alpha.spending", type = "numeric", format = "0.0000")
 
-      } else if (input$fut_method == "Beta") {
-
-        df <- data.frame(
-          Stage          = 1:k,
-          IF             = seq_len(k) / k,
-          alpha.spending = (1:k)/k * 0.025,
-          beta.spending  = (1:k)/k * 0.01,
-          check.names    = FALSE
-        )
-
-        rhandsontable(df, rowHeaders = FALSE) %>%
-          hot_col("Stage", readOnly = TRUE) %>%
-          hot_col("IF", type = "numeric", format = "0.00") %>%
-          hot_col("alpha.spending", type = "numeric", format = "0.0000") %>%
-          hot_col("beta.spending", type = "numeric", format = "0.0000")
-      }
-
     })
 
+  output$beta_spending_table <- renderRHandsontable({
+
+    req(input$n_stages_beta)
+    k <- input$n_stages_beta
+    df <- data.frame(
+      Stage          = 1:k,
+      IF             = seq_len(k) / k,
+      beta.spending = (1:k)/k * 0.1,
+      check.names    = FALSE
+    )
+
+    rhandsontable(df, rowHeaders = FALSE) %>%
+      hot_col("Stage", readOnly = TRUE) %>%
+      hot_col("IF", type = "numeric", format = "0.00") %>%
+      hot_col("beta.spending", type = "numeric", format = "0.0000")
+
+  })
 
 
 
@@ -754,14 +809,6 @@ server <- function(input, output, session) {
         }
 
 
-
-
-
-
-
-
-        # boundaryDFFut <- data.frame(IF = as.numeric(trimws(unlist(strsplit(IF_vector[chosen_design], ",")))),
-        #                         zStat = c(design$futilityBounds, design$criticalValues[length(design$criticalValues)]))
 
 
 
@@ -865,7 +912,7 @@ server <- function(input, output, session) {
                         strsplit(input$TLimits, ", ")[[1]][1],
                         ", upper = ",
                         strsplit(input$TLimits, ", ")[[1]][2],
-                        "), \n delay_time_dist = \"",
+                        "), \n delay_dist = \"",
                         input$TDist,
                         "\", \n HR_SHELF = SHELF::fitdist(c(",
                         input$HRValues,
@@ -906,12 +953,11 @@ server <- function(input, output, session) {
 
     base_call <- paste0(base_call,
                         "), \n GSD_model = list(events = ",
-                        input$total_events)
+                        input$total_events_simulate)
 
-    df <- hot_to_r(input$alpha_spending_table)
-
-    alpha_vector <- df$`alpha.spending`
-    alpha_IF <- df$IF
+    alpha_df <- hot_to_r(input$alpha_spending_table)
+    alpha_vector <- alpha_df$`alpha.spending`
+    alpha_IF <- alpha_df$IF
 
     base_call <- paste0(
       base_call,
@@ -931,13 +977,21 @@ server <- function(input, output, session) {
 
       if (input$fut_method == "Beta"){
 
-        base_call <- paste0(base_call,
-                            ", \n futility_IF = c(", alpha_IF, ")")
+        beta_df <- hot_to_r(input$beta_spending_table)
+        beta_IF <- beta_df$IF
+        beta_vector <- beta_df$`beta.spending`
 
-        beta_spending <- df$`beta.spending`
 
-        base_call <- paste0(base_call,
-                          ", \n beta_spending = c(", beta_spending, ")")
+        base_call <- paste0(
+          base_call,
+          ", \n futility_IF = c(", paste(beta_IF, collapse = ", "), ")"
+        )
+
+
+        base_call <- paste0(
+          base_call,
+          ", \n beta_spending = c(", paste(beta_vector, collapse = ", "), ")"
+        )
 
 
       }
@@ -948,7 +1002,17 @@ server <- function(input, output, session) {
                             ", \n futility_IF = ", input$BPP_timing)
 
         base_call <- paste0(base_call,
-                            ", \n beta_threshold = ", input$BPP_threshold)
+                            ", \n BPP_threshold = ", input$BPP_threshold)
+
+
+
+        base_call <- paste0(base_call,
+                            "), \n analysis_model  = list(
+          method = \"LRT\",
+          alternative_hypothesis = \"one.sided\",
+          alpha = ", alpha_vector[length(alpha_vector)])
+
+
       }
 
 
@@ -956,7 +1020,7 @@ server <- function(input, output, session) {
 
     base_call <- paste0(base_call,
                         "), \n n_sims = ",
-                        input$n_sims,
+                        input$n_sims_simulate,
                         ")")
 
 
@@ -971,22 +1035,21 @@ server <- function(input, output, session) {
   calculateGSDAssurance <- eventReactive(input$calc_GSD_assurance, {
     call_string <- function_call_simulate()
     result <- eval(parse(text = call_string))
-    shinyjs::show("selected_columns_sim_table")
     shinyjs::show("selected_metrics_sim_plot")
     return(result)
   })
 
 
-    output$sim_table <- renderDT({
+    output$sim_table <- renderTable({
       sim_output <- calculateGSDAssurance()
 
       design_summary <- sim_output %>%
-        group_by(IF) %>%
         summarise(
           Assurance = mean(Decision %in% c("Stop for efficacy", "Successful at final")),
+          `Pr(Early Fut.)` = mean(Decision %in% c("Stop for futility")),
+          `Pr(Early Eff.)` = mean(Decision %in% c("Stop for efficacy")),
           `Average Duration` = round(mean(StopTime, na.rm = TRUE), 2),
-          `Average Sample Size` = round(mean(SampleSize, na.rm = TRUE), 2),
-          .groups = "drop"
+          `Average Sample Size` = round(mean(SampleSize, na.rm = TRUE), 2)
         )
 
     })
@@ -1177,46 +1240,32 @@ server <- function(input, output, session) {
     })
 
 
-  # Bayesian Logic ---------------------------------
-
-    # calc_BPP_hist <- function(n_c, n_t,
-    #                           control_dist = "Exponential",
-    #                           t1 = NULL, t2 = NULL,
-    #                           t1_Beta_a = NULL, t1_Beta_b = NULL,
-    #                           diff_Beta_a = NULL, diff_Beta_b = NULL,
-    #                           delay_time_SHELF, delay_time_dist = "hist",
-    #                           post_delay_HR_SHELF, post_delay_HR_dist = "hist",
-    #                           P_S = 1, P_DTE = 0, cens_events = NULL, IF = NULL,
-    #                           rec_method, rec_period=NULL, rec_power=NULL, rec_rate=NULL, rec_duration=NULL,
-    #                           type_one_error = NULL, N = 50, M = 50)
+  # BPP - Timing Logic ---------------------------------
 
 
-      function_call_Bayesian <- reactive({
-        n_c <- (input$numofpatients*input$ControlRatio)/(sum(input$ControlRatio+input$TreatmentRatio))
-        n_t <- (input$numofpatients*input$TreatmentRatio)/(sum(input$ControlRatio+input$TreatmentRatio))
+      function_call_BPP_Timing <- reactive({
 
 
-
-        base_call <- paste0("calc_BPP_hist(n_c = ",
-                            paste(round(n_c), collapse = ", "),
+        base_call <- paste0("calibrate_BPP_timing(n_c = ",
+                            input$n_c,
                             ", \n n_t = ",
-                            paste(round(n_t), collapse = ", "),
-                            ", \n control_dist = \"",
+                            input$n_t,
+                            ", \n control_model = list(dist = \"",
                             input$ControlDist,
                             "\"")
 
         if (input$ControlDist=="Exponential"){
           base_call <- paste0(base_call,
-                              ", \n control_parameters = \"",
+                              ", \n parameter_mode = \"",
                               input$ExpChoice,
                               "\"")
           if (input$ExpChoice=="Fixed"){
             base_call <- paste0(base_call,
-                                ", \n fixed_parameters_type = \"",
+                                ", \n fixed_type = \"",
                                 input$ExpRateorTime,
                                 "\"")
             if (input$ExpRateorTime == "Parameters"){
-              base_call <-  paste0(base_call, ", \n lambda_c = ",
+              base_call <-  paste0(base_call, ", \n lambda = ",
                                    input$ExpRate)
             } else if (input$ExpRateorTime == "Landmark"){
               base_call <-  paste0(base_call, ", \n t1 = ",
@@ -1282,7 +1331,7 @@ server <- function(input, output, session) {
 
 
         base_call <- paste0(base_call,
-                            ", \n delay_time_SHELF = SHELF::fitdist(c(",
+                            "), \n effect_model = list(delay_SHELF = SHELF::fitdist(c(",
                             input$TValues,
                             "), probs = c(",
                             input$TProbs,
@@ -1290,9 +1339,9 @@ server <- function(input, output, session) {
                             strsplit(input$TLimits, ", ")[[1]][1],
                             ", upper = ",
                             strsplit(input$TLimits, ", ")[[1]][2],
-                            "), \n delay_time_dist = \"",
+                            "), \n delay_dist = \"",
                             input$TDist,
-                            "\", \n post_delay_HR_SHELF = SHELF::fitdist(c(",
+                            "\", \n HR_SHELF = SHELF::fitdist(c(",
                             input$HRValues,
                             "), probs = c(",
                             input$HRProbs,
@@ -1300,64 +1349,71 @@ server <- function(input, output, session) {
                             strsplit(input$HRLimits, ", ")[[1]][1],
                             ", upper = ",
                             strsplit(input$HRLimits, ", ")[[1]][2],
-                            "), \n post_delay_HR_dist = \"",
+                            "), \n HR_dist = \"",
                             input$HRDist,
                             "\",  \n P_S = ",
                             input$P_S,
                             ", \n P_DTE = ",
                             input$P_DTE,
-                            ", \n cens_events = ",
-                            input$censEvents,
-                            ", \n rec_method = \"",
+                            "), \n recruitment_model = list(method = \"",
                             input$rec_method,
                             "\"")
 
 
         if (input$rec_method == "power"){
           base_call <- paste0(base_call,
-                              ", \n rec_period = ",
+                              ", \n period = ",
                               input$rec_period,
-                              ", \n rec_power = ",
+                              ", \n power = ",
                               input$rec_power)
         }
         if (input$rec_method == "PWC"){
           base_call <- paste0(base_call,
-                              ", \n rec_rate = ",
+                              ", \n rate = ",
                               input$rec_rate,
-                              ", \n rec_duration = ",
+                              ", \n duration = ",
                               input$rec_duration)
         }
 
 
 
+        base_call <- paste0(base_call, "), \n IA_model = list(events = ",
+                            input$total_events_BPP_timing,
+                            ", \n IF = c(", input$BPP_Timing, ")")
+
+
+        df <- hot_to_r(input$alpha_spending_table)
+        alpha_vector <- df$`alpha.spending`
 
         base_call <- paste0(base_call,
-                            ", \n nSims = ",
-                            input$nSamples,
-                            ", \n k = ",
-                            input$number_of_looks)
+                            "), \n analysis_model  = list(
+          method = \"LRT\",
+          alternative_hypothesis = \"one.sided\",
+          alpha = ", alpha_vector[length(alpha_vector)])
+
+
+        base_call <- paste0(base_call,
+                            "), \n n_sims = ",
+                            input$n_sims_BPP_Timing,
+                            ")")
 
 
 
-        base_call <- paste0(base_call, ")")
 
         return(base_call)
 
       })
 
-    output$display_func_Bayesian <- renderText({
-      function_call_Bayesian()
+    observe({
+      updateAceEditor(session, "display_func_BPP_Timing", value = function_call_BPP_Timing())
     })
 
-    calculate_Bayesian <- eventReactive(input$calcBayesian, {
-      call_string <- function_call_Bayesian()
+    calculate_BPP_Timing <- eventReactive(input$calc_BPP_Timing, {
+      call_string <- function_call_BPP_Timing()
       result <- eval(parse(text = call_string))
       return(result)
     })
 
-    output$BayesianPlot <- renderPlot({
-      calculate_Bayesian()
-    })
 
 
 
