@@ -150,7 +150,7 @@ apply_GSD_to_trial <- function(n_c,
 
   trial_data <- trial_data[order(trial_data$pseudo_time),]
 
-  if (GSD_model$futility_type %in% c("beta", "none")) {
+  if (GSD_model$futility_type %in% c("Beta", "none")) {
 
     info_rates <- design$informationRates
 
@@ -206,7 +206,7 @@ apply_GSD_to_trial <- function(n_c,
 
     # 2) Beta-spending futility (unchanged logic, only if futility_type == "beta")
     if (!is.null(GSD_model) &&
-        GSD_model$futility_type == "beta") {
+        GSD_model$futility_type == "Beta") {
 
       fut_idx <- which(abs(design$informationRates - IF_here) < 1e-8)
 
@@ -738,7 +738,7 @@ make_rpact_design_from_GSD_model <- function(GSD_model) {
   fut_type <- GSD_model$futility_type
 
   # 3. Combined IF grid
-  if (fut_type == "beta") {
+  if (fut_type == "Beta") {
 
     beta_IF       <- GSD_model$futility_IF
     beta_spending <- GSD_model$beta_spending
@@ -772,7 +772,7 @@ make_rpact_design_from_GSD_model <- function(GSD_model) {
   #==================================================
   # 5. Expand beta
   #==================================================
-  if (fut_type == "beta") {
+  if (fut_type == "Beta") {
 
     beta_spending_full <- numeric(K)
     idx <- 1
@@ -795,7 +795,7 @@ make_rpact_design_from_GSD_model <- function(GSD_model) {
   #==================================================
   # 6. Build rpact design
   #==================================================
-  if (fut_type == "beta") {
+  if (fut_type == "Beta") {
 
     design <- rpact::getDesignGroupSequential(
       typeOfDesign      = "asUser",
