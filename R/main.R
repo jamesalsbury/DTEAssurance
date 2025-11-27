@@ -621,7 +621,7 @@ calc_dte_assurance_interim <- function(n_c, n_t,
     z_stat      <- -fit_summary$coefficients[, "z"]
 
     # --- Futility type: beta-spending ---
-    if (GSD_model$futility_type %in% c("beta", "none")) {
+    if (GSD_model$futility_type %in% c("Beta", "none")) {
 
       rpact_design <- make_rpact_design_from_GSD_model(GSD_model)
       design       <- rpact_design$design
