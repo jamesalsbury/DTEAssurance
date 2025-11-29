@@ -1,12 +1,11 @@
-# Function to calculate the 'optimal' information fraction to calculate BPP
+# Function to calculate the 'optimal' BPP threshold value
 
-Function to calculate the 'optimal' information fraction to calculate
-BPP
+Function to calculate the 'optimal' BPP threshold value
 
 ## Usage
 
 ``` r
-calibrate_BPP_timing(
+calibrate_BPP_threshold(
   n_c,
   n_t,
   control_model,
@@ -14,7 +13,8 @@ calibrate_BPP_timing(
   recruitment_model,
   IA_model,
   analysis_model,
-  n_sims = 50
+  data_generating_model,
+  n_sims = 100
 )
 ```
 
@@ -91,6 +91,17 @@ calibrate_BPP_timing(
 
   - `rho`, `gamma`, `t_star`, `s_star`: additional parameters for WLRT
     or MW (if applicable).
+
+- data_generating_model:
+
+  A named list specifying the parameters for the data-generating
+  mechanism
+
+  - `lambda_c`: hazard rate for the control group
+
+  - `delay_time`: time at which the treatment starts to take effect
+
+  - `post_delay_HR`: hazard ratio, after `delay_time`
 
 - n_sims:
 

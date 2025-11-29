@@ -228,7 +228,7 @@ result <- calc_dte_assurance_interim(n_c = 300, n_t = 300,
 - [`calc_dte_assurance_interim()`](https://jamesalsbury.github.io/DTEAssurance/reference/calc_dte_assurance_interim.md)
   : Calculates operating characteristics for a Group Sequential Trial
   with a Delayed Treatment Effect
-- [`calibrate_BPP_thresholds()`](https://jamesalsbury.github.io/DTEAssurance/reference/calibrate_BPP_thresholds.md)
+- [`calibrate_BPP_threshold()`](https://jamesalsbury.github.io/DTEAssurance/reference/calibrate_BPP_threshold.md)
   : Function to calculate the 'optimal' BPP threshold value
 - [`calibrate_BPP_timing()`](https://jamesalsbury.github.io/DTEAssurance/reference/calibrate_BPP_timing.md)
   : Function to calculate the 'optimal' information fraction to

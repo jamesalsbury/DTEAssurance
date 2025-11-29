@@ -16,6 +16,7 @@ calc_dte_assurance_interim(
   effect_model,
   recruitment_model,
   GSD_model,
+  analysis_model = NULL,
   n_sims = 1000
 )
 ```
