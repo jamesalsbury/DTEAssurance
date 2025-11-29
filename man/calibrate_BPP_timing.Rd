@@ -12,7 +12,7 @@ calibrate_BPP_timing(
   recruitment_model,
   IA_model,
   analysis_model,
-  n_sims = 100
+  n_sims = 50
 )
 }
 \arguments{

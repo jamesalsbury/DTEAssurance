@@ -454,7 +454,7 @@ single_calibration_rep <- function(i,
                                            n_t_planned = n_t,
                                            rec_time_planned = recruitment_model$period,
                                            df_cens_time = censored_data$cens_time,
-                                           censoring_model = list(method = "Events", events = IA_model$events),
+                                           censoring_model = list(method = "Events", events = total_events),
                                            analysis_model = analysis_model,
                                            n_sims = 50)
 

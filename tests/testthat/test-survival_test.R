@@ -9,9 +9,10 @@ test_that("survival_test returns expected structure with LRT", {
   result <- survival_test(df, analysis_method = "LRT", alpha = 0.05, alternative = "one.sided")
 
   expect_type(result, "list")
-  expect_named(result, c("Signif", "observed_HR"))
+  expect_named(result, c("Signif", "observed_HR", "Z"))
   expect_type(result$Signif, "logical")
   expect_type(result$observed_HR, "double")
+  expect_type(result$Z, "double")
   expect_true(result$observed_HR > 0)
 })
 

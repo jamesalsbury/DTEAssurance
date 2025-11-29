@@ -1479,11 +1479,11 @@ calibrate_BPP_timing <- function(n_c, n_t,
 #'     \item \code{alternative_hypothesis}: direction of the alternative (e.g. \code{"one.sided"}).
 #'     \item \code{rho}, \code{gamma}, \code{t_star}, \code{s_star}: additional parameters for WLRT or MW (if applicable).
 #'   }
-#' @param data_generating_model A named list specifying the data-generating mechanisms
+#' @param data_generating_model A named list specifying the parameters for the data-generating mechanism
 #'   \itemize{
-#'     \item \code{null_model}: \code{lambda_c}
-#'     \item \code{fixed_delay}: \code{lambda_c}, \code{delay_time} and \code{post_delay_HR}
-#'     \item \code{no_delay}: \code{lambda_c} and \code{HR}
+#'     \item \code{lambda_c}: hazard rate for the control group
+#'     \item \code{delay_time}: time at which the treatment starts to take effect
+#'     \item \code{post_delay_HR}: hazard ratio, after `delay_time`
 #'   }
 #' @param n_sims Number of data sets to simulate (default is 100).
 #'
@@ -1492,7 +1492,7 @@ calibrate_BPP_timing <- function(n_c, n_t,
 #' @export
 #'
 
-calibrate_BPP_thresholds <- function(n_c,
+calibrate_BPP_threshold <- function(n_c,
                                      n_t,
                                      control_model,
                                      effect_model,
@@ -1503,50 +1503,7 @@ calibrate_BPP_thresholds <- function(n_c,
                                      n_sims = 100){
 
 
-  BPP_df <- data.frame(null = numeric(n_sims),
-                       fixed = numeric(n_sims),
-                       no_delay = numeric(n_sims))
-
-  ##### Do the null_model first
-  for (i in 1:n_sims){
-
-    # --- Simulate survival data ---
-    data <- sim_dte(n_c, n_t, data_generating_model$null_model$lambda_c, delay_time = 0, post_delay_HR = 1,
-                    dist = "Exponential")
-
-    # --- Add recruitment time ---
-    data <- add_recruitment_time(data,
-                                 rec_method = recruitment_model$method,
-                                 rec_period = recruitment_model$period,
-                                 rec_power = recruitment_model$power,
-                                 rec_rate = recruitment_model$rate,
-                                 rec_duration = recruitment_model$duration)
-
-
-    censored_data <- cens_data(data, cens_method = "Events", cens_events = IA_model$events*IA_model$IF)
-
-    data <- censored_data$data
-
-    posterior_samples <- DTEAssurance::update_priors(data,
-                                                     control_model = control_model,
-                                                     effect_model = effect_model,
-                                                     n_samples = 100)
-
-    BPP_outcome <-  DTEAssurance::BPP_func(data,
-                                           posterior_samples,
-                                           control_distribution = control_model$dist,
-                                           n_c_planned = n_c,
-                                           n_t_planned = n_t,
-                                           rec_time_planned = recruitment_model$period,
-                                           df_cens_time = censored_data$cens_time,
-                                           censoring_model = list(method = "Events", events = IA_model$events),
-                                           analysis_model = analysis_model,
-                                           n_sims = 50)
-
-    BPP_df$null[i] <- mean(BPP_outcome$BPP_df$success)
-
-
-  }
+  BPP_vec <- rep(NA, n_sims)
 
 
   ##### Now the fixed delay model
@@ -1554,9 +1511,9 @@ calibrate_BPP_thresholds <- function(n_c,
 
     # --- Simulate survival data ---
     data <- sim_dte(n_c, n_t,
-                    data_generating_model$fixed_delay$lambda_c,
-                    delay_time = data_generating_model$fixed_delay$delay_time,
-                    post_delay_HR = data_generating_model$fixed_delay$post_delay_HR,
+                    data_generating_model$lambda_c,
+                    delay_time = data_generating_model$delay_time,
+                    post_delay_HR = data_generating_model$post_delay_HR,
                     dist = "Exponential")
 
     # --- Add recruitment time ---
@@ -1588,58 +1545,12 @@ calibrate_BPP_thresholds <- function(n_c,
                                            analysis_model = analysis_model,
                                            n_sims = 50)
 
-    BPP_df$fixed[i] <- mean(BPP_outcome$BPP_df$success)
+    BPP_vec[i] <- mean(BPP_outcome$BPP_df$success)
 
 
   }
 
-  ##### And now the no delay model
-  for (i in 1:n_sims){
-
-    # --- Simulate survival data ---
-    data <- sim_dte(n_c, n_t,
-                    data_generating_model$no_delay$lambda_c,
-                    delay_time = 0,
-                    post_delay_HR = data_generating_model$no_delay$HR,
-                    dist = "Exponential")
-
-    # --- Add recruitment time ---
-    data <- add_recruitment_time(data,
-                                 rec_method = recruitment_model$method,
-                                 rec_period = recruitment_model$period,
-                                 rec_power = recruitment_model$power,
-                                 rec_rate = recruitment_model$rate,
-                                 rec_duration = recruitment_model$duration)
-
-
-    censored_data <- cens_data(data, cens_method = "Events", cens_events = IA_model$events*IA_model$IF)
-
-    data <- censored_data$data
-
-    posterior_samples <- DTEAssurance::update_priors(data,
-                                                     control_model = control_model,
-                                                     effect_model = effect_model,
-                                                     n_samples = 100)
-
-    BPP_outcome <-  DTEAssurance::BPP_func(data,
-                                           posterior_samples,
-                                           control_distribution = control_model$dist,
-                                           n_c_planned = n_c,
-                                           n_t_planned = n_t,
-                                           rec_time_planned = recruitment_model$period,
-                                           df_cens_time = censored_data$cens_time,
-                                           censoring_model = list(method = "Events", events = IA_model$events),
-                                           analysis_model = analysis_model,
-                                           n_sims = 50)
-
-    BPP_df$no_delay[i] <- mean(BPP_outcome$BPP_df$success)
-
-
-  }
-
-
-  return(list(BPP_df = BPP_df))
-
+  return(list(BPP_vec = BPP_vec))
 }
 
 

@@ -23,9 +23,9 @@ test_that("calc_dte_assurance_interim returns expected structure and values", {
 
   GSD_model <- list(
     events = 100,
-    alpha_spending = c("0.0125, 0.025"),
-    beta_spending = c("0.05, 0.1"),
-    IF_vec = c("0.5, 1")
+    alpha_spending = c(0.0125, 0.025),
+    alpha_IF = c(0.75, 1),
+    futility_type = "none"
   )
 
   result <- calc_dte_assurance_interim(
@@ -41,9 +41,8 @@ test_that("calc_dte_assurance_interim returns expected structure and values", {
   expect_false(is.null(result))
   expect_true(is.data.frame(result))
   expect_equal(nrow(result), 5)
-  expect_true(all(c("Trial", "IF", "Decision", "StopTime", "SampleSize", "Final_Decision") %in% names(result)))
+  expect_true(all(c("Trial", "Decision", "StopTime", "SampleSize", "Final_Decision") %in% names(result)))
   expect_type(result$Trial, "integer")
-  expect_type(result$IF, "character")
   expect_type(result$Decision, "character")
   expect_type(result$StopTime, "double")
   expect_type(result$SampleSize, "integer")
