@@ -7,11 +7,9 @@
 #' @return No return value, called for side effects (invisibly returns NULL).
 #'         The function launches an interactive 'shiny' application.
 #'
-#' @examples
-#' if (interactive()) {
-#'   # Launch the interactive app in an R session
-#'   assurance_shiny_app()
-#' }
+#' @examplesIf FALSE
+#' # Launch the interactive Shiny app
+#' assurance_shiny_app()
 #'
 #' @export
 assurance_shiny_app <- function() {
@@ -34,11 +32,9 @@ assurance_shiny_app <- function() {
 #' @return No return value, called for side effects (invisibly returns NULL).
 #'         The function launches an interactive 'shiny' application.
 #'
-#' @examples
-#' if (interactive()) {
-#'   # Launch the interactive app in an R session
-#'   assurance_adaptive_shiny_app()
-#' }
+#' @examplesIf FALSE
+#' # Launch the interactive Shiny app
+#' assurance_adaptive_shiny_app()
 #'
 #' @export
 assurance_adaptive_shiny_app <- function() {

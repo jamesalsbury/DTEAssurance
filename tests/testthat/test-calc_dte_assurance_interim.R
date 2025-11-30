@@ -1,4 +1,4 @@
-test_that("calc_dte_assurance_interim returns expected structure and values", {
+test_that("calc_dte_assurance_adaptive returns expected structure and values", {
   control_model <- list(
     dist = "Exponential",
     parameter_mode = "Fixed",

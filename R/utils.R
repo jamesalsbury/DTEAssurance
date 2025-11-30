@@ -467,7 +467,7 @@ single_calibration_rep <- function(i,
 
 make_rpact_design_from_GSD_model <- function(GSD_model) {
 
-  # 1. Extract alpha
+  # 1. Extract alpha side
   alpha_IF       <- GSD_model$alpha_IF
   alpha_spending <- GSD_model$alpha_spending
 
@@ -475,17 +475,13 @@ make_rpact_design_from_GSD_model <- function(GSD_model) {
   fut_type <- GSD_model$futility_type
 
   # 3. Combined IF grid
-  if (fut_type == "Beta") {
-
-    beta_IF       <- GSD_model$futility_IF
-    beta_spending <- GSD_model$beta_spending
-    IF_all <- sort(unique(c(alpha_IF, beta_IF)))
-
-  } else if (fut_type %in% c("none", "BPP")) {
-
-    # For "none" and "BPP", futility boundaries not needed
+  if (fut_type %in% c("Beta", "BPP")) {
+    # For Beta and BPP, include futility information fraction(s)
+    fut_IF <- GSD_model$futility_IF
+    IF_all <- sort(unique(c(alpha_IF, fut_IF)))
+  } else if (fut_type == "none") {
+    # No futility: only alpha IFs
     IF_all <- sort(unique(alpha_IF))
-
   } else {
     stop("Unknown futility type in GSD_model")
   }
@@ -493,39 +489,40 @@ make_rpact_design_from_GSD_model <- function(GSD_model) {
   K <- length(IF_all)
 
   #==================================================
-  # 4. Expand alpha
+  # 4. Expand alpha spending to the full IF grid
   #==================================================
   alpha_spending_full <- numeric(K)
-  idx <- 1
+  idx <- 1L
   for (k in seq_len(K)) {
     if (idx <= length(alpha_IF) && IF_all[k] == alpha_IF[idx]) {
       alpha_spending_full[k] <- alpha_spending[idx]
-      idx <- idx + 1
+      idx <- idx + 1L
     } else {
-      alpha_spending_full[k] <- if (k == 1) 0 else alpha_spending_full[k-1]
+      alpha_spending_full[k] <- if (k == 1L) 0 else alpha_spending_full[k - 1L]
     }
   }
 
   #==================================================
-  # 5. Expand beta
+  # 5. Expand beta spending (frequentist futility)
   #==================================================
   if (fut_type == "Beta") {
 
-    beta_spending_full <- numeric(K)
-    idx <- 1
+    beta_IF       <- GSD_model$futility_IF
+    beta_spending <- GSD_model$beta_spending
 
+    beta_spending_full <- numeric(K)
+    idx <- 1L
     for (k in seq_len(K)) {
       if (idx <= length(beta_IF) && IF_all[k] == beta_IF[idx]) {
         beta_spending_full[k] <- beta_spending[idx]   # cumulative
-        idx <- idx + 1
+        idx <- idx + 1L
       } else {
-        beta_spending_full[k] <- if (k == 1) 0 else beta_spending_full[k-1]
+        beta_spending_full[k] <- if (k == 1L) 0 else beta_spending_full[k - 1L]
       }
     }
 
-  } else if (fut_type %in% c("none", "BPP")) {
-
-    # No futility boundaries for rpact
+  } else {
+    # For "none" and "BPP", no frequentist futility spending in rpact
     beta_spending_full <- rep(0, K)
   }
 

@@ -29,7 +29,7 @@ ui <- fluidPage(
   shinyjs::useShinyjs(),
 
   # Application title
-  titlePanel("Interim Analyses: Delayed Treatment Effects - Elicited Distributions"),
+  titlePanel("Adaptive Design: Delayed Treatment Effects - Elicited Distributions"),
 
   mainPanel(
     tabsetPanel(
@@ -912,9 +912,99 @@ server <- function(input, output, session) {
       # Show the plot
       p
 
-        }
+      } else if (input$fut_method  == "Beta"){
+
+        df_alpha <- hot_to_r(input$alpha_spending_table)
+        alpha_vec <- df_alpha$`alpha.spending`
+        eff_IF <- df_alpha$IF
+
+        df_beta <- hot_to_r(input$beta_spending_table)
+        beta_vec <- df_beta$`beta.spending`
+        fut_IF <- df_beta$IF
+
+        #print)
 
 
+
+        #--------------------------------------------------------------------
+        # 1. EFFICACY DESIGN (Alpha-Spending)
+        #--------------------------------------------------------------------
+        eff_design <- rpact::getDesignGroupSequential(
+          typeOfDesign      = "asUser",
+          informationRates  = eff_IF,
+          userAlphaSpending = alpha_vec,
+          typeBetaSpending  = "none"
+        )
+
+        eff_df <- data.frame(
+          IF     = eff_IF,
+          Z_Stat = eff_design$criticalValues
+        )
+
+
+        #--------------------------------------------------------------------
+        # 2. FUTILITY DESIGN (Beta-Spending)
+        #--------------------------------------------------------------------
+        fut_design <- rpact::getDesignGroupSequential(
+          typeOfDesign      = "noEarlyEfficacy",
+          informationRates  = fut_IF,
+          typeBetaSpending  = "bsUser",
+          userBetaSpending  = beta_vec
+        )
+
+
+        fut_length <- length(fut_IF)
+
+        fut_df <- data.frame(
+          IF     = numeric(fut_length),
+          Z_Stat = numeric(fut_length)
+        )
+
+
+        fut_df$IF <- fut_IF
+        fut_df$Z_Stat[1:(fut_length-1)] <- fut_design$futilityBounds
+
+        fut_df$Z_Stat[fut_length] <-  eff_design$criticalValues[length(eff_design$criticalValues)]
+
+
+        #--------------------------------------------------------------------
+        # 3. Determine plot limits
+        #--------------------------------------------------------------------
+        all_vals <- c(0, eff_df$Z_Stat, fut_df$Z_Stat)
+        plot_range <- range(all_vals)
+
+        margin <- 0.1 * diff(plot_range)
+        extended_ylim <- c(plot_range[1] - margin, plot_range[2] + margin)
+
+
+        #--------------------------------------------------------------------
+        # 4. Plot both curves
+        #--------------------------------------------------------------------
+        p <- plot_ly() %>%
+          add_trace(
+            data = eff_df, x = ~IF, y = ~Z_Stat,
+            type = "scatter", mode = "lines+markers",
+            line = list(color = "red", width = 3),
+            marker = list(color = "red", size = 10),
+            name = "Efficacy Boundary"
+          ) %>%
+          add_trace(
+            data = fut_df, x = ~IF, y = ~Z_Stat,
+            type = "scatter", mode = "lines+markers",
+            line = list(color = "blue", width = 3, dash = "dash"),
+            marker = list(color = "blue", size = 10, symbol = "square"),
+            name = "Futility Boundary (Beta Spending)"
+          ) %>%
+          layout(
+            yaxis = list(range = extended_ylim, title = "Z-Value Boundaries"),
+            xaxis = list(title = "Information Fraction"),
+            title = "Efficacy and Futility Boundaries (Distinct IFs)"
+          )
+
+        p
+
+
+}
 
 
 
@@ -926,7 +1016,7 @@ server <- function(input, output, session) {
   function_call_simulate <- reactive({
 
     base_call <- paste0(
-      "calc_dte_assurance_interim(n_c = ",
+      "calc_dte_assurance_adaptive(n_c = ",
       input$n_c,
       ", \n n_t = ",
       input$n_t,
@@ -1173,8 +1263,7 @@ server <- function(input, output, session) {
         "   method = \"LRT\",\n",
         "   alternative_hypothesis = \"one.sided\",\n",
         "   alpha = ",
-        alpha_vector[length(alpha_vector)],
-        "\n )"
+        alpha_vector[length(alpha_vector)]
       )
     }
 

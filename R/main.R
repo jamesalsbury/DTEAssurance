@@ -202,7 +202,7 @@ cens_data <- function(data,
 #' Class: \code{list}
 #'
 #' @examples
-#' # Minimal example with placeholder inputs
+#' set.seed(123)
 #' control_model <- list(dist = "Exponential", parameter_mode = "Fixed",
 #' fixed_type = "Parameters", lambda = 0.1)
 #' effect_model <- list(delay_SHELF = SHELF::fitdist(c(3, 4, 5),
@@ -569,7 +569,7 @@ add_recruitment_time <- function(data, rec_method,
 #' Class: \code{data.frame}
 #'
 #' @examples
-#' # Minimal example with placeholder inputs
+#' set.seed(123)
 #' control_model <- list(dist = "Exponential", parameter_mode = "Fixed",
 #' fixed_type = "Parameters", lambda = 0.1)
 #'effect_model <- list(P_S = 1, P_DTE = 0,
@@ -756,8 +756,9 @@ calc_dte_assurance_adaptive <- function(n_c, n_t,
 #' @export
 #'
 #' @examples
+#' set.seed(123)
 #'
-#' interim_data = data.frame(survival_time = runif(10, min = 0, max = 1),
+#' interim_data = data.frame(survival_time = runif(10, min = 0, max = 10),
 #' status = rbinom(10, size = 1, prob = 0.5),
 #' group = c(rep("Control", 5), rep("Treatment", 5)))
 #' control_model = list(dist = "Exponential",
@@ -774,7 +775,7 @@ calc_dte_assurance_adaptive <- function(n_c, n_t,
 #'
 #' posterior_df <- update_priors(
 #'   data = interim_data,
-#'   control_model = control_prior_list,
+#'   control_model = control_model,
 #'   effect_model = effect_model,
 #'   n_samples = 10)
 #'
@@ -991,14 +992,17 @@ return(posterior_df)
 #' @export
 #'
 #' @examples
-#' \dontrun{
+#'
+#' df <-
+#'
+#'
 #'   BPP_func(df, posterior_df, n_c_planned = 500, n_t_planned = 500,
 #'            rec_time_planned = 34, df_cens_time = 20,
 #'            censoring_model = list(method = "Events", events = 1200),
 #'            analysis_model = list(method = "LRT",
 #'                                  alpha = 0.025,
 #'                                  alternative_hypothesis = "one.sided"))
-#' }
+#'
 BPP_func <- function(data, posterior_df, control_distribution = "Exponential", n_c_planned, n_t_planned,
                      rec_time_planned, df_cens_time,
                      censoring_model, analysis_model,
