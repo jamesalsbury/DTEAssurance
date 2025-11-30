@@ -19,8 +19,8 @@ function launches an interactive 'shiny' application.
 ## Examples
 
 ``` r
-if (interactive()) {
-  # Launch the interactive app in an R session
-  assurance_shiny_app()
+if (FALSE) {
+# Launch the interactive Shiny app
+assurance_shiny_app()
 }
 ```

@@ -97,9 +97,8 @@ effect_model = list(delay_SHELF = SHELF::fitdist(c(5.5, 6, 6.5), probs = c(0.25,
 
 posterior_df <- update_priors(
   data = interim_data,
-  control_model = control_prior_list,
+  control_model = control_model,
   effect_model = effect_model,
   n_samples = 10)
-#> Error: object 'control_prior_list' not found
 
 ```
