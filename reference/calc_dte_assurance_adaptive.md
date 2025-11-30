@@ -1,0 +1,173 @@
+# Calculates operating characteristics for a Group Sequential Trial with a Delayed Treatment Effect
+
+Simulates assurance and operating characteristics for a group sequential
+trial under prior uncertainty about a delayed treatment effect. The
+function integrates beliefs about control survival, treatment delay,
+post-delay hazard ratio, recruitment, and group sequential design (GSD)
+parameters.
+
+## Usage
+
+``` r
+calc_dte_assurance_adaptive(
+  n_c,
+  n_t,
+  control_model,
+  effect_model,
+  recruitment_model,
+  GSD_model,
+  analysis_model = NULL,
+  n_sims = 1000
+)
+```
+
+## Arguments
+
+- n_c:
+
+  Control group sample size
+
+- n_t:
+
+  Treatment group sample size
+
+- control_model:
+
+  A named list specifying the control arm survival distribution:
+
+  - `dist`: Distribution type ("Exponential" or "Weibull")
+
+  - `parameter_mode`: Either "Fixed" or "Distribution"
+
+  - `fixed_type`: If "Fixed", specify as "Parameters" or "Landmark"
+
+  - `lambda`, `gamma`: Scale and shape parameters
+
+  - `t1`, `t2`: Landmark times
+
+  - `surv_t1`, `surv_t2`: Survival probabilities at landmarks
+
+  - `t1_Beta_a`, `t1_Beta_b`, `diff_Beta_a`, `diff_Beta_b`: Beta prior
+    parameters
+
+- effect_model:
+
+  A named list specifying beliefs about the treatment effect:
+
+  - `delay_SHELF`, `HR_SHELF`: SHELF objects encoding beliefs
+
+  - `delay_dist`, `HR_dist`: Distribution types ("hist" by default)
+
+  - `P_S`: Probability that survival curves separate
+
+  - `P_DTE`: Probability of delayed separation, conditional on
+    separation
+
+- recruitment_model:
+
+  A named list specifying the recruitment process:
+
+  - `method`: "power" or "PWC"
+
+  - `period`, `power`: Parameters for power model
+
+  - `rate`, `duration`: Comma-separated strings for PWC model
+
+- GSD_model:
+
+  A named list specifying the group sequential design:
+
+  - `events`: Total number of events
+
+  - `alpha_spending`: Cumulative alpha spending vector
+
+  - `alpha_IF`: Information Fraction at which we look for efficacy
+
+  - `futility_type`: `beta` (for beta-spending), `BPP` (for Bayesian
+    Predictive Probability) or `none`
+
+  - `futility_IF`: Information Fraction at which we look for futility
+
+  - `beta_spending`: Cumulative beta spending vector
+
+  - `BPP_threshold`: BPP value at which we will stop for futility
+
+- analysis_model:
+
+  A named list specifying the final analysis and decision rule:
+
+  - `method`: e.g. `"LRT"`, `"WLRT"`, or `"MW"`.
+
+  - `alpha`: one-sided type I error level.
+
+  - `alternative_hypothesis`: direction of the alternative (e.g.
+    `"one.sided"`).
+
+  - `rho`, `gamma`, `t_star`, `s_star`: additional parameters for WLRT
+    or MW (if applicable).
+
+- n_sims:
+
+  Number of simulations to run (default = 1000)
+
+## Value
+
+A data frame with one row per simulated trial and the following columns:
+
+- Trial:
+
+  Simulation index
+
+- IF:
+
+  Information fraction label used at the decision point
+
+- Decision:
+
+  Interim decision outcome (e.g., "Continue", "Stop for efficacy", "Stop
+  for futility")
+
+- StopTime:
+
+  Time at which the trial stopped or completed
+
+- SampleSize:
+
+  Total sample size at the time of decision
+
+- Final_Decision:
+
+  Final classification of trial success based on the test statistic and
+  threshold
+
+Class: `data.frame`
+
+## Examples
+
+``` r
+# Minimal example with placeholder inputs
+control_model <- list(dist = "Exponential", parameter_mode = "Fixed",
+fixed_type = "Parameters", lambda = 0.1)
+effect_model <- list(P_S = 1, P_DTE = 0,
+HR_SHELF = SHELF::fitdist(c(0.6, 0.65, 0.7), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 2),
+HR_dist = "gamma",
+delay_SHELF = SHELF::fitdist(c(3, 4, 5), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 10),
+delay_dist = "gamma"
+)
+recruitment_model <- list(method = "power", period = 12, power = 1)
+GSD_model <- list(events = 300, alpha_spending = c(0.0125, 0.025),
+                  alpha_IF = c(0.75, 1), futility_type = "none")
+result <- calc_dte_assurance_adaptive(n_c = 300, n_t = 300,
+                        control_model = control_model,
+                        effect_model = effect_model,
+                        recruitment_model = recruitment_model,
+                        GSD_model = GSD_model,
+                        n_sims = 10)
+str(result)
+#> 'data.frame':    10 obs. of  5 variables:
+#>  $ Trial         : int  1 2 3 4 5 6 7 8 9 10
+#>  $ Decision      : chr  "Stop for efficacy" "Stop for efficacy" "Stop for efficacy" "Stop for efficacy" ...
+#>  $ StopTime      : num  12.2 12.5 12.5 12.1 11.4 ...
+#>  $ SampleSize    : int  600 600 600 600 570 600 600 600 600 600
+#>  $ Final_Decision: chr  "Successful" "Successful" "Successful" "Successful" ...
+```

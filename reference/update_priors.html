@@ -69,7 +69,11 @@ exponential or Weibull model for the control arm.</p>
 <li><p><code>t1</code>, <code>t2</code>: Landmark times</p></li>
 <li><p><code>surv_t1</code>, <code>surv_t2</code>: Survival probabilities at landmarks</p></li>
 <li><p><code>t1_Beta_a</code>, <code>t1_Beta_b</code>, <code>diff_Beta_a</code>, <code>diff_Beta_b</code>: Beta prior parameters</p></li>
-</ul><p>@param effect_model A named list specifying beliefs about the treatment effect:</p><ul><li><p><code>delay_SHELF</code>, <code>HR_SHELF</code>: SHELF objects encoding beliefs</p></li>
+</ul></dd>
+
+
+<dt id="arg-effect-model">effect_model<a class="anchor" aria-label="anchor" href="#arg-effect-model"></a></dt>
+<dd><p>A named list specifying beliefs about the treatment effect:</p><ul><li><p><code>delay_SHELF</code>, <code>HR_SHELF</code>: SHELF objects encoding beliefs</p></li>
 <li><p><code>delay_dist</code>, <code>HR_dist</code>: Distribution types ("hist" by default)</p></li>
 <li><p><code>P_S</code>: Probability that survival curves separate</p></li>
 <li><p><code>P_DTE</code>: Probability of delayed separation, conditional on separation</p></li>
@@ -88,37 +92,35 @@ distribution of the model parameters. Columns normally include:</p><ul><li><p><c
 <li><p><code>HR</code> Posterior samples for the post-delay hazard ratio.</p></li>
 <li><p><code>gamma_c</code> (only if <code>control_distribution = "Weibull"</code>)
 Posterior samples for the Weibull shape parameter.</p></li>
-</ul></div>
-    <div class="section level2">
-    <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>The function performs Bayesian updating under a delayed-effect model:
-$$
-h_T(t) =
-\begin{cases}
-  \lambda_c, &amp; t \le T \\
-  \lambda_c \times HR, &amp; t &gt; T
-\end{cases}
-$$</p>
-<p>Priors for <code>lambda_c</code>, <code>T</code>, and <code>HR</code> are constructed from
+</ul><p>Priors for <code>lambda_c</code>, <code>T</code>, and <code>HR</code> are constructed from
 elicited distributions using the SHELF framework, then updated through
 sampling-based posterior inference.</p>
     </div>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="kw">if</span> <span class="op">(</span><span class="cn">FALSE</span><span class="op">)</span> <span class="op">{</span> <span class="co"># \dontrun{</span></span></span>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="va">interim_data</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>survival_time <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/Uniform.html" class="external-link">runif</a></span><span class="op">(</span><span class="fl">10</span>, min <span class="op">=</span> <span class="fl">0</span>, max <span class="op">=</span> <span class="fl">1</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>status <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/Binomial.html" class="external-link">rbinom</a></span><span class="op">(</span><span class="fl">10</span>, size <span class="op">=</span> <span class="fl">1</span>, prob <span class="op">=</span> <span class="fl">0.5</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>group <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="st">"Control"</span>, <span class="fl">5</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="st">"Treatment"</span>, <span class="fl">5</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">control_model</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>dist <span class="op">=</span> <span class="st">"Exponential"</span>,</span></span>
+<span class="r-in"><span>                     parameter_mode <span class="op">=</span> <span class="st">"Distribution"</span>,</span></span>
+<span class="r-in"><span>                     t1 <span class="op">=</span> <span class="fl">12</span>,</span></span>
+<span class="r-in"><span>                     t1_Beta_a <span class="op">=</span> <span class="fl">20</span>,</span></span>
+<span class="r-in"><span>                     t1_Beta_b <span class="op">=</span> <span class="fl">32</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">effect_model</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>delay_SHELF <span class="op">=</span> <span class="fu">SHELF</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/SHELF/man/fitdist.html" class="external-link">fitdist</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">5.5</span>, <span class="fl">6</span>, <span class="fl">6.5</span><span class="op">)</span>, probs <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.25</span>, <span class="fl">0.5</span>, <span class="fl">0.75</span><span class="op">)</span>, lower <span class="op">=</span> <span class="fl">0</span>, upper <span class="op">=</span> <span class="fl">12</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>                    delay_dist <span class="op">=</span> <span class="st">"gamma"</span>,</span></span>
+<span class="r-in"><span>                    HR_SHELF <span class="op">=</span> <span class="fu">SHELF</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/SHELF/man/fitdist.html" class="external-link">fitdist</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.5</span>, <span class="fl">0.6</span>, <span class="fl">0.7</span><span class="op">)</span>, probs <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.25</span>, <span class="fl">0.5</span>, <span class="fl">0.75</span><span class="op">)</span>, lower <span class="op">=</span> <span class="fl">0</span>, upper <span class="op">=</span> <span class="fl">1</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>                    HR_dist <span class="op">=</span> <span class="st">"gamma"</span>,</span></span>
+<span class="r-in"><span>                    P_S <span class="op">=</span> <span class="fl">1</span>,</span></span>
+<span class="r-in"><span>                    P_DTE <span class="op">=</span> <span class="fl">0</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="va">posterior_df</span> <span class="op">&lt;-</span> <span class="fu">update_priors</span><span class="op">(</span></span></span>
 <span class="r-in"><span>  data <span class="op">=</span> <span class="va">interim_data</span>,</span></span>
-<span class="r-in"><span>  control_distribution <span class="op">=</span> <span class="st">"Exponential"</span>,</span></span>
 <span class="r-in"><span>  control_model <span class="op">=</span> <span class="va">control_prior_list</span>,</span></span>
-<span class="r-in"><span>  delay_SHELF <span class="op">=</span> <span class="va">delay_shelf_obj</span>,</span></span>
-<span class="r-in"><span>  HR_SHELF <span class="op">=</span> <span class="va">hr_shelf_obj</span>,</span></span>
-<span class="r-in"><span>  delay_param_dist <span class="op">=</span> <span class="st">"lognormal"</span>,</span></span>
-<span class="r-in"><span>  HR_param_dist <span class="op">=</span> <span class="st">"lognormal"</span>,</span></span>
-<span class="r-in"><span>  n_samples <span class="op">=</span> <span class="fl">2000</span></span></span>
-<span class="r-in"><span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="op">}</span> <span class="co"># }</span></span></span>
-<span class="r-in"><span></span></span>
+<span class="r-in"><span>  effect_model <span class="op">=</span> <span class="va">effect_model</span>,</span></span>
+<span class="r-in"><span>  n_samples <span class="op">=</span> <span class="fl">10</span><span class="op">)</span></span></span>
+<span class="r-err co"><span class="r-pr">#&gt;</span> <span class="error">Error:</span> object 'control_prior_list' not found</span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span></span></span>
 </code></pre></div>

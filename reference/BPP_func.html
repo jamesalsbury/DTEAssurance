@@ -56,7 +56,17 @@
     <h2 id="arguments">Arguments<a class="anchor" aria-label="anchor" href="#arguments"></a></h2>
 
 
-<dl><dt id="arg-posterior-df">posterior_df<a class="anchor" aria-label="anchor" href="#arg-posterior-df"></a></dt>
+<dl><dt id="arg-data">data<a class="anchor" aria-label="anchor" href="#arg-data"></a></dt>
+<dd><p>A data frame containing interim survival data, censored at <code>df_cens_time</code>, with columns:</p><ul><li><p><code>time</code> Final observed/event time at the interim (on the analysis time scale).</p></li>
+<li><p><code>group</code> Treatment group indicator (e.g. "Control", "Treatment").</p></li>
+<li><p><code>rec_time</code> Recruitment (calendar) time.</p></li>
+<li><p><code>pseudo_time</code> <code>time + rec_time</code> (calendar time at event/censoring).</p></li>
+<li><p><code>status</code> Event indicator at the interim (1 = event, 0 = censored).</p></li>
+<li><p><code>survival_time</code> Observed follow-up time from randomisation to event/censoring at the interim.</p></li>
+</ul></dd>
+
+
+<dt id="arg-posterior-df">posterior_df<a class="anchor" aria-label="anchor" href="#arg-posterior-df"></a></dt>
 <dd><p>A data frame of posterior samples with columns:
 <code>lambda_c</code>, <code>delay_time</code> and <code>HR</code>, corresponding to the control hazard,
 the delay (changepoint) time and the post-delay hazard ratio, respectively.</p></dd>
@@ -99,16 +109,6 @@ either <code>"Exponential"</code> (default) or <code>"Weibull"</code>.</p></dd>
 
 <dt id="arg-n-sims">n_sims<a class="anchor" aria-label="anchor" href="#arg-n-sims"></a></dt>
 <dd><p>Number of predictive simulations to run (default is 1000).</p></dd>
-
-
-<dt id="arg-df">df<a class="anchor" aria-label="anchor" href="#arg-df"></a></dt>
-<dd><p>A data frame containing interim survival data, censored at <code>df_cens_time</code>, with columns:</p><ul><li><p><code>time</code> Final observed/event time at the interim (on the analysis time scale).</p></li>
-<li><p><code>group</code> Treatment group indicator (e.g. "Control", "Treatment").</p></li>
-<li><p><code>rec_time</code> Recruitment (calendar) time.</p></li>
-<li><p><code>pseudo_time</code> <code>time + rec_time</code> (calendar time at event/censoring).</p></li>
-<li><p><code>status</code> Event indicator at the interim (1 = event, 0 = censored).</p></li>
-<li><p><code>survival_time</code> Observed follow-up time from randomisation to event/censoring at the interim.</p></li>
-</ul></dd>
 
 </dl></div>
     <div class="section level2">

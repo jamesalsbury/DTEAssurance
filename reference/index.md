@@ -15,13 +15,13 @@
   : ZODIAC data set
 - [`add_recruitment_time()`](https://jamesalsbury.github.io/DTEAssurance/reference/add_recruitment_time.md)
   : Add recruitment time to a survival dataset
-- [`assurance_GSD_shiny_app()`](https://jamesalsbury.github.io/DTEAssurance/reference/assurance_GSD_shiny_app.md)
-  : Launch the 'shiny' GSD Assurance app
+- [`assurance_adaptive_shiny_app()`](https://jamesalsbury.github.io/DTEAssurance/reference/assurance_adaptive_shiny_app.md)
+  : Launch the 'shiny' adaptive assurance app
 - [`assurance_shiny_app()`](https://jamesalsbury.github.io/DTEAssurance/reference/assurance_shiny_app.md)
   : Launch the 'shiny' Assurance app
 - [`calc_dte_assurance()`](https://jamesalsbury.github.io/DTEAssurance/reference/calc_dte_assurance.md)
   : Calculate Assurance for a Trial with a Delayed Treatment Effect
-- [`calc_dte_assurance_interim()`](https://jamesalsbury.github.io/DTEAssurance/reference/calc_dte_assurance_interim.md)
+- [`calc_dte_assurance_adaptive()`](https://jamesalsbury.github.io/DTEAssurance/reference/calc_dte_assurance_adaptive.md)
   : Calculates operating characteristics for a Group Sequential Trial
   with a Delayed Treatment Effect
 - [`calibrate_BPP_threshold()`](https://jamesalsbury.github.io/DTEAssurance/reference/calibrate_BPP_threshold.md)

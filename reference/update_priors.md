@@ -42,8 +42,9 @@ update_priors(data, control_model, effect_model, n_samples = 1000)
   - `t1_Beta_a`, `t1_Beta_b`, `diff_Beta_a`, `diff_Beta_b`: Beta prior
     parameters
 
-  @param effect_model A named list specifying beliefs about the
-  treatment effect:
+- effect_model:
+
+  A named list specifying beliefs about the treatment effect:
 
   - `delay_SHELF`, `HR_SHELF`: SHELF objects encoding beliefs
 
@@ -72,12 +73,6 @@ distribution of the model parameters. Columns normally include:
 - `gamma_c` (only if `control_distribution = "Weibull"`) Posterior
   samples for the Weibull shape parameter.
 
-## Details
-
-The function performs Bayesian updating under a delayed-effect model:
-\$\$ h_T(t) = \begin{cases} \lambda_c, & t \le T \\ \lambda_c \times HR,
-& t \> T \end{cases} \$\$
-
 Priors for `lambda_c`, `T`, and `HR` are constructed from elicited
 distributions using the SHELF framework, then updated through
 sampling-based posterior inference.
@@ -85,18 +80,26 @@ sampling-based posterior inference.
 ## Examples
 
 ``` r
-if (FALSE) { # \dontrun{
+interim_data = data.frame(survival_time = runif(10, min = 0, max = 1),
+status = rbinom(10, size = 1, prob = 0.5),
+group = c(rep("Control", 5), rep("Treatment", 5)))
+control_model = list(dist = "Exponential",
+                     parameter_mode = "Distribution",
+                     t1 = 12,
+                     t1_Beta_a = 20,
+                     t1_Beta_b = 32)
+effect_model = list(delay_SHELF = SHELF::fitdist(c(5.5, 6, 6.5), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 12),
+                    delay_dist = "gamma",
+                    HR_SHELF = SHELF::fitdist(c(0.5, 0.6, 0.7), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 1),
+                    HR_dist = "gamma",
+                    P_S = 1,
+                    P_DTE = 0)
+
 posterior_df <- update_priors(
   data = interim_data,
-  control_distribution = "Exponential",
   control_model = control_prior_list,
-  delay_SHELF = delay_shelf_obj,
-  HR_SHELF = hr_shelf_obj,
-  delay_param_dist = "lognormal",
-  HR_param_dist = "lognormal",
-  n_samples = 2000
-)
-} # }
-
+  effect_model = effect_model,
+  n_samples = 10)
+#> Error: object 'control_prior_list' not found
 
 ```

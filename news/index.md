@@ -16,9 +16,7 @@ CRAN release: 2025-10-14
 - Introduced
   [`calc_dte_assurance()`](https://jamesalsbury.github.io/DTEAssurance/reference/calc_dte_assurance.md)
   for fixed designs
-- Introduced
-  [`calc_dte_assurance_interim()`](https://jamesalsbury.github.io/DTEAssurance/reference/calc_dte_assurance_interim.md)
-  for group sequential designs
+- Introduced `calc_dte_assurance_interim()` for group sequential designs
 - Included interactive Shiny apps for both design types
 - Added vignettes and pkgdown site for documentation
 
