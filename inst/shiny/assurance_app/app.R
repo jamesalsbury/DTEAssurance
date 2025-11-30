@@ -36,9 +36,9 @@ ui <- fluidPage(
                        selectInput("ExpChoice", "Choice", choices = c("Fixed", "Distribution"), selected = "Fixed"),
                        conditionalPanel(
                          condition = "input.ExpChoice == 'Fixed'",
-                         selectInput("ExpRateorTime", "Input type", choices = c("Parameter", "Landmark")),
+                         selectInput("ExpRateorTime", "Input type", choices = c("Parameters", "Landmark")),
                          conditionalPanel(
-                           condition = "input.ExpRateorTime == 'Parameter'",
+                           condition = "input.ExpRateorTime == 'Parameters'",
                            numericInput("ExpRate", label =  HTML(paste0("Rate (\u03bb",tags$sub("c"), ")")), value = 0.08, min=0),
                            bsTooltip(id = "ExpRate", title = "Rate parameter")
                          ),
@@ -597,7 +597,7 @@ ui <- fluidPage(
 
       if (input$ControlDist == "Exponential") {
         if (input$ExpChoice == "Fixed") {
-          if (input$ExpRateorTime == "Parameter"){
+          if (input$ExpRateorTime == "Parameters"){
             ExpRate <- input$ExpRate
           } else {
             ExpRate <- -log(input$ExpSurv)/input$ExpTime
@@ -806,7 +806,7 @@ ui <- fluidPage(
       # Calculate treatment survival data based on distribution type and input options
       if (input$ControlDist == "Exponential") {
         if (input$ExpChoice == "Fixed") {
-          if (input$ExpRateorTime == "Parameter") {
+          if (input$ExpRateorTime == "Parameters") {
             ExpRate <- input$ExpRate
           } else {
             ExpRate <- -log(input$ExpSurv)/input$ExpTime
@@ -1257,7 +1257,7 @@ ui <- fluidPage(
                               ", \n fixed_type = \"",
                               input$ExpRateorTime,
                               "\"")
-          if (input$ExpRateorTime == "Parameter"){
+          if (input$ExpRateorTime == "Parameters"){
             base_call <-  paste0(base_call, ", \n lambda = ",
                                  input$ExpRate)
           } else if (input$ExpRateorTime == "Landmark"){
@@ -1585,7 +1585,7 @@ ui <- fluidPage(
           if (input$ExpChoice == "Fixed") {
             object_list$fixed_parameters_type <- input$ExpRateorTime
 
-            if (input$ExpRateorTime == "Parameter") {
+            if (input$ExpRateorTime == "Parameters") {
               object_list$lambda_c <- input$ExpRate
             } else if (input$ExpRateorTime == "Landmark") {
               object_list$t1 <- input$ExpTime

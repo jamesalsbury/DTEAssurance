@@ -15,7 +15,7 @@
 #'
 #' @export
 assurance_shiny_app <- function() {
-  app_dir <- system.file("shiny/AssuranceApp/app.R", package = "DTEAssurance")
+  app_dir <- system.file("shiny/assurance_app/app.R", package = "DTEAssurance")
   if (app_dir == "") {
     stop("Could not find app directory. Try re-installing `DTEAssurance`.", call. = FALSE)
   }
@@ -25,7 +25,7 @@ assurance_shiny_app <- function() {
 
 
 
-#' Launch the 'shiny' GSD Assurance app
+#' Launch the 'shiny' adaptive assurance app
 #'
 #' Launches a 'shiny' application to simulate group sequential trials with
 #' delayed treatment effects (DTE) using elicited prior distributions. The app
@@ -37,12 +37,12 @@ assurance_shiny_app <- function() {
 #' @examples
 #' if (interactive()) {
 #'   # Launch the interactive app in an R session
-#'   assurance_GSD_shiny_app()
+#'   assurance_adaptive_shiny_app()
 #' }
 #'
 #' @export
-assurance_GSD_shiny_app <- function() {
-  app_dir <- system.file("shiny/AdaptiveApp/app.R", package = "DTEAssurance")
+assurance_adaptive_shiny_app <- function() {
+  app_dir <- system.file("shiny/adaptive_app/app.R", package = "DTEAssurance")
   if (app_dir == "") {
     stop("Could not find app directory. Try re-installing `DTEAssurance`.", call. = FALSE)
   }

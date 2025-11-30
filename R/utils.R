@@ -431,7 +431,7 @@ single_calibration_rep <- function(i,
                                     IF,
                                     analysis_model) {
 
-    data <- DTEAssurance:::simulate_trial_with_recruitment(
+    data <- simulate_trial_with_recruitment(
       n_c = n_c,
       n_t = n_t,
       control_model = control_model,
@@ -439,15 +439,15 @@ single_calibration_rep <- function(i,
       recruitment_model = recruitment_model
     )
 
-    censored_data <- DTEAssurance::cens_data(data, cens_method = "Events", cens_events = total_events * IF)
+    censored_data <- cens_data(data, cens_method = "Events", cens_events = total_events * IF)
 
     data <- censored_data$data
 
-    posterior_samples <- DTEAssurance::update_priors(data, control_model = control_model,
+    posterior_samples <- update_priors(data, control_model = control_model,
                                                      effect_model = effect_model,
                                                      n_samples = 100)
 
-    BPP_outcome <-  DTEAssurance::BPP_func(data,
+    BPP_outcome <-  BPP_func(data,
                                            posterior_samples,
                                            control_distribution = control_model$dist,
                                            n_c_planned = n_c,

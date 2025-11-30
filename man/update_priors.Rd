@@ -23,8 +23,9 @@ update_priors(data, control_model, effect_model, n_samples = 1000)
 \item \code{t1}, \code{t2}: Landmark times
 \item \code{surv_t1}, \code{surv_t2}: Survival probabilities at landmarks
 \item \code{t1_Beta_a}, \code{t1_Beta_b}, \code{diff_Beta_a}, \code{diff_Beta_b}: Beta prior parameters
-}
-@param effect_model A named list specifying beliefs about the treatment effect:
+}}
+
+\item{effect_model}{A named list specifying beliefs about the treatment effect:
 \itemize{
 \item \code{delay_SHELF}, \code{HR_SHELF}: SHELF objects encoding beliefs
 \item \code{delay_dist}, \code{HR_dist}: Distribution types ("hist" by default)
@@ -44,6 +45,10 @@ distribution of the model parameters. Columns normally include:
 \item \code{gamma_c} (only if \code{control_distribution = "Weibull"})
 Posterior samples for the Weibull shape parameter.
 }
+
+Priors for \code{lambda_c}, \code{T}, and \code{HR} are constructed from
+elicited distributions using the SHELF framework, then updated through
+sampling-based posterior inference.
 }
 \description{
 This function updates elicited priors (defined through SHELF objects and
@@ -51,34 +56,28 @@ parametric prior distributions) using interim survival data under a
 delayed-effect, piecewise-exponential model for the treatment arm and an
 exponential or Weibull model for the control arm.
 }
-\details{
-The function performs Bayesian updating under a delayed-effect model:
-\deqn{
-h_T(t) =
-\begin{cases}
-  \lambda_c, & t \le T \\
-  \lambda_c \times HR, & t > T
-\end{cases}
-}
-
-Priors for \code{lambda_c}, \code{T}, and \code{HR} are constructed from
-elicited distributions using the SHELF framework, then updated through
-sampling-based posterior inference.
-}
 \examples{
-\dontrun{
+
+interim_data = data.frame(survival_time = runif(10, min = 0, max = 1),
+status = rbinom(10, size = 1, prob = 0.5),
+group = c(rep("Control", 5), rep("Treatment", 5)))
+control_model = list(dist = "Exponential",
+                     parameter_mode = "Distribution",
+                     t1 = 12,
+                     t1_Beta_a = 20,
+                     t1_Beta_b = 32)
+effect_model = list(delay_SHELF = SHELF::fitdist(c(5.5, 6, 6.5), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 12),
+                    delay_dist = "gamma",
+                    HR_SHELF = SHELF::fitdist(c(0.5, 0.6, 0.7), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 1),
+                    HR_dist = "gamma",
+                    P_S = 1,
+                    P_DTE = 0)
+
 posterior_df <- update_priors(
   data = interim_data,
-  control_distribution = "Exponential",
   control_model = control_prior_list,
-  delay_SHELF = delay_shelf_obj,
-  HR_SHELF = hr_shelf_obj,
-  delay_param_dist = "lognormal",
-  HR_param_dist = "lognormal",
-  n_samples = 2000
-)
-}
-
+  effect_model = effect_model,
+  n_samples = 10)
 
 
 }

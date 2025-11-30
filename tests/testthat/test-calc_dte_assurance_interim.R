@@ -28,7 +28,7 @@ test_that("calc_dte_assurance_interim returns expected structure and values", {
     futility_type = "none"
   )
 
-  result <- calc_dte_assurance_interim(
+  result <- calc_dte_assurance_adaptive(
     n_c = 50,
     n_t = 50,
     control_model = control_model,

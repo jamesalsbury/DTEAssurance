@@ -548,6 +548,13 @@ add_recruitment_time <- function(data, rec_method,
 #'     \item \code{beta_spending}: Cumulative beta spending vector
 #'     \item \code{BPP_threshold}: BPP value at which we will stop for futility
 #'   }
+#' @param analysis_model A named list specifying the final analysis and decision rule:
+#'   \itemize{
+#'     \item \code{method}: e.g. \code{"LRT"}, \code{"WLRT"}, or \code{"MW"}.
+#'     \item \code{alpha}: one-sided type I error level.
+#'     \item \code{alternative_hypothesis}: direction of the alternative (e.g. \code{"one.sided"}).
+#'     \item \code{rho}, \code{gamma}, \code{t_star}, \code{s_star}: additional parameters for WLRT or MW (if applicable).
+#'   }
 #' @param n_sims Number of simulations to run (default = 1000)
 #'
 #' @return A data frame with one row per simulated trial and the following columns:
@@ -572,9 +579,9 @@ add_recruitment_time <- function(data, rec_method,
 #'delay_dist = "gamma"
 #')
 #' recruitment_model <- list(method = "power", period = 12, power = 1)
-#' GSD_model <- list(events = 300, alpha_spending = c("0.01, 0.025"),
-#'                   beta_spending = c("0.05, 0.1"), IF_vec = c("0.5, 1"))
-#' result <- calc_dte_assurance_interim(n_c = 300, n_t = 300,
+#' GSD_model <- list(events = 300, alpha_spending = c(0.0125, 0.025),
+#'                   alpha_IF = c(0.75, 1), futility_type = "none")
+#' result <- calc_dte_assurance_adaptive(n_c = 300, n_t = 300,
 #'                         control_model = control_model,
 #'                         effect_model = effect_model,
 #'                         recruitment_model = recruitment_model,
@@ -585,7 +592,7 @@ add_recruitment_time <- function(data, rec_method,
 #' @export
 
 
-calc_dte_assurance_interim <- function(n_c, n_t,
+calc_dte_assurance_adaptive <- function(n_c, n_t,
                                        control_model,
                                        effect_model,
                                        recruitment_model,
@@ -711,7 +718,6 @@ calc_dte_assurance_interim <- function(n_c, n_t,
 #'     \item \code{group} Group identifier (e.g., "Control", "Treatment").
 #'   }
 #'
-#'
 #' @param control_model A named list specifying the control arm survival distribution:
 #'   \itemize{
 #'     \item \code{dist}: Distribution type ("Exponential" or "Weibull")
@@ -722,7 +728,7 @@ calc_dte_assurance_interim <- function(n_c, n_t,
 #'     \item \code{surv_t1}, \code{surv_t2}: Survival probabilities at landmarks
 #'     \item \code{t1_Beta_a}, \code{t1_Beta_b}, \code{diff_Beta_a}, \code{diff_Beta_b}: Beta prior parameters
 #'   }
-#'  @param effect_model A named list specifying beliefs about the treatment effect:
+#' @param effect_model A named list specifying beliefs about the treatment effect:
 #'   \itemize{
 #'     \item \code{delay_SHELF}, \code{HR_SHELF}: SHELF objects encoding beliefs
 #'     \item \code{delay_dist}, \code{HR_dist}: Distribution types ("hist" by default)
@@ -742,15 +748,6 @@ calc_dte_assurance_interim <- function(n_c, n_t,
 #'           Posterior samples for the Weibull shape parameter.
 #'   }
 #'
-#' @details
-#' The function performs Bayesian updating under a delayed-effect model:
-#' \deqn{
-#' h_T(t) =
-#' \begin{cases}
-#'   \lambda_c, & t \le T \\
-#'   \lambda_c \times HR, & t > T
-#' \end{cases}
-#' }
 #'
 #' Priors for \code{lambda_c}, \code{T}, and \code{HR} are constructed from
 #' elicited distributions using the SHELF framework, then updated through
@@ -759,19 +756,27 @@ calc_dte_assurance_interim <- function(n_c, n_t,
 #' @export
 #'
 #' @examples
-#' \dontrun{
+#'
+#' interim_data = data.frame(survival_time = runif(10, min = 0, max = 1),
+#' status = rbinom(10, size = 1, prob = 0.5),
+#' group = c(rep("Control", 5), rep("Treatment", 5)))
+#' control_model = list(dist = "Exponential",
+#'                      parameter_mode = "Distribution",
+#'                      t1 = 12,
+#'                      t1_Beta_a = 20,
+#'                      t1_Beta_b = 32)
+#' effect_model = list(delay_SHELF = SHELF::fitdist(c(5.5, 6, 6.5), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 12),
+#'                     delay_dist = "gamma",
+#'                     HR_SHELF = SHELF::fitdist(c(0.5, 0.6, 0.7), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 1),
+#'                     HR_dist = "gamma",
+#'                     P_S = 1,
+#'                     P_DTE = 0)
+#'
 #' posterior_df <- update_priors(
 #'   data = interim_data,
-#'   control_distribution = "Exponential",
 #'   control_model = control_prior_list,
-#'   delay_SHELF = delay_shelf_obj,
-#'   HR_SHELF = hr_shelf_obj,
-#'   delay_param_dist = "lognormal",
-#'   HR_param_dist = "lognormal",
-#'   n_samples = 2000
-#' )
-#' }
-#'
+#'   effect_model = effect_model,
+#'   n_samples = 10)
 #'
 #'
 
@@ -927,10 +932,10 @@ data_list$pi <- pi_vec
 
 
 
-model = jags.model(textConnection(modelstring), data = data_list, quiet = T)
+model = rjags::jags.model(textConnection(modelstring), data = data_list, quiet = T)
 
 
-update(model, n.iter=100)
+stats::update(model, n.iter=100)
 
 var_names <- if (control_model$dist == "Exponential") {
   c("lambda_c", "HR", "delay_time")
@@ -938,7 +943,7 @@ var_names <- if (control_model$dist == "Exponential") {
   c("lambda_c", "gamma_c", "HR", "delay_time")
 }
 
-output=coda.samples(model=model, variable.names=var_names, n.iter = n_samples)
+output = rjags::coda.samples(model=model, variable.names=var_names, n.iter = n_samples)
 
 
 posterior_df <- as.data.frame(as.matrix(output))
@@ -949,7 +954,7 @@ return(posterior_df)
 
 #' Calculate Bayesian Predictive Probability given interim data and posterior samples
 #'
-#' @param df A data frame containing interim survival data, censored at \code{df_cens_time}, with columns:
+#' @param data A data frame containing interim survival data, censored at \code{df_cens_time}, with columns:
 #'   \itemize{
 #'     \item \code{time} Final observed/event time at the interim (on the analysis time scale).
 #'     \item \code{group} Treatment group indicator (e.g. "Control", "Treatment").
@@ -1020,7 +1025,7 @@ BPP_func <- function(data, posterior_df, control_distribution = "Exponential", n
 
 
     #Sampling the recruitment times for the unenrolled patients
-    unenrolled_rec_times <- runif(n_unenrolled_control+n_unenrolled_treatment, df_cens_time, rec_time_planned)
+    unenrolled_rec_times <- stats::runif(n_unenrolled_control+n_unenrolled_treatment, df_cens_time, rec_time_planned)
 
     idx <- sample(seq_len(nrow(posterior_df)), 1)
     sampled_lambda_c      <- lambda_c_samples[idx]
@@ -1032,11 +1037,11 @@ BPP_func <- function(data, posterior_df, control_distribution = "Exponential", n
 
       #For the unenrolled data, we can sample the remaining data according to the updated (sampled) parameters
       #First we do the control group
-      unenrolled_control_times <- rexp(n_unenrolled_control, sampled_lambda_c)
+      unenrolled_control_times <- stats::rexp(n_unenrolled_control, sampled_lambda_c)
 
       #Now we do the treatment group
       CP <- exp(-(sampled_lambda_c*sampled_delay_time))
-      u <- runif(n_unenrolled_treatment)
+      u <- stats::runif(n_unenrolled_treatment)
       unenrolled_treatment_times <- ifelse(u > CP,
                                            (-log(u))/sampled_lambda_c,
                                            (1/sampled_lambda_t)*(sampled_delay_time*sampled_lambda_t-log(u)-sampled_delay_time*sampled_lambda_c))
@@ -1047,11 +1052,11 @@ BPP_func <- function(data, posterior_df, control_distribution = "Exponential", n
 
       sampled_gamma_c <- gamma_c_samples[idx]
 
-      u <- runif(n_unenrolled_control)
+      u <- stats::runif(n_unenrolled_control)
       unenrolled_control_times <- (-log(u))^(1 / sampled_gamma_c) / sampled_lambda_c
 
       CP <- exp(-(sampled_lambda_c*sampled_delay_time)^sampled_gamma_c)
-      u <- runif(n_unenrolled_treatment)
+      u <- stats::runif(n_unenrolled_treatment)
 
 
       unenrolled_treatment_times <- ifelse(
@@ -1088,18 +1093,18 @@ BPP_func <- function(data, posterior_df, control_distribution = "Exponential", n
 
     #Extracting the censored observations in the control group
     control_censored_df <- censored_df %>%
-      filter(group=="Control")
+      dplyr::filter(.data$group=="Control")
 
 
     if (control_distribution == "Exponential"){
       #Adding a exp(lambda_c) value to the censored value
-      control_censored_df$final_time <- control_censored_df$survival_time + rexp(n_censored_control, rate = sampled_lambda_c)
+      control_censored_df$final_time <- control_censored_df$survival_time + stats::rexp(n_censored_control, rate = sampled_lambda_c)
     }
 
 
     if (control_distribution == "Weibull"){
 
-      V  <- runif(n_censored_control)
+      V  <- stats::runif(n_censored_control)
 
       control_censored_df$final_time <- (
         ( (sampled_lambda_c * control_censored_df$survival_time)^sampled_gamma_c - log(V) )^(1 / sampled_gamma_c)
@@ -1113,8 +1118,8 @@ BPP_func <- function(data, posterior_df, control_distribution = "Exponential", n
 
     # Subset: treatment patients censored before the delay
     censored_treatment_before_delay <- censored_df %>%
-      filter(group == "Treatment") %>%
-      filter(survival_time <= sampled_delay_time)
+      dplyr::filter(.data$group == "Treatment") %>%
+      dplyr::filter(.data$survival_time <= sampled_delay_time)
 
     n_before <- nrow(censored_treatment_before_delay)
 
@@ -1125,7 +1130,7 @@ BPP_func <- function(data, posterior_df, control_distribution = "Exponential", n
         # ------- EXISTING EXPONENTIAL LOGIC (unchanged) -------
 
         # Conditional uniform U ~ Unif(0,1)
-        u <- runif(n_before)
+        u <- stats::runif(n_before)
 
         # Correct conditional probability that event occurs before sampled_delay_time
         p_before <- 1 - exp(-sampled_lambda_c * (sampled_delay_time - censored_treatment_before_delay$survival_time))
@@ -1159,7 +1164,7 @@ BPP_func <- function(data, posterior_df, control_distribution = "Exponential", n
         p_before <- 1 - exp(-(H_tau - H_t0))
 
         # Branch draw: which patients have event before vs after tau
-        u_branch <- runif(n_before)
+        u_branch <- stats::runif(n_before)
 
         early_idx <- u_branch <= p_before
         late_idx  <- !early_idx
@@ -1170,7 +1175,7 @@ BPP_func <- function(data, posterior_df, control_distribution = "Exponential", n
         if (any(early_idx)) {
           k <- sum(early_idx)
 
-          v_early <- runif(k)               # conditional position within [t0, tau]
+          v_early <- stats::runif(k)               # conditional position within [t0, tau]
           S_t0_e  <- S_t0[early_idx]
 
           S_t_e <- S_t0_e - v_early * (S_t0_e - S_tau)
@@ -1186,7 +1191,7 @@ BPP_func <- function(data, posterior_df, control_distribution = "Exponential", n
           k <- sum(late_idx)
 
 
-          v_late <- runif(k)
+          v_late <- stats::runif(k)
 
           H_C_t <- H_tau - (log(v_late)) / sampled_post_delay_HR
           t_late <- (H_C_t)^(1 / sampled_gamma_c) / sampled_lambda_c
@@ -1206,8 +1211,8 @@ BPP_func <- function(data, posterior_df, control_distribution = "Exponential", n
 
     # Extract censored treatment observations with t0 > tau
     censored_treatment_after_delay <- censored_df %>%
-      filter(group == "Treatment") %>%
-      filter(survival_time > sampled_delay_time)
+      dplyr::filter(.data$group == "Treatment") %>%
+      dplyr::filter(.data$survival_time > sampled_delay_time)
 
     n_after <- nrow(censored_treatment_after_delay)
 
@@ -1218,7 +1223,7 @@ BPP_func <- function(data, posterior_df, control_distribution = "Exponential", n
 
         # existing exponential logic (unchanged)
         censored_treatment_after_delay$final_time <-
-          censored_treatment_after_delay$survival_time + rexp(n_after, rate = sampled_lambda_t)
+          censored_treatment_after_delay$survival_time + stats::rexp(n_after, rate = sampled_lambda_t)
 
       } else if (control_distribution == "Weibull") {
 
@@ -1227,7 +1232,7 @@ BPP_func <- function(data, posterior_df, control_distribution = "Exponential", n
         sampled_lambda_t <- sampled_lambda_c * sampled_post_delay_HR^(1 / sampled_gamma_c)
 
         # conditional Weibull residual life
-        V <- runif(n_after)
+        V <- stats::runif(n_after)
 
 
         H_t0 <- (sampled_lambda_t * censored_treatment_after_delay$survival_time)^sampled_gamma_c
@@ -1245,7 +1250,7 @@ BPP_func <- function(data, posterior_df, control_distribution = "Exponential", n
 
 
     non_censored_df <- data %>%
-      filter(status == 1)
+      dplyr::filter(.data$status == 1)
 
     final_non_censored_df <- non_censored_df[,1:4]
 
@@ -1552,7 +1557,6 @@ calibrate_BPP_threshold <- function(n_c,
 
   return(list(BPP_vec = BPP_vec))
 }
-
 
 
 
