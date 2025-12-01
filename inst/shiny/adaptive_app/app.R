@@ -922,13 +922,9 @@ server <- function(input, output, session) {
         beta_vec <- df_beta$`beta.spending`
         fut_IF <- df_beta$IF
 
-        #print)
 
 
 
-        #--------------------------------------------------------------------
-        # 1. EFFICACY DESIGN (Alpha-Spending)
-        #--------------------------------------------------------------------
         eff_design <- rpact::getDesignGroupSequential(
           typeOfDesign      = "asUser",
           informationRates  = eff_IF,
@@ -942,9 +938,7 @@ server <- function(input, output, session) {
         )
 
 
-        #--------------------------------------------------------------------
-        # 2. FUTILITY DESIGN (Beta-Spending)
-        #--------------------------------------------------------------------
+
         fut_design <- rpact::getDesignGroupSequential(
           typeOfDesign      = "noEarlyEfficacy",
           informationRates  = fut_IF,
@@ -967,9 +961,7 @@ server <- function(input, output, session) {
         fut_df$Z_Stat[fut_length] <-  eff_design$criticalValues[length(eff_design$criticalValues)]
 
 
-        #--------------------------------------------------------------------
-        # 3. Determine plot limits
-        #--------------------------------------------------------------------
+
         all_vals <- c(0, eff_df$Z_Stat, fut_df$Z_Stat)
         plot_range <- range(all_vals)
 
@@ -977,9 +969,6 @@ server <- function(input, output, session) {
         extended_ylim <- c(plot_range[1] - margin, plot_range[2] + margin)
 
 
-        #--------------------------------------------------------------------
-        # 4. Plot both curves
-        #--------------------------------------------------------------------
         p <- plot_ly() %>%
           add_trace(
             data = eff_df, x = ~IF, y = ~Z_Stat,
@@ -1718,7 +1707,6 @@ server <- function(input, output, session) {
 
       )
 
-      # ------------------ CONTROL MODEL ------------------
       if (input$ControlDist == "Exponential") {
 
         base_call <- paste0(
@@ -1840,7 +1828,6 @@ server <- function(input, output, session) {
       )
 
 
-      # ------------------ RECRUITMENT MODEL ------------------
       base_call <- paste0(
         base_call,
         ", \n recruitment_model = list(\n   method = \"", input$rec_method, "\""
@@ -1868,7 +1855,7 @@ server <- function(input, output, session) {
 
       base_call <- paste0(base_call, ")")
 
-      # ------------------ IA MODEL ------------------
+
       base_call <- paste0(
         base_call,
         ", \n IA_model = list(\n    events = ", input$total_events_BPP_threshold,
@@ -1877,7 +1864,7 @@ server <- function(input, output, session) {
 
 
 
-      # ------------------ ANALYSIS MODEL ------------------
+
       df <- hot_to_r(input$alpha_spending_table)
       alpha_vector <- df$`alpha.spending`
 
@@ -1889,7 +1876,6 @@ server <- function(input, output, session) {
         "    alpha = ", alpha_vector[length(alpha_vector)], "\n  )"
       )
 
-      # ------------------ DATA GENERATING MODEL ------------------
       base_call <- paste0(
         base_call,
         ", \n data_generating_model = list(\n",
@@ -1899,7 +1885,6 @@ server <- function(input, output, session) {
         "\n  )"
       )
 
-      # ------------------ N SIMS ------------------
       base_call <- paste0(
         base_call,
         ", \n n_sims = ", input$n_sims_BPP_Threshold,

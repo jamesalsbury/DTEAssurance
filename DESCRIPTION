@@ -1,7 +1,7 @@
 Package: DTEAssurance
 Type: Package
 Title: Assurance Methods for Clinical Trials with a Delayed Treatment Effect
-Version: 1.0.1
+Version: 1.1.0
 Authors@R: 
     person("James", "Salsbury", email = "jsalsbury1@sheffield.ac.uk",
            role = c("aut", "cre"),

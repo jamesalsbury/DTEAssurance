@@ -44,15 +44,8 @@ The methodology is based on the following papers:
 
 ## Installation
 
-You can install `DTEAssurance` from GitHub using:
+You can install `DTEAssurance` on CRAN  using:
 
-```{r}
-# Install from GitHub
-devtools::install_github("jamesalsbury/DTEAssurance")
-library(DTEAssurance)
-```
-
-Once accepted to CRAN, you'll be able to install it with:
 ```{r}
 install.packages("DTEAssurance")
 ```
@@ -159,7 +152,7 @@ DTEAssurance::assurance_GSD_shiny_app()
 You can also use the package offline via the main function:
 
 ```{r, eval = F}
-DTEAssurance::calc_dte_assurance_interim()
+DTEAssurance::calc_dte_assurance_adaptive()
 ```
 
 This function requires the following arguments:
@@ -182,9 +175,11 @@ HR_SHELF = SHELF::fitdist(c(0.55, 0.6, 0.7), probs = c(0.25, 0.5, 0.75), lower =
 HR_dist = "gamma",
 P_S = 0.9, P_DTE = 0.7)
 recruitment_model <- list(method = "power", period = 12, power = 1)
-GSD_model <- list(events = 450, alpha_spending = c("0.01, 0.025"),
-                  beta_spending = c("0.05, 0.1"), IF_vec = c("0.5, 1"))
-result <- calc_dte_assurance_interim(n_c = 300, n_t = 300,
+GSD_model <- list(events = 450,
+                  alpha_spending = c(0.0125, 0.025),
+                  alpha_IF = c(0.75, 1),
+                  futility_type = "none")
+result <- calc_dte_assurance_adaptive(n_c = 300, n_t = 300,
                              control_model = control_model,
                              effect_model = effect_model,
                              recruitment_model = recruitment_model,
@@ -195,115 +190,20 @@ str(result)
 
 ```
 
-If we wish to compare the operating characteristics we can do so by changing the `GSD_model` and plotting the proportion of outcomes:
-
-
 ```{r}
+design_summary <- result %>%
+        summarise(
+          Assurance = mean(Decision %in% c("Stop for efficacy", "Successful at final")),
+          `Pr(Early Fut.)` = mean(Decision %in% c("Stop for futility")),
+          `Pr(Early Eff.)` = mean(Decision %in% c("Stop for efficacy")),
+          `Average Duration` = round(mean(StopTime, na.rm = TRUE), 2),
+          `Average Sample Size` = round(mean(SampleSize, na.rm = TRUE), 2)
+        )
 
-GSD_model <- list(events = 450, 
-                  alpha_spending = c("0.01, 0.025", "0.01, 0.025", "0.01, 0.025"),
-                  beta_spending = c("0.05, 0.1", "0.05, 0.1", "0.05, 0.1"), 
-                  IF_vec = c("0.25, 1", "0.5, 1", "0.75, 1"))
 
-result <- calc_dte_assurance_interim(n_c = 300, n_t = 300,
-                             control_model = control_model,
-                             effect_model = effect_model,
-                             recruitment_model = recruitment_model,
-                             GSD_model = GSD_model,
-                             n_sims = 500)
-
+design_summary
 ```
 
-
-```{r, echo = F}
-result$Outcome <- with(result, ifelse(
-      Decision == "Stop for efficacy" & Final_Decision == "Successful", "Correctly stopped for Efficacy",
-      ifelse(Decision == "Stop for efficacy" & Final_Decision == "Unsuccessful", "Incorrectly stopped for Efficacy",
-             ifelse(Decision == "Stop for futility" & Final_Decision == "Successful", "Incorrectly stopped for Futility",
-                    ifelse(Decision == "Stop for futility" & Final_Decision == "Unsuccessful", "Correctly stopped for Futility",
-                           ifelse(Decision == "Successful at final" & Final_Decision == "Successful", "Successful at Final Analysis",
-                                  # Everything else (including final boundary failed due to interim analyses) is treated as Unsuccessful
-                                  "Unsuccessful at Final Analysis"
-                           ))))))
-
-
-
-      outcomes_decisions <- c("Successful at Final Analysis", "Correctly stopped for Efficacy",
-                              "Incorrectly stopped for Efficacy", "Incorrectly stopped for Futility",
-                              "Correctly stopped for Futility", "Unsuccessful at Final Analysis")
-
-      result$Outcome <- factor(result$Outcome, levels = outcomes_decisions)
-
-      outcome_decisions_colors <- setNames(c("green", "green", "green", "red", "red", "red"), outcomes_decisions)
-
-
-
-      # Create matrix with all combinations
-      IF_outcomes_mat <- result %>%
-        group_by(IF, Outcome) %>%
-        summarise(n = n(), .groups = "drop") %>%
-        complete(IF, Outcome = outcomes_decisions, fill = list(n = 0)) %>%
-        group_by(IF) %>%
-        mutate(Proportion = round(n / sum(n), 3)) %>%
-        ungroup() %>%
-        mutate(Outcome = factor(Outcome, levels = outcomes_decisions)) %>%
-        arrange(Outcome) %>%
-        select(-n) %>%
-        pivot_wider(names_from = IF, values_from = Proportion, values_fill = 0)
-
-      # Remove the Outcome column and convert to matrix
-      numeric_mat <- as.matrix(IF_outcomes_mat[, -1])
-
-      # Now apply sum to rows 1:3
-
-      density_vals <- c(NA, 20, 50, 50, 20, NA)
-      angle_vals <- c(0, 45, -45, -45, 45, 0)
-
-      # Get bar heights to determine where to draw lines
-      bar_heights <- apply(numeric_mat[1:3, , drop = F], 2, sum)
-
-
-      bar_positions <- barplot(numeric_mat,
-                               beside = FALSE,
-                               width = 1,  # Optional, but explicit
-                               col = outcome_decisions_colors[outcomes_decisions],
-                               density = density_vals,
-                               angle = angle_vals,
-                               xlab = "Information Fraction",
-                               ylab = "Proportion",
-                               main = "Proportion of Trial Outcomes at Different Information Fractions")
-
-
-
-      legend("topright",
-             legend = c(rev(outcomes_decisions), "Assurance"),
-             fill = c(rev(outcome_decisions_colors[outcomes_decisions]), NA),
-             border = c(rep("black", length(outcomes_decisions)), NA),
-             density = c(rev(density_vals), NA),
-             angle = c(rev(angle_vals), NA),
-             col = c(rep(NA, length(outcomes_decisions)), "black"),
-             cex = 0.6,
-             xpd = TRUE,
-             inset = c(-0.4, 0),
-             bty = "n")
-
-
-
-      # Add black separator lines between top and bottom outcome segments
-      segments(x0 = bar_positions - 0.5,  # left edge of each bar
-               x1 = bar_positions + 0.5,  # right edge
-               y0 = bar_heights,          # y position (cumulative height of top 3)
-               y1 = bar_heights,
-               col = "black",
-               lwd = 5)
-
-      # Add text labels just below the separator line
-      text(x = bar_positions,
-           y = bar_heights,  # Adjust this for spacing
-           labels = round(bar_heights, 2),
-           cex = 1,                # text size
-           pos = 1)                  # below the specified y (1 = below)
-```
 
 
 
