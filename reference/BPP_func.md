@@ -103,12 +103,43 @@ model and analysis model.
 ## Examples
 
 ``` r
-if (FALSE) { # \dontrun{
-  BPP_func(df, posterior_df, n_c_planned = 500, n_t_planned = 500,
-           rec_time_planned = 34, df_cens_time = 20,
-           censoring_model = list(method = "Events", events = 1200),
-           analysis_model = list(method = "LRT",
-                                 alpha = 0.025,
-                                 alternative_hypothesis = "one.sided"))
-} # }
+set.seed(123)
+n <- 30
+cens_time <- 15
+
+time <- runif(n, 0, 12)
+rec_time <- runif(n, 0, 12)
+
+
+df <- data.frame(
+  time = time,
+  group = c(rep("Control", n/2), rep("Treatment", n/2)),
+  rec_time = rec_time
+)
+
+
+df$pseudo_time <- df$time + df$rec_time
+df$status <- df$pseudo_time < cens_time
+df$survival_time <- ifelse(df$status == TRUE, df$time, cens_time - df$rec_time)
+
+
+posterior_df <- data.frame(HR = rnorm(20, mean = 0.75, sd = 0.05),
+                           delay_time = rep(0, 20),
+                           lambda_c = rnorm(20, log(2)/9, sd = 0.01))
+
+
+censoring_model = list(method = "Time", time = 25)
+analysis_model = list(method = "LRT",
+                      alpha = 0.025,
+                      alternative_hypothesis = "one.sided")
+
+BPP_outcome <- BPP_func(df,
+           posterior_df,
+           control_distribution = "Exponential",
+           n_c_planned = n/2,
+           n_t_planned = n/2,
+           rec_time_planned = 12, df_cens_time = 15,
+           censoring_model = censoring_model,
+           analysis_model = analysis_model,
+           n_sims = 10)
 ```

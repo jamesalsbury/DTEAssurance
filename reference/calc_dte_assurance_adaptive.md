@@ -145,7 +145,7 @@ Class: `data.frame`
 ## Examples
 
 ``` r
-# Minimal example with placeholder inputs
+set.seed(123)
 control_model <- list(dist = "Exponential", parameter_mode = "Fixed",
 fixed_type = "Parameters", lambda = 0.1)
 effect_model <- list(P_S = 1, P_DTE = 0,
@@ -166,8 +166,8 @@ result <- calc_dte_assurance_adaptive(n_c = 300, n_t = 300,
 str(result)
 #> 'data.frame':    10 obs. of  5 variables:
 #>  $ Trial         : int  1 2 3 4 5 6 7 8 9 10
-#>  $ Decision      : chr  "Stop for efficacy" "Stop for efficacy" "Stop for efficacy" "Stop for efficacy" ...
-#>  $ StopTime      : num  12.2 12.5 12.5 12.1 11.4 ...
-#>  $ SampleSize    : int  600 600 600 600 570 600 600 600 600 600
+#>  $ Decision      : chr  "Stop for efficacy" "Successful at final" "Stop for efficacy" "Stop for efficacy" ...
+#>  $ StopTime      : num  12.5 13.6 12 12.4 12 ...
+#>  $ SampleSize    : int  600 600 600 600 600 600 600 600 600 600
 #>  $ Final_Decision: chr  "Successful" "Successful" "Successful" "Successful" ...
 ```

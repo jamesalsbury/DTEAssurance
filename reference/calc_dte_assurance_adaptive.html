@@ -137,7 +137,7 @@
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="co"># Minimal example with placeholder inputs</span></span></span>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">123</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">control_model</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>dist <span class="op">=</span> <span class="st">"Exponential"</span>, parameter_mode <span class="op">=</span> <span class="st">"Fixed"</span>,</span></span>
 <span class="r-in"><span>fixed_type <span class="op">=</span> <span class="st">"Parameters"</span>, lambda <span class="op">=</span> <span class="fl">0.1</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">effect_model</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>P_S <span class="op">=</span> <span class="fl">1</span>, P_DTE <span class="op">=</span> <span class="fl">0</span>,</span></span>
@@ -158,9 +158,9 @@
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/utils/str.html" class="external-link">str</a></span><span class="op">(</span><span class="va">result</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 'data.frame':	10 obs. of  5 variables:</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  $ Trial         : int  1 2 3 4 5 6 7 8 9 10</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  $ Decision      : chr  "Stop for efficacy" "Stop for efficacy" "Stop for efficacy" "Stop for efficacy" ...</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  $ StopTime      : num  12.2 12.5 12.5 12.1 11.4 ...</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  $ SampleSize    : int  600 600 600 600 570 600 600 600 600 600</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  $ Decision      : chr  "Stop for efficacy" "Successful at final" "Stop for efficacy" "Stop for efficacy" ...</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  $ StopTime      : num  12.5 13.6 12 12.4 12 ...</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  $ SampleSize    : int  600 600 600 600 600 600 600 600 600 600</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  $ Final_Decision: chr  "Successful" "Successful" "Successful" "Successful" ...</span>
 <span class="r-in"><span></span></span>
 </code></pre></div>

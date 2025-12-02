@@ -127,7 +127,7 @@ Class: `list`
 ## Examples
 
 ``` r
-# Minimal example with placeholder inputs
+set.seed(123)
 control_model <- list(dist = "Exponential", parameter_mode = "Fixed",
 fixed_type = "Parameters", lambda = 0.1)
 effect_model <- list(delay_SHELF = SHELF::fitdist(c(3, 4, 5),
@@ -148,8 +148,8 @@ result <- calc_dte_assurance(n_c = 300, n_t = 300,
                                      n_sims = 10)
 str(result)
 #> List of 4
-#>  $ assurance  : num 0.9
-#>  $ CI         : num [1, 1:2] 0.555 0.997
+#>  $ assurance  : num 0.6
+#>  $ CI         : num [1, 1:2] 0.262 0.878
 #>  $ duration   : num 12
 #>  $ sample_size: num 600
 ```

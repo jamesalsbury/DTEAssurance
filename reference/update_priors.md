@@ -80,7 +80,8 @@ sampling-based posterior inference.
 ## Examples
 
 ``` r
-interim_data = data.frame(survival_time = runif(10, min = 0, max = 1),
+set.seed(123)
+interim_data = data.frame(survival_time = runif(10, min = 0, max = 10),
 status = rbinom(10, size = 1, prob = 0.5),
 group = c(rep("Control", 5), rep("Treatment", 5)))
 control_model = list(dist = "Exponential",
@@ -88,9 +89,12 @@ control_model = list(dist = "Exponential",
                      t1 = 12,
                      t1_Beta_a = 20,
                      t1_Beta_b = 32)
-effect_model = list(delay_SHELF = SHELF::fitdist(c(5.5, 6, 6.5), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 12),
+
+effect_model = list(delay_SHELF = SHELF::fitdist(c(5.5, 6, 6.5),
+                    probs = c(0.25, 0.5, 0.75), lower = 0, upper = 12),
                     delay_dist = "gamma",
-                    HR_SHELF = SHELF::fitdist(c(0.5, 0.6, 0.7), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 1),
+                    HR_SHELF = SHELF::fitdist(c(0.5, 0.6, 0.7),
+                    probs = c(0.25, 0.5, 0.75), lower = 0, upper = 1),
                     HR_dist = "gamma",
                     P_S = 1,
                     P_DTE = 0)
