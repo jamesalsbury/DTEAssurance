@@ -46,8 +46,12 @@ The methodology is based on the following papers:
 
 You can install `DTEAssurance` on CRAN  using:
 
-```{r}
+```{r, eval = F}
 install.packages("DTEAssurance")
+```
+
+```{r}
+library(DTEAssurance)
 ```
 
 ## Assurance Methods for Delayed Treatment Effects

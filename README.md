@@ -36,22 +36,14 @@ The methodology is based on the following papers:
 
 ## Installation
 
-You can install `DTEAssurance` from GitHub using:
-
-``` r
-# Install from GitHub
-devtools::install_github("jamesalsbury/DTEAssurance")
-#> Using GitHub PAT from the git credential store.
-#> Skipping install of 'DTEAssurance' from a github remote, the SHA1 (da7dd954) has not changed since last install.
-#>   Use `force = TRUE` to force installation
-library(DTEAssurance)
-```
-
-Once accepted to CRAN, you’ll be able to install it with:
+You can install `DTEAssurance` on CRAN using:
 
 ``` r
 install.packages("DTEAssurance")
-#> Warning: package 'DTEAssurance' is in use and will not be installed
+```
+
+``` r
+library(DTEAssurance)
 ```
 
 ## Assurance Methods for Delayed Treatment Effects
@@ -147,7 +139,7 @@ DTEAssurance::assurance_GSD_shiny_app()
 You can also use the package offline via the main function:
 
 ``` r
-DTEAssurance::calc_dte_assurance_interim()
+DTEAssurance::calc_dte_assurance_adaptive()
 ```
 
 This function requires the following arguments:
@@ -172,9 +164,11 @@ HR_SHELF = SHELF::fitdist(c(0.55, 0.6, 0.7), probs = c(0.25, 0.5, 0.75), lower =
 HR_dist = "gamma",
 P_S = 0.9, P_DTE = 0.7)
 recruitment_model <- list(method = "power", period = 12, power = 1)
-GSD_model <- list(events = 450, alpha_spending = c("0.01, 0.025"),
-                  beta_spending = c("0.05, 0.1"), IF_vec = c("0.5, 1"))
-result <- calc_dte_assurance_interim(n_c = 300, n_t = 300,
+GSD_model <- list(events = 450,
+                  alpha_spending = c(0.0125, 0.025),
+                  alpha_IF = c(0.75, 1),
+                  futility_type = "none")
+result <- calc_dte_assurance_adaptive(n_c = 300, n_t = 300,
                              control_model = control_model,
                              effect_model = effect_model,
                              recruitment_model = recruitment_model,
@@ -182,31 +176,26 @@ result <- calc_dte_assurance_interim(n_c = 300, n_t = 300,
                              n_sims = 500)
 
 str(result)
-#> 'data.frame':    500 obs. of  6 variables:
+#> 'data.frame':    500 obs. of  5 variables:
 #>  $ Trial         : int  1 2 3 4 5 6 7 8 9 10 ...
-#>  $ IF            : chr  "0.5, 1" "0.5, 1" "0.5, 1" "0.5, 1" ...
-#>  $ Decision      : chr  "Successful at final" "Stop for efficacy" "Stop for futility" "Stop for futility" ...
-#>  $ StopTime      : num  27.1 13.6 12.5 12.9 13.7 ...
+#>  $ Decision      : chr  "Stop for efficacy" "Stop for efficacy" "Successful at final" "Stop for efficacy" ...
+#>  $ StopTime      : num  21.6 20.4 26.8 17.9 18.7 ...
 #>  $ SampleSize    : int  600 600 600 600 600 600 600 600 600 600 ...
 #>  $ Final_Decision: chr  "Successful" "Successful" "Successful" "Successful" ...
 ```
 
-If we wish to compare the operating characteristics we can do so by
-changing the `GSD_model` and plotting the proportion of outcomes:
-
 ``` r
+design_summary <- result %>%
+        summarise(
+          Assurance = mean(Decision %in% c("Stop for efficacy", "Successful at final")),
+          `Pr(Early Fut.)` = mean(Decision %in% c("Stop for futility")),
+          `Pr(Early Eff.)` = mean(Decision %in% c("Stop for efficacy")),
+          `Average Duration` = round(mean(StopTime, na.rm = TRUE), 2),
+          `Average Sample Size` = round(mean(SampleSize, na.rm = TRUE), 2)
+        )
 
-GSD_model <- list(events = 450, 
-                  alpha_spending = c("0.01, 0.025", "0.01, 0.025", "0.01, 0.025"),
-                  beta_spending = c("0.05, 0.1", "0.05, 0.1", "0.05, 0.1"), 
-                  IF_vec = c("0.25, 1", "0.5, 1", "0.75, 1"))
 
-result <- calc_dte_assurance_interim(n_c = 300, n_t = 300,
-                             control_model = control_model,
-                             effect_model = effect_model,
-                             recruitment_model = recruitment_model,
-                             GSD_model = GSD_model,
-                             n_sims = 500)
+design_summary
+#>   Assurance Pr(Early Fut.) Pr(Early Eff.) Average Duration Average Sample Size
+#> 1       0.7              0          0.528            22.38                 600
 ```
-
-<img src="man/figures/README-unnamed-chunk-14-1.png" width="100%" />
