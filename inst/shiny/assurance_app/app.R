@@ -1,78 +1,66 @@
-library(SHELF)
-library(ggplot2)
-library(survival)
-library(shinyjs)
-library(nleqslv)
-library(shinyBS)
-#remotes::install_github("jamesalsbury/DTEAssurance")
-library(DT)
-library(rlang)
-library(shinyAce)
-
-
 
 ui <- fluidPage(
 
 
 
-    withMathJax(),
+    shiny::withMathJax(),
 
     # Application title
-    titlePanel("Assurance: Delayed Treatment Effects"),
+    shiny::titlePanel("Assurance: Delayed Treatment Effects"),
 
     # sidebarLayout(
-    mainPanel(
+    shiny::mainPanel(
 
-      tabsetPanel(
+      shiny::tabsetPanel(
         # Control UI ---------------------------------
 
-        tabPanel("Control",
-                 sidebarLayout(
+        shiny::tabPanel("Control",
+                 shiny::sidebarLayout(
                    sidebarPanel = sidebarPanel(
-                     selectInput("ControlDist", "Distribution", choices = c("Exponential", "Weibull"), selected = "Exponential"),
+                     shiny::selectInput("ControlDist", "Distribution", choices = c("Exponential", "Weibull"), selected = "Exponential"),
                      # Conditional UI for Exponential distribution
-                     conditionalPanel(
+                     shiny::conditionalPanel(
                        condition = "input.ControlDist == 'Exponential'",
-                       selectInput("ExpChoice", "Choice", choices = c("Fixed", "Distribution"), selected = "Fixed"),
-                       conditionalPanel(
+                       shiny::selectInput("ExpChoice", "Choice", choices = c("Fixed", "Distribution"), selected = "Fixed"),
+                       shiny::conditionalPanel(
                          condition = "input.ExpChoice == 'Fixed'",
-                         selectInput("ExpRateorTime", "Input type", choices = c("Parameters", "Landmark")),
-                         conditionalPanel(
+                         shiny::selectInput("ExpRateorTime", "Input type", choices = c("Parameters", "Landmark")),
+                         shiny::conditionalPanel(
                            condition = "input.ExpRateorTime == 'Parameters'",
                            numericInput("ExpRate", label =  HTML(paste0("Rate (\u03bb",tags$sub("c"), ")")), value = 0.08, min=0),
-                           bsTooltip(id = "ExpRate", title = "Rate parameter")
+                           shinyBS::bsTooltip(id = "ExpRate", title = "Rate parameter")
                          ),
-                         conditionalPanel(
+                         shiny::conditionalPanel(
                            condition = "input.ExpRateorTime == 'Landmark'",
-                           fluidRow(
-                             column(6,
-                                    numericInput("ExpTime", label =  HTML(paste0("t",tags$sub("1"))), value = 12),
-                                    bsTooltip(id = "ExpTime", title = "Time 1")
+                           shiny::fluidRow(
+                             shiny::column(6,
+                                    shiny::numericInput("ExpTime", label =  HTML(paste0("t",tags$sub("1"))), value = 12),
+                                    shinyBS::bsTooltip(id = "ExpTime", title = "Time 1")
 
                              ),
-                             column(6,
-                                    numericInput("ExpSurv", label =  HTML(paste0("S(t",tags$sub("1"), ")")), 0.5),
-                                    bsTooltip(id = "ExpSurv", title = "Survival probability at time 1")
+                             shiny::column(6,
+                                    shiny::numericInput("ExpSurv", label =  HTML(paste0("S(t",tags$sub("1"), ")")), 0.5),
+                                    shinyBS::bsTooltip(id = "ExpSurv", title = "Survival probability at time 1")
                              )
                            )
                          )
                        ),
-                       conditionalPanel(
+                       shiny::conditionalPanel(
                          condition = "input.ExpChoice == 'Distribution'",
-                         numericInput("ExpSurvTime", label = HTML(paste0("t",tags$sub("1"))), value = 12),
-                         bsTooltip(id = "ExpSurvTime", title = "Time 1"),
-                         fluidRow(
+                         shiny::numericInput("ExpSurvTime", label = HTML(paste0("t",tags$sub("1"))), value = 12),
+                         shinyBS::bsTooltip(id = "ExpSurvTime", title = "Time 1"),
+                         shiny::fluidRow(
                            column(4,
                                   uiOutput("ExpDistText"),
-                                  bsTooltip(id = "ExpDistText", title = "The distribution of survival probability at time 1")
+                                  shinyBS::bsTooltip(id = "ExpDistText", title = "The distribution of survival probability at time 1")
                            ),
                            column(8,
                                   div(style = "display: flex; align-items: center;",
                                       numericInput("ExpBetaA", label = NULL, value = 20, width = "45%"),
-                                      bsTooltip(id = "ExpBetaA", title = "The mean of a Beta(a, b) distribution is a/(a+b)"),
+                                      shinyBS::bsTooltip(id = "ExpBetaA", title = "The mean of a Beta(a, b) distribution is a/(a+b)"),
                                       tags$span(", "),
                                       numericInput("ExpBetaB", label = NULL, value = 32, width = "45%"),
-                                      bsTooltip(id = "ExpBetaB", title = "The variance of a Beta(a, b) distribution is (a*b)/[(a+b)^2*(a+b+1)]"),
+                                      shinyBS::bsTooltip(id = "ExpBetaB", title = "The variance of a Beta(a, b) distribution is (a*b)/[(a+b)^2*(a+b+1)]"),
                                       tags$span(")")
                                   )
                            )
@@ -97,12 +85,12 @@ ui <- fluidPage(
                            fluidRow(
                              column(6,
                                     numericInput("WeibullScale", label =  HTML(paste0("Scale (\u03bb",tags$sub("c"), ")")), value = 0.08, min=0),
-                                    bsTooltip(id = "WeibullScale", title = "Scale parameter"),
+                                    shinyBS::bsTooltip(id = "WeibullScale", title = "Scale parameter"),
 
                              ),
                              column(6,
                                     numericInput("WeibullShape", label =  HTML(paste0("Shape (\u03b3",tags$sub("c"), ")")), value = 1, min=0),
-                                    bsTooltip(id = "WeibullShape", title = "Shape parameter"),
+                                    shinyBS::bsTooltip(id = "WeibullShape", title = "Shape parameter"),
 
                              )
                            )
@@ -112,22 +100,22 @@ ui <- fluidPage(
                            fluidRow(
                              column(6,
                                     numericInput("WeibullTime1", label =  HTML(paste0("t",tags$sub("1"))), value = 12),
-                                    bsTooltip(id = "WeibullTime1", title = "Time 1")
+                                    shinyBS::bsTooltip(id = "WeibullTime1", title = "Time 1")
                              ),
                              column(6,
                                     numericInput("WeibullSurv1", label =  HTML(paste0("S(t",tags$sub("1"), ")")), value = 0.38),
-                                    bsTooltip(id = "WeibullSurv1", title = "Survival Probability at Time 1")
+                                    shinyBS::bsTooltip(id = "WeibullSurv1", title = "Survival Probability at Time 1")
                              )
                            ),
                            fluidRow(
                              column(6,
                                     numericInput("WeibullTime2", label =  HTML(paste0("t",tags$sub("2"))), value = 18),
-                                    bsTooltip(id = "WeibullTime2", title = "Time 2")
+                                    shinyBS::bsTooltip(id = "WeibullTime2", title = "Time 2")
 
                              ),
                              column(6,
                                     numericInput("WeibullSurv2", label =  HTML(paste0("S(t",tags$sub("2"), ")")), value = 0.24),
-                                    bsTooltip(id = "WeibullSurv2", title = "Survival Probability at Time 2")
+                                    shinyBS::bsTooltip(id = "WeibullSurv2", title = "Survival Probability at Time 2")
                              )
                            ),
                          )
@@ -138,28 +126,28 @@ ui <- fluidPage(
                          fluidRow(
                            column(6,
                                   numericInput("WeibullDistT1", label =  HTML(paste0("t",tags$sub("1"))), value = 12),
-                                  bsTooltip(id = "WeibullDistT1", title = "Time 1"),
+                                  shinyBS::bsTooltip(id = "WeibullDistT1", title = "Time 1"),
 
 
                            ),
                            column(6,
                                   numericInput("WeibullDistT2", label =  HTML(paste0("t",tags$sub("2"))), value = 18),
-                                  bsTooltip(id = "WeibullDistT2", title = "Time 2"),
+                                  shinyBS::bsTooltip(id = "WeibullDistT2", title = "Time 2"),
 
                            )
                          ),
                          fluidRow(
                            column(4,
                                   uiOutput("WeibullDistS1Text"),
-                                  bsTooltip(id = "WeibullDistS1Text", title = "The distribution of survival probability at time 1"),
+                                  shinyBS::bsTooltip(id = "WeibullDistS1Text", title = "The distribution of survival probability at time 1"),
                            ),
                            column(8,
                                   div(style = "display: flex; align-items: center;",
                                       numericInput("WeibullDistS1BetaA", label = NULL, value = 20, width = "45%"),
-                                      bsTooltip(id = "WeibullDistS1BetaA", title = "The mean of a Beta(a, b) distribution is a/(a+b)"),
+                                      shinyBS::bsTooltip(id = "WeibullDistS1BetaA", title = "The mean of a Beta(a, b) distribution is a/(a+b)"),
                                       tags$span(", "),
                                       numericInput("WeibullDistS1BetaB", label = NULL, value = 32, width = "45%"),
-                                      bsTooltip(id = "WeibullDistS1BetaB", title = "The variance of a Beta(a, b) distribution is (a*b)/[(a+b)^2*(a+b+1)]"),
+                                      shinyBS::bsTooltip(id = "WeibullDistS1BetaB", title = "The variance of a Beta(a, b) distribution is (a*b)/[(a+b)^2*(a+b+1)]"),
                                       tags$span(")")
                                   )
                            )
@@ -167,16 +155,16 @@ ui <- fluidPage(
                          fluidRow(
                            column(4,
                                   uiOutput("WeibullDistDelta1Text"),
-                                  bsTooltip(id = "WeibullDistDelta1Text", title = "The distribution of the difference in survival probabilities between time 2 and time 1"),
+                                  shinyBS::bsTooltip(id = "WeibullDistDelta1Text", title = "The distribution of the difference in survival probabilities between time 2 and time 1"),
 
                            ),
                            column(8,
                                   div(style = "display: flex; align-items: center;",
                                       numericInput("WeibullDistDelta1BetaA", label = NULL, value = 20, width = "45%"),
-                                      bsTooltip(id = "WeibullDistDelta1BetaA", title = "The mean of a Beta(a, b) distribution is a/(a+b)"),
+                                      shinyBS::bsTooltip(id = "WeibullDistDelta1BetaA", title = "The mean of a Beta(a, b) distribution is a/(a+b)"),
                                       tags$span(", "),
                                       numericInput("WeibullDistDelta1BetaB", label = NULL, value = 140, width = "45%"),
-                                      bsTooltip(id = "WeibullDistDelta1BetaB", title = "The variance of a Beta(a, b) distribution is (a*b)/[(a+b)^2*(a+b+1)]"),
+                                      shinyBS::bsTooltip(id = "WeibullDistDelta1BetaB", title = "The variance of a Beta(a, b) distribution is (a*b)/[(a+b)^2*(a+b+1)]"),
                                       tags$span(")")
                                   )
                            )
@@ -303,8 +291,8 @@ ui <- fluidPage(
                                         choices = c("Median survival probability" = "median_probability",
                                                     "95% CI for T" = "ci_t",
                                                     "CI for Treatment Curve (0.025 and 0.975)" = "ci_treatment_curve")),
-                     hidden(numericInput("feedbackQuantile", "Uncertainty about the following survival quantile:", value = 0.5, min = 0, max = 1)),
-                     hidden(numericInput("timeInputFeedback", "Prior information about time:", value = 25, min = 0, max = 100))
+                     shinyjs::hidden(numericInput("feedbackQuantile", "Uncertainty about the following survival quantile:", value = 0.5, min = 0, max = 1)),
+                     shinyjs::hidden(numericInput("timeInputFeedback", "Prior information about time:", value = 25, min = 0, max = 100))
                    ),
                    mainPanel(
                      plotOutput("plotFeedback"),
@@ -448,8 +436,8 @@ ui <- fluidPage(
 
 
                      actionButton("calcAssurance", "Calculate Assurance"),
-                     hidden(numericInput("feedbackN", "Number of Patients", value=500)),
-                     hidden(actionButton("calcAssuranceFeedback", "Calculate Feedback"))
+                     shinyjs::hidden(numericInput("feedbackN", "Number of Patients", value=500)),
+                     shinyjs::hidden(actionButton("calcAssuranceFeedback", "Calculate Feedback"))
 
                    ),
                    mainPanel = mainPanel(
@@ -471,7 +459,7 @@ ui <- fluidPage(
                      tags$div(
                        id = "collapseText",
                        class = "collapse",
-                       aceEditor(
+                       shinyAce::aceEditor(
                          outputId = "display_func",
                          value = "",
                          mode = "r",
@@ -705,19 +693,19 @@ ui <- fluidPage(
       plotType <- controlSurvivalData()$type
 
       if (plotType == "single") {
-        ggplot(data, aes(x = controlTime, y = controlSurv)) +
-          geom_line(colour = "blue") +
-          xlim(0, max(data$controlTime)) +
-          ylim(0, 1) +
-          xlab("Time") + ylab("Survival")
+        ggplot2::ggplot(data, ggplot2::aes(x = controlTime, y = controlSurv)) +
+          ggplot2::geom_line(colour = "blue") +
+          ggplot2::xlim(0, max(data$controlTime)) +
+          ggplot2::ylim(0, 1) +
+          ggplot2::xlab("Time") + ggplot2::ylab("Survival")
 
       } else if (plotType == "distribution") {
-        ggplot(data, aes(x = controlTime)) +
-          geom_line(aes(y = medVec), colour = "blue") +
-          geom_line(aes(y = UBVec), colour = "blue", linetype = "dashed") +
-          geom_line(aes(y = LBVec), colour = "blue", linetype = "dashed") +
-          xlim(0, max(data$controlTime)) + ylim(0, 1) +
-          xlab("Time") + ylab("Survival")
+        ggplot2::ggplot(data, ggplot2::aes(x = controlTime)) +
+          ggplot2::geom_line(ggplot2::aes(y = medVec), colour = "blue") +
+          ggplot2::geom_line(ggplot2::aes(y = UBVec), colour = "blue", linetype = "dashed") +
+          ggplot2::geom_line(ggplot2::aes(y = LBVec), colour = "blue", linetype = "dashed") +
+          ggplot2::xlim(0, max(data$controlTime)) + ggplot2::ylim(0, 1) +
+          ggplot2::xlab("Time") + ggplot2::ylab("Survival")
       }
     })
 
@@ -761,13 +749,13 @@ ui <- fluidPage(
     })
 
     TFit <- reactive({
-      fitdist(vals = TValues(), probs = TProbs(), lower = TLimits()[1],
+      SHELF::fitdist(vals = TValues(), probs = TProbs(), lower = TLimits()[1],
               upper = TLimits()[2],
               tdf = input$tdf1)
     })
 
     HRFit <- reactive({
-      fitdist(vals = HRValues(), probs = HRProbs(), lower = HRLimits()[1],
+      SHELF::fitdist(vals = HRValues(), probs = HRProbs(), lower = HRLimits()[1],
               upper = HRLimits()[2],
               tdf = input$tdf2)
     })
@@ -777,7 +765,7 @@ ui <- fluidPage(
 
     output$TPlot <- renderPlot({
 
-      suppressWarnings(plotfit(TFit(), d = input$TDist,
+      suppressWarnings(SHELF::plotfit(TFit(), d = input$TDist,
                                ql = 0.05, qu = 0.95,
                                xl = TLimits()[1], xu = TLimits()[2]
                                ))
@@ -788,7 +776,7 @@ ui <- fluidPage(
 
     output$HRPlot <- renderPlot({
 
-      suppressWarnings(plotfit(HRFit(), d = input$HRDist,
+      suppressWarnings(SHELF::plotfit(HRFit(), d = input$HRDist,
                                ql = 0.05, qu = 0.95,
                                xl = HRLimits()[1], xu = HRLimits()[2]
                                ))
@@ -821,13 +809,13 @@ ui <- fluidPage(
               } else {
                 if (runif(1) > input$P_DTE){
                   #Curves separate with no delay
-                  HRSample <- sampleFit(HRFit(), n = 1)
+                  HRSample <- SHELF::sampleFit(HRFit(), n = 1)
                   sampledTrtHazard[i] <- ExpRate*HRSample[,input$HRDist]
                   sampledbigT[i] <- 0
                 } else{
                   #Curves separate with a delay
-                  HRSample <- sampleFit(HRFit(), n = 1)
-                  bigTSample <- sampleFit(TFit(), n = 1)
+                  HRSample <- SHELF::sampleFit(HRFit(), n = 1)
+                  bigTSample <- SHELF::sampleFit(TFit(), n = 1)
                   sampledbigT[i] <- bigTSample[,input$TDist]
                   sampledTrtHazard[i] <- ExpRate*HRSample[,input$HRDist]
                 }
@@ -868,13 +856,13 @@ ui <- fluidPage(
             } else {
               if (runif(1) > input$P_DTE){
                 #Curves separate with no delay
-                HRSample <- sampleFit(HRFit(), n = 1)
+                HRSample <- SHELF::sampleFit(HRFit(), n = 1)
                 sampledTrtHazard[i] <- sampledLambda[i]*HRSample[,input$HRDist]
                 sampledbigT[i] <- 0
               } else{
                 #Curves separate with a delay
-                HRSample <- sampleFit(HRFit(), n = 1)
-                bigTSample <- sampleFit(TFit(), n = 1)
+                HRSample <- SHELF::sampleFit(HRFit(), n = 1)
+                bigTSample <- SHELF::sampleFit(TFit(), n = 1)
                 sampledbigT[i] <- bigTSample[,input$TDist]
                 sampledTrtHazard[i] <- sampledLambda[i]*HRSample[,input$HRDist]
               }
@@ -915,13 +903,13 @@ ui <- fluidPage(
             } else {
               if (runif(1) > input$P_DTE){
                 #Curves separate with no delay
-                HRSample <- sampleFit(HRFit(), n = 1)
+                HRSample <- SHELF::sampleFit(HRFit(), n = 1)
                 sampledTrtHazard[i] <- input$WeibullScale*(HRSample[,input$HRDist])^(1/input$WeibullShape)
                 sampledbigT[i] <- 0
               } else{
                 #Curves separate with a delay
-                HRSample <- sampleFit(HRFit(), n = 1)
-                bigTSample <- sampleFit(TFit(), n = 1)
+                HRSample <- SHELF::sampleFit(HRFit(), n = 1)
+                bigTSample <- SHELF::sampleFit(TFit(), n = 1)
                 sampledbigT[i] <- bigTSample[,input$TDist]
                 sampledTrtHazard[i] <- input$WeibullScale*(HRSample[,input$HRDist])^(1/input$WeibullShape)
               }
@@ -985,13 +973,13 @@ ui <- fluidPage(
             } else {
               if (runif(1) > input$P_DTE){
                 #Curves separate with no delay
-                HRSample <- sampleFit(HRFit(), n = 1)
+                HRSample <- SHELF::sampleFit(HRFit(), n = 1)
                 sampledTrtHazard[i] <- lambdaVec[i]*(HRSample[,input$HRDist])^(1/gammaVec[i])
                 sampledbigT[i] <- 0
               } else{
                 #Curves separate with a delay
-                HRSample <- sampleFit(HRFit(), n = 1)
-                bigTSample <- sampleFit(TFit(), n = 1)
+                HRSample <- SHELF::sampleFit(HRFit(), n = 1)
+                bigTSample <- SHELF::sampleFit(TFit(), n = 1)
                 sampledbigT[i] <- bigTSample[,input$TDist]
                 sampledTrtHazard[i] <- lambdaVec[i]*(HRSample[,input$HRDist])^(1/gammaVec[i])
               }
@@ -1097,11 +1085,11 @@ ui <- fluidPage(
       plotType <- controlSurvivalData()$type
 
       if (plotType == "single") {
-       p1 <- ggplot(controlData, aes(x = controlTime, y = controlSurv)) +
-          geom_line(colour = "blue") +
-          xlim(0, max(controlData$controlTime)) +
-          ylim(0, 1) +
-          xlab("Time") + ylab("Survival")
+       p1 <- ggplot2::ggplot(controlData, ggplot2::aes(x = controlTime, y = controlSurv)) +
+          ggplot2::geom_line(colour = "blue") +
+          ggplot2::xlim(0, max(controlData$controlTime)) +
+          ggplot2::ylim(0, 1) +
+          ggplot2::xlab("Time") + ggplot2::ylab("Survival")
 
        if ("median_probability" %in% input$showfeedback){
          median_time_control <- approx(controlData$controlSurv, controlData$controlTime, xout = 0.5)$y
@@ -1109,21 +1097,21 @@ ui <- fluidPage(
          mediandf <- data.frame(x = seq(0, max(median_time_control, median_time_treatment), length=2), y = rep(0.5, 2))
          mediandf1 <- data.frame(x = rep(median_time_control, 2), y = seq(0, 0.5, length=2))
          mediandf2 <- data.frame(x = rep(median_time_treatment, 2), y = seq(0, 0.5, length=2))
-         p1 <- p1 + geom_line(data = mediandf, aes(x = x, y=y), linetype = "dashed") +
-           geom_line(data = mediandf1, aes(x = x, y=y), linetype = "dashed") +
-           geom_line(data = mediandf2, aes(x = x, y=y), linetype = "dashed")
+         p1 <- p1 + ggplot2::geom_line(data = mediandf, ggplot2::aes(x = x, y=y), linetype = "dashed") +
+           ggplot2::geom_line(data = mediandf1, ggplot2::aes(x = x, y=y), linetype = "dashed") +
+           ggplot2::geom_line(data = mediandf2, ggplot2::aes(x = x, y=y), linetype = "dashed")
        }
 
 
       } else if (plotType == "distribution") {
-        p1 <- ggplot(controlData, aes(x = controlTime)) +
-          geom_line(aes(y = medVec), colour = "blue")  +
-          xlim(0, max(controlData$controlTime)) + ylim(0, 1) +
-          xlab("Time") + ylab("Survival")
+        p1 <- ggplot2::ggplot(controlData, ggplot2::aes(x = controlTime)) +
+          ggplot2::geom_line(ggplot2::aes(y = medVec), colour = "blue")  +
+          ggplot2::xlim(0, max(controlData$controlTime)) + ggplot2::ylim(0, 1) +
+          ggplot2::xlab("Time") + ggplot2::ylab("Survival")
 
         if ("ci_control" %in% input$showfeedback)
-          p1 <- p1 + geom_line(aes(y = UBVec), colour = "blue", linetype = "dashed") +
-            geom_line(aes(y = LBVec), colour = "blue", linetype = "dashed")
+          p1 <- p1 + ggplot2::geom_line(ggplot2::aes(y = UBVec), colour = "blue", linetype = "dashed") +
+            ggplot2::geom_line(ggplot2::aes(y = LBVec), colour = "blue", linetype = "dashed")
 
 
         if ("median_probability" %in% input$showfeedback){
@@ -1132,26 +1120,26 @@ ui <- fluidPage(
           mediandf <- data.frame(x = seq(0, max(median_time_control, median_time_treatment), length=2), y = rep(0.5, 2))
           mediandf1 <- data.frame(x = rep(median_time_control, 2), y = seq(0, 0.5, length=2))
           mediandf2 <- data.frame(x = rep(median_time_treatment, 2), y = seq(0, 0.5, length=2))
-          p1 <- p1 + geom_line(data = mediandf, aes(x = x, y=y), linetype = "dashed") +
-            geom_line(data = mediandf1, aes(x = x, y=y), linetype = "dashed") +
-            geom_line(data = mediandf2, aes(x = x, y=y), linetype = "dashed")
+          p1 <- p1 + ggplot2::geom_line(data = mediandf, ggplot2::aes(x = x, y=y), linetype = "dashed") +
+            ggplot2::geom_line(data = mediandf1, ggplot2::aes(x = x, y=y), linetype = "dashed") +
+            ggplot2::geom_line(data = mediandf2, ggplot2::aes(x = x, y=y), linetype = "dashed")
         }
 
       }
 
-      p1 <- p1 + geom_line(data = treatmentData, aes(x=controlTime, y = medVec), colour = "red")
+      p1 <- p1 + ggplot2::geom_line(data = treatmentData, ggplot2::aes(x=controlTime, y = medVec), colour = "red")
 
       if ("ci_treatment_curve" %in% input$showfeedback){
-        p1 <- p1 + geom_line(data = treatmentData, aes(x=controlTime, y = UBVec), colour = "red", linetype = "dashed") +
-          geom_line(data = treatmentData, aes(x=controlTime, y = LBVec), colour = "red", linetype = "dashed")
+        p1 <- p1 + ggplot2::geom_line(data = treatmentData, ggplot2::aes(x=controlTime, y = UBVec), colour = "red", linetype = "dashed") +
+          ggplot2::geom_line(data = treatmentData, ggplot2::aes(x=controlTime, y = LBVec), colour = "red", linetype = "dashed")
       }
 
       if ("ci_t" %in% input$showfeedback){
         lowerSurv <- approx(treatmentData$controlTime, treatmentData$medVec, xout = treatmentSurvivalData()$lowerT)$y
         upperSurv <- approx(treatmentData$controlTime, treatmentData$medVec, xout = treatmentSurvivalData()$upperT)$y
 
-        p1 <- p1 + annotate("point", x = treatmentSurvivalData()$lowerT, y = lowerSurv) +
-          annotate("point", x = treatmentSurvivalData()$upperT, y = upperSurv)
+        p1 <- p1 + ggplot2::annotate("point", x = treatmentSurvivalData()$lowerT, y = lowerSurv) +
+          ggplot2::annotate("point", x = treatmentSurvivalData()$upperT, y = upperSurv)
       }
 
       p1
@@ -1176,10 +1164,10 @@ ui <- fluidPage(
         )
 
         # Generate the plot using ggplot
-        ggplot(data, aes(x = time, y = patients, color = type)) +
-          geom_line() +
-          labs(x = "Time", y = "Total Number of Patients") +
-          scale_color_manual(values = c("red", "blue", "green"))
+        ggplot2::ggplot(data, ggplot2::aes(x = time, y = patients, color = type)) +
+          ggplot2::geom_line() +
+          ggplot2::labs(x = "Time", y = "Total Number of Patients") +
+          ggplot2::scale_color_manual(values = c("red", "blue", "green"))
       }
 
       # Power Recruitment Method
@@ -1448,7 +1436,7 @@ ui <- fluidPage(
 
 
     observe({
-      updateAceEditor(session, "display_func", value = function_call())
+      shinyAce::updateAceEditor(session, "display_func", value = function_call())
     })
 
 
@@ -1491,15 +1479,15 @@ ui <- fluidPage(
 
 
         # Generate the plot using ggplot
-        ggplot(assuranceDF, aes(x = N)) +
-          geom_line(aes(y = Ass), colour = "blue")+
-          geom_line(aes(y = LB), colour = "blue", linetype = "dashed") +
-          geom_line(aes(y = UB), colour = "blue", linetype = "dashed") +
-          geom_line(aes(y = Ass_Target), colour = "red")+
-          geom_line(aes(y = LB_Target), colour = "red", linetype = "dashed") +
-          geom_line(aes(y = UB_Target), colour = "red", linetype = "dashed") +
-          labs(x = "Number of Patients", y = "Assurance") +
-          ylim(0, 1.05)
+        ggplot2::ggplot(assuranceDF, ggplot2::aes(x = N)) +
+          ggplot2::geom_line(ggplot2::aes(y = Ass), colour = "blue")+
+          ggplot2::geom_line(ggplot2::aes(y = LB), colour = "blue", linetype = "dashed") +
+          ggplot2::geom_line(ggplot2::aes(y = UB), colour = "blue", linetype = "dashed") +
+          ggplot2::geom_line(ggplot2::aes(y = Ass_Target), colour = "red")+
+          ggplot2::geom_line(ggplot2::aes(y = LB_Target), colour = "red", linetype = "dashed") +
+          ggplot2::geom_line(ggplot2::aes(y = UB_Target), colour = "red", linetype = "dashed") +
+          ggplot2::labs(x = "Number of Patients", y = "Assurance") +
+          ggplot2::ylim(0, 1.05)
 
 
 
@@ -1511,18 +1499,18 @@ ui <- fluidPage(
 
 
         # Generate the plot using ggplot
-        ggplot(assuranceDF, aes(x = N)) +
-          geom_line(aes(y = Ass), colour = "blue")+
-          geom_line(aes(y = LB), colour = "blue", linetype = "dashed") +
-          geom_line(aes(y = UB), colour = "blue", linetype = "dashed") +
-          labs(x = "Number of Patients", y = "Assurance") +
-          ylim(0, 1.05)
+        ggplot2::ggplot(assuranceDF, ggplot2::aes(x = N)) +
+          ggplot2::geom_line(ggplot2::aes(y = Ass), colour = "blue")+
+          ggplot2::geom_line(ggplot2::aes(y = LB), colour = "blue", linetype = "dashed") +
+          ggplot2::geom_line(ggplot2::aes(y = UB), colour = "blue", linetype = "dashed") +
+          ggplot2::labs(x = "Number of Patients", y = "Assurance") +
+          ggplot2::ylim(0, 1.05)
       }
 
 
     })
 
-    output$OC_table <- renderDT({
+    output$OC_table <- DT::renderDT({
 
       assOutput <- calculateAssurance()
 

@@ -13,13 +13,30 @@
 #'
 #' @export
 assurance_shiny_app <- function() {
-  app_dir <- system.file("shiny/assurance_app/app.R", package = "DTEAssurance")
-  if (app_dir == "") {
-    stop("Could not find app directory. Try re-installing `DTEAssurance`.", call. = FALSE)
+
+
+    # Check required packages (shiny + any UI dependencies)
+    needed <- c("shiny", "shinyjs", "shinyBS", "shinyAce",
+                "rhandsontable", "plotly")
+
+    missing <- needed[!vapply(needed, requireNamespace, quietly = TRUE, FUN.VALUE = logical(1))]
+    if (length(missing) > 0) {
+      stop(
+        "The Shiny app requires the following packages: ",
+        paste(missing, collapse = ", "),
+        ".\nPlease install them with install.packages().",
+        call. = FALSE
+      )
+    }
+
+    app_dir <- system.file("shiny/assurance_app/app.R", package = "DTEAssurance")
+    if (app_dir == "") {
+      stop("Could not find app directory. Try re-installing `DTEAssurance`.", call. = FALSE)
+    }
+
+    shiny::runApp(app_dir, display.mode = "normal")
   }
 
-  shiny::runApp(app_dir, display.mode = "normal")
-}
 
 
 
@@ -38,6 +55,21 @@ assurance_shiny_app <- function() {
 #'
 #' @export
 assurance_adaptive_shiny_app <- function() {
+
+  # Check required packages (shiny + any UI dependencies)
+  needed <- c("shiny", "shinyjs", "shinyBS", "shinyAce",
+              "rhandsontable", "plotly")
+
+  missing <- needed[!vapply(needed, requireNamespace, quietly = TRUE, FUN.VALUE = logical(1))]
+  if (length(missing) > 0) {
+    stop(
+      "The Shiny app requires the following packages: ",
+      paste(missing, collapse = ", "),
+      ".\nPlease install them with install.packages().",
+      call. = FALSE
+    )
+  }
+
   app_dir <- system.file("shiny/adaptive_app/app.R", package = "DTEAssurance")
   if (app_dir == "") {
     stop("Could not find app directory. Try re-installing `DTEAssurance`.", call. = FALSE)

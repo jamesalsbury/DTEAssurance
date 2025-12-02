@@ -1,18 +1,3 @@
-library(shiny)
-library(shinyjs)
-library(survival)
-library(DT)
-library(rhandsontable)
-library(rpact)
-library(dplyr)
-library(plotly)
-library(shinyBS)
-#remotes::install_github("jamesalsbury/DTEAssurance")
-library(DTEAssurance)
-library(shinyAce)
-library(tidyr)
-library(rjags)
-
 
 # UI definition
 ui <- fluidPage(
@@ -59,19 +44,19 @@ ui <- fluidPage(
                        conditionalPanel(
                          condition = "input.ExpRateorTime == 'Parameters'",
                          numericInput("ExpRate", label =  HTML(paste0("Rate (\u03bb",tags$sub("c"), ")")), value = 0.08, min=0),
-                         bsTooltip(id = "ExpRate", title = "Rate parameter")
+                         shinyBS::bsTooltip(id = "ExpRate", title = "Rate parameter")
                        ),
                        conditionalPanel(
                          condition = "input.ExpRateorTime == 'Landmark'",
                          fluidRow(
                            column(6,
                                   numericInput("ExpTime", label =  HTML(paste0("t",tags$sub("1"))), value = 12),
-                                  bsTooltip(id = "ExpTime", title = "Time 1")
+                                  shinyBS::bsTooltip(id = "ExpTime", title = "Time 1")
 
                            ),
                            column(6,
                                   numericInput("ExpSurv", label =  HTML(paste0("S(t",tags$sub("1"), ")")), 0.5),
-                                  bsTooltip(id = "ExpSurv", title = "Survival probability at time 1")
+                                  shinyBS::bsTooltip(id = "ExpSurv", title = "Survival probability at time 1")
 
 
                            )
@@ -81,19 +66,19 @@ ui <- fluidPage(
                      conditionalPanel(
                        condition = "input.ExpChoice == 'Distribution'",
                        numericInput("ExpSurvTime", label = HTML(paste0("t",tags$sub("1"))), value = 12),
-                       bsTooltip(id = "ExpSurvTime", title = "Time 1"),
+                       shinyBS::bsTooltip(id = "ExpSurvTime", title = "Time 1"),
                        fluidRow(
                          column(4,
                                 uiOutput("ExpDistText"),
-                                bsTooltip(id = "ExpDistText", title = "The distribution of survival probability at time 1"),
+                                shinyBS::bsTooltip(id = "ExpDistText", title = "The distribution of survival probability at time 1"),
                          ),
                          column(8,
                                 div(style = "display: flex; align-items: center;",
                                     numericInput("ExpBetaA", label = NULL, value = 20, width = "45%"),
-                                    bsTooltip(id = "ExpBetaA", title = "The mean of a Beta(a, b) distribution is a/(a+b)"),
+                                    shinyBS::bsTooltip(id = "ExpBetaA", title = "The mean of a Beta(a, b) distribution is a/(a+b)"),
                                     tags$span(", "),
                                     numericInput("ExpBetaB", label = NULL, value = 32, width = "45%"),
-                                    bsTooltip(id = "ExpBetaB", title = "The variance of a Beta(a, b) distribution is (a*b)/[(a+b)^2*(a+b+1)]"),
+                                    shinyBS::bsTooltip(id = "ExpBetaB", title = "The variance of a Beta(a, b) distribution is (a*b)/[(a+b)^2*(a+b+1)]"),
                                     tags$span(")")
                                 )
                          )
@@ -113,12 +98,12 @@ ui <- fluidPage(
                          fluidRow(
                            column(6,
                                   numericInput("WeibullScale", label =  HTML(paste0("Scale (\u03bb",tags$sub("c"), ")")), value = 0.08, min=0),
-                                  bsTooltip(id = "WeibullScale", title = "Scale parameter"),
+                                  shinyBS::bsTooltip(id = "WeibullScale", title = "Scale parameter"),
 
                            ),
                            column(6,
                                   numericInput("WeibullShape", label =  HTML(paste0("Shape (\u03b3",tags$sub("c"), ")")), value = 1, min=0),
-                                  bsTooltip(id = "WeibullShape", title = "Shape parameter"),
+                                  shinyBS::bsTooltip(id = "WeibullShape", title = "Shape parameter"),
 
                            )
                          )
@@ -128,22 +113,22 @@ ui <- fluidPage(
                          fluidRow(
                            column(6,
                                   numericInput("WeibullTime1", label =  HTML(paste0("t",tags$sub("1"))), value = 12),
-                                  bsTooltip(id = "WeibullTime1", title = "Time 1")
+                                  shinyBS::bsTooltip(id = "WeibullTime1", title = "Time 1")
                            ),
                            column(6,
                                   numericInput("WeibullSurv1", label =  HTML(paste0("S(t",tags$sub("1"), ")")), value = 0.38),
-                                  bsTooltip(id = "WeibullSurv1", title = "Survival Probability at Time 1")
+                                  shinyBS::bsTooltip(id = "WeibullSurv1", title = "Survival Probability at Time 1")
                            )
                          ),
                          fluidRow(
                            column(6,
                                   numericInput("WeibullTime2", label =  HTML(paste0("t",tags$sub("2"))), value = 18),
-                                  bsTooltip(id = "WeibullTime2", title = "Time 2")
+                                  shinyBS::bsTooltip(id = "WeibullTime2", title = "Time 2")
 
                            ),
                            column(6,
                                   numericInput("WeibullSurv2", label =  HTML(paste0("S(t",tags$sub("2"), ")")), value = 0.24),
-                                  bsTooltip(id = "WeibullSurv2", title = "Survival Probability at Time 2")
+                                  shinyBS::bsTooltip(id = "WeibullSurv2", title = "Survival Probability at Time 2")
                            )
                          ),
                        )
@@ -154,28 +139,28 @@ ui <- fluidPage(
                        fluidRow(
                          column(6,
                                 numericInput("WeibullDistT1", label =  HTML(paste0("t",tags$sub("1"))), value = 12),
-                                bsTooltip(id = "WeibullDistT1", title = "Time 1"),
+                                shinyBS::bsTooltip(id = "WeibullDistT1", title = "Time 1"),
 
 
                          ),
                          column(6,
                                 numericInput("WeibullDistT2", label =  HTML(paste0("t",tags$sub("2"))), value = 18),
-                                bsTooltip(id = "WeibullDistT2", title = "Time 2"),
+                                shinyBS::bsTooltip(id = "WeibullDistT2", title = "Time 2"),
 
                          )
                        ),
                        fluidRow(
                          column(4,
                                 uiOutput("WeibullDistS1Text"),
-                                bsTooltip(id = "WeibullDistS1Text", title = "The distribution of survival probability at time 1"),
+                                shinyBS::bsTooltip(id = "WeibullDistS1Text", title = "The distribution of survival probability at time 1"),
                          ),
                          column(8,
                                 div(style = "display: flex; align-items: center;",
                                     numericInput("WeibullDistS1BetaA", label = NULL, value = 20, width = "45%"),
-                                    bsTooltip(id = "WeibullDistS1BetaA", title = "The mean of a Beta(a, b) distribution is a/(a+b)"),
+                                    shinyBS::bsTooltip(id = "WeibullDistS1BetaA", title = "The mean of a Beta(a, b) distribution is a/(a+b)"),
                                     tags$span(", "),
                                     numericInput("WeibullDistS1BetaB", label = NULL, value = 32, width = "45%"),
-                                    bsTooltip(id = "WeibullDistS1BetaB", title = "The variance of a Beta(a, b) distribution is (a*b)/[(a+b)^2*(a+b+1)]"),
+                                    shinyBS::bsTooltip(id = "WeibullDistS1BetaB", title = "The variance of a Beta(a, b) distribution is (a*b)/[(a+b)^2*(a+b+1)]"),
                                     tags$span(")")
                                 )
                          )
@@ -183,16 +168,16 @@ ui <- fluidPage(
                        fluidRow(
                          column(4,
                                 uiOutput("WeibullDistDelta1Text"),
-                                bsTooltip(id = "WeibullDistDelta1Text", title = "The distribution of the difference in survival probabilities between time 2 and time 1"),
+                                shinyBS::bsTooltip(id = "WeibullDistDelta1Text", title = "The distribution of the difference in survival probabilities between time 2 and time 1"),
 
                          ),
                          column(8,
                                 div(style = "display: flex; align-items: center;",
                                     numericInput("WeibullDistDelta1BetaA", label = NULL, value = 20, width = "45%"),
-                                    bsTooltip(id = "WeibullDistDelta1BetaA", title = "The mean of a Beta(a, b) distribution is a/(a+b)"),
+                                    shinyBS::bsTooltip(id = "WeibullDistDelta1BetaA", title = "The mean of a Beta(a, b) distribution is a/(a+b)"),
                                     tags$span(", "),
                                     numericInput("WeibullDistDelta1BetaB", label = NULL, value = 140, width = "45%"),
-                                    bsTooltip(id = "WeibullDistDelta1BetaB", title = "The variance of a Beta(a, b) distribution is (a*b)/[(a+b)^2*(a+b+1)]"),
+                                    shinyBS::bsTooltip(id = "WeibullDistDelta1BetaB", title = "The variance of a Beta(a, b) distribution is (a*b)/[(a+b)^2*(a+b+1)]"),
                                     tags$span(")")
                                 )
                          )
@@ -345,7 +330,7 @@ ui <- fluidPage(
                             numericInput("n_stages_alpha", "Number of Stages", value = 2)
                      ),
                      column(8,
-                            rHandsontableOutput("alpha_spending_table"),
+                            rhandsontable::rHandsontableOutput("alpha_spending_table"),
                      )
                    ),
                    selectInput("fut_method", "Type of Futility", choices = c("None"="none", "Beta-Spending"="Beta", "BPP" = "BPP"), selected = "none"),
@@ -356,7 +341,7 @@ ui <- fluidPage(
                               numericInput("n_stages_beta", "Number of Stages", value = 2)
                               ),
                        column(8,
-                              rHandsontableOutput("beta_spending_table"),
+                              rhandsontable::rHandsontableOutput("beta_spending_table"),
                        ),
                      )
                    ),
@@ -393,7 +378,7 @@ ui <- fluidPage(
                tags$div(
                  id = "collapseText_simulate",
                  class = "collapse",
-                 aceEditor(
+                 shinyAce::aceEditor(
                    outputId = "display_func_simulate",
                    value = "",
                    mode = "r",
@@ -428,7 +413,7 @@ ui <- fluidPage(
                  tabPanel("Tables",
                           tableOutput("sim_table")),
                  tabPanel("Plots",
-                          plotlyOutput("boundary_plot"))
+                          plotly::plotlyOutput("boundary_plot"))
                ),
       )
                )
@@ -448,13 +433,13 @@ ui <- fluidPage(
                    ),
                    numericInput("n_sims_BPP_Timing", "Number of simulations", value=10),
                    actionButton("calc_BPP_Timing", label  = "Calculate"),
-                   hidden(numericInput("n_breaks_BPP_timing", "Number of bins", value=10)),
+                   shinyjs::hidden(numericInput("n_breaks_BPP_timing", "Number of bins", value=10)),
                    fluidRow(
                             column(6,
-                                   hidden(numericInput("lower_bound_BPP_timing", "Lower bound", value=0.1))
+                                   shinyjs::hidden(numericInput("lower_bound_BPP_timing", "Lower bound", value=0.1))
                             ),
                             column(6,
-                                   hidden(numericInput("upper_bound_BPP_timing", "Upper bound", value=0.9))
+                                   shinyjs::hidden(numericInput("upper_bound_BPP_timing", "Upper bound", value=0.9))
                             )
                             )
 
@@ -478,7 +463,7 @@ ui <- fluidPage(
                    tags$div(
                      id = "collapseText_BPP_Timing",
                      class = "collapse",
-                     aceEditor(
+                     shinyAce::aceEditor(
                        outputId = "display_func_BPP_Timing",
                        value = "",
                        mode = "r",
@@ -562,10 +547,10 @@ ui <- fluidPage(
                    actionButton("calc_BPP_Threshold", label  = "Calculate"),
                    fluidRow(
                      column(6,
-                            hidden(numericInput("n_breaks_BPP_threshold", "Number of bins", value=10))
+                            shinyjs::hidden(numericInput("n_breaks_BPP_threshold", "Number of bins", value=10))
                             ),
                      column(6,
-                            hidden(numericInput("threshold_value", "Threshold Value", value=0.2))
+                            shinyjs::hidden(numericInput("threshold_value", "Threshold Value", value=0.2))
                             )
 
                    )
@@ -590,7 +575,7 @@ ui <- fluidPage(
                    tags$div(
                      id = "collapseText_BPP_Threshold",
                      class = "collapse",
-                     aceEditor(
+                     shinyAce::aceEditor(
                        outputId = "display_func_BPP_Threshold",
                        value = "",
                        mode = "r",
@@ -637,23 +622,23 @@ ui <- fluidPage(
                sidebarLayout(
                  sidebarPanel = sidebarPanel(
                    fluidRow(
-                     column(4, hidden(checkboxInput("checkDesign", "Design", value = FALSE))),
-                     column(4, hidden(selectizeInput("checkDesignOptionsTables", "Selected (Metrics) Tables",
+                     column(4, shinyjs::hidden(checkboxInput("checkDesign", "Design", value = FALSE))),
+                     column(4, shinyjs::hidden(selectizeInput("checkDesignOptionsTables", "Selected (Metrics) Tables",
                                                      choices = c(""),
                                                      selected = c(""),
                                                      multiple = TRUE))),
-                     column(4, hidden(selectizeInput("checkDesignOptionsPlots", "Selected Plots",
+                     column(4, shinyjs::hidden(selectizeInput("checkDesignOptionsPlots", "Selected Plots",
                                                      choices = c("Elicited T", "Elicited post-delay HR"),
                                                      selected = c(""),
                                                      multiple = TRUE)))
                    ),
                    fluidRow(
-                     column(4, hidden(checkboxInput("checkNoLook", "No Look", value = FALSE))),
-                     column(4, hidden(selectizeInput("checkNoLookOptionsTables", "Selected (Metrics) Tables",
+                     column(4, shinyjs::hidden(checkboxInput("checkNoLook", "No Look", value = FALSE))),
+                     column(4, shinyjs::hidden(selectizeInput("checkNoLookOptionsTables", "Selected (Metrics) Tables",
                                                      choices = c("Assurance OC"),
                                                      selected = c(""),
                                                      multiple = TRUE))),
-                     column(4, hidden(selectizeInput("checkNoLookOptionsPlots", "Selected Plots",
+                     column(4, shinyjs::hidden(selectizeInput("checkNoLookOptionsPlots", "Selected Plots",
                                                      choices = c("Assurance Plot"),
                                                      selected = c(),
                                                      multiple = TRUE)))
@@ -661,22 +646,22 @@ ui <- fluidPage(
                    ),
 
                    fluidRow(
-                     column(4, hidden(checkboxInput("checkOneLook", "One Look", value = FALSE))),
-                     column(4, hidden(selectizeInput("checkOneLookOptionsTables", "Selected (Metrics) Tables",
+                     column(4, shinyjs::hidden(checkboxInput("checkOneLook", "One Look", value = FALSE))),
+                     column(4, shinyjs::hidden(selectizeInput("checkOneLookOptionsTables", "Selected (Metrics) Tables",
                                                      choices = c("Interim Analysis Time", "Assurance", "Duration", "Sample Size",
                                                                  "% Stop", "% Stop for Efficacy", "% Stop for Futility",
                                                                  "% Correctly Stop", "% Correctly Stop for Efficacy", "% Correctly Stop for Futility",
                                                                  "% Correctly Continue"),
                                                      selected = c(""),
                                                      multiple = TRUE))),
-                     column(4, hidden(selectizeInput("checkOneLookOptionsPlots", "Selected Plots",
+                     column(4, shinyjs::hidden(selectizeInput("checkOneLookOptionsPlots", "Selected Plots",
                                                      choices = c("Boundary Plot", "Assurance vs Duration", "Assurance vs Sample Size"),
                                                      selected = c(""),
                                                      multiple = TRUE)))
                    ),
                    fluidRow(
-                     column(4, hidden(checkboxInput("checkTwoLooks", "Two Looks", value = FALSE))),
-                     column(4, hidden(selectizeInput("checkTwoLooksOptionsTables", "Selected (Metrics) Tables",
+                     column(4, shinyjs::hidden(checkboxInput("checkTwoLooks", "Two Looks", value = FALSE))),
+                     column(4, shinyjs::hidden(selectizeInput("checkTwoLooksOptionsTables", "Selected (Metrics) Tables",
                                                      choices = c("Assurance", "Duration", "Sample Size",
                                                                  "Interim Analysis 1 Time", "Interim Analysis 2 Time",
                                                                  "% Stop", "% Stop Look 1", "% Stop Look 2",
@@ -690,18 +675,18 @@ ui <- fluidPage(
                                                                  "Correctly Continue", "Correctly Continue at Look 1", "Correctly Continue at Look 2"),
                                                      selected = c(""),
                                                      multiple = TRUE))),
-                     column(4, hidden(selectizeInput("checkTwoLooksOptionsPlots", "Selected Plots",
+                     column(4, shinyjs::hidden(selectizeInput("checkTwoLooksOptionsPlots", "Selected Plots",
                                                      choices = c("Boundary Plot", "Assurance vs Duration", "Assurance vs Sample Size"),
                                                      selected = c(""),
                                                      multiple = TRUE)))
                    ),
                    fluidRow(
-                     column(4, hidden(checkboxInput("checkBayesian", "Bayesian", value = FALSE))),
-                     column(4, hidden(selectizeInput("checkBayesianOptionsTables", "Selected (Metrics) Tables",
+                     column(4, shinyjs::hidden(checkboxInput("checkBayesian", "Bayesian", value = FALSE))),
+                     column(4, shinyjs::hidden(selectizeInput("checkBayesianOptionsTables", "Selected (Metrics) Tables",
                                                      choices = c(""),
                                                      selected = c(""),
                                                      multiple = TRUE))),
-                     column(4, hidden(selectizeInput("checkBayesianOptionsPlots", "Selected Plots",
+                     column(4, shinyjs::hidden(selectizeInput("checkBayesianOptionsPlots", "Selected Plots",
                                                      choices = c("BPP Plot", "Target Effectiveness Plot", "BPP vs TE Plot"),
                                                      selected = c(""),
                                                      multiple = TRUE)))
@@ -833,7 +818,7 @@ server <- function(input, output, session) {
 
   # Simulate Logic ---------------------------------
 
-    output$alpha_spending_table <- renderRHandsontable({
+    output$alpha_spending_table <- rhandsontable::renderRHandsontable({
 
     req(input$n_stages_alpha)
     k <- input$n_stages_alpha
@@ -844,14 +829,14 @@ server <- function(input, output, session) {
           check.names    = FALSE
         )
 
-        rhandsontable(df, rowHeaders = FALSE) %>%
-          hot_col("Stage", readOnly = TRUE) %>%
-          hot_col("IF", type = "numeric", format = "0.00") %>%
-          hot_col("alpha.spending", type = "numeric", format = "0.0000")
+        rhandsontable::rhandsontable(df, rowHeaders = FALSE) %>%
+          rhandsontable::hot_col("Stage", readOnly = TRUE) %>%
+          rhandsontable::hot_col("IF", type = "numeric", format = "0.00") %>%
+          rhandsontable::hot_col("alpha.spending", type = "numeric", format = "0.0000")
 
     })
 
-  output$beta_spending_table <- renderRHandsontable({
+  output$beta_spending_table <- rhandsontable::renderRHandsontable({
 
     req(input$n_stages_beta)
     k <- input$n_stages_beta
@@ -862,10 +847,10 @@ server <- function(input, output, session) {
       check.names    = FALSE
     )
 
-    rhandsontable(df, rowHeaders = FALSE) %>%
-      hot_col("Stage", readOnly = TRUE) %>%
-      hot_col("IF", type = "numeric", format = "0.00") %>%
-      hot_col("beta.spending", type = "numeric", format = "0.0000")
+    rhandsontable::rhandsontable(df, rowHeaders = FALSE) %>%
+      rhandsontable::hot_col("Stage", readOnly = TRUE) %>%
+      rhandsontable::hot_col("IF", type = "numeric", format = "0.00") %>%
+      rhandsontable::hot_col("beta.spending", type = "numeric", format = "0.0000")
 
   })
 
@@ -874,9 +859,9 @@ server <- function(input, output, session) {
   observe({
 
 
-    output$boundary_plot <- renderPlotly({
+    output$boundary_plot <- plotly::renderPlotly({
 
-      df <- hot_to_r(input$alpha_spending_table)
+      df <- rhandsontable::hot_to_r(input$alpha_spending_table)
       alpha_vector <- df$`alpha.spending`
       IF_vector <- df$IF
 
@@ -914,11 +899,11 @@ server <- function(input, output, session) {
 
       } else if (input$fut_method  == "Beta"){
 
-        df_alpha <- hot_to_r(input$alpha_spending_table)
+        df_alpha <- rhandsontable::hot_to_r(input$alpha_spending_table)
         alpha_vec <- df_alpha$`alpha.spending`
         eff_IF <- df_alpha$IF
 
-        df_beta <- hot_to_r(input$beta_spending_table)
+        df_beta <- rhandsontable::hot_to_r(input$beta_spending_table)
         beta_vec <- df_beta$`beta.spending`
         fut_IF <- df_beta$IF
 
@@ -1186,7 +1171,7 @@ server <- function(input, output, session) {
       input$total_events_simulate
     )
 
-    alpha_df <- hot_to_r(input$alpha_spending_table)
+    alpha_df <- rhandsontable::hot_to_r(input$alpha_spending_table)
     alpha_vector <- alpha_df$`alpha.spending`
     alpha_IF <- alpha_df$IF
 
@@ -1213,7 +1198,7 @@ server <- function(input, output, session) {
 
     # futility options
     if (input$fut_method == "Beta") {
-      beta_df <- hot_to_r(input$beta_spending_table)
+      beta_df <- rhandsontable::hot_to_r(input$beta_spending_table)
       beta_IF <- beta_df$IF
       beta_vector <- beta_df$`beta.spending`
 
@@ -1269,7 +1254,7 @@ server <- function(input, output, session) {
   })
 
   observe({
-    updateAceEditor(session, "display_func_simulate", value = function_call_simulate())
+    shinyAce::updateAceEditor(session, "display_func_simulate", value = function_call_simulate())
   })
 
   calculate_assurance_interim <- eventReactive(input$calc_GSD_assurance, {
@@ -1283,8 +1268,10 @@ server <- function(input, output, session) {
     output$sim_table <- renderTable({
       sim_output <- calculate_assurance_interim()
 
+      print(sim_output)
+
       design_summary <- sim_output %>%
-        summarise(
+        dplyr::summarise(
           Assurance = mean(Decision %in% c("Stop for efficacy", "Successful at final")),
           `Pr(Early Fut.)` = mean(Decision %in% c("Stop for futility")),
           `Pr(Early Eff.)` = mean(Decision %in% c("Stop for efficacy")),
@@ -1295,7 +1282,7 @@ server <- function(input, output, session) {
     })
 
 
-    # output$sim_plot <- renderPlotly({
+    # output$sim_plot <- plotly::renderPlotly({
     #   sim_output <- calculate_assurance_interim()
     #
     #   if (input$number_of_looks>1){
@@ -1622,7 +1609,7 @@ server <- function(input, output, session) {
                             ", \n IF = ", input$BPP_Timing_IF)
 
 
-        df <- hot_to_r(input$alpha_spending_table)
+        df <- rhandsontable::hot_to_r(input$alpha_spending_table)
         alpha_vector <- df$`alpha.spending`
 
         base_call <- paste0(base_call,
@@ -1645,7 +1632,7 @@ server <- function(input, output, session) {
       })
 
     observe({
-      updateAceEditor(session, "display_func_BPP_Timing", value = function_call_BPP_Timing())
+      shinyAce::updateAceEditor(session, "display_func_BPP_Timing", value = function_call_BPP_Timing())
     })
 
     calculate_BPP_Timing <- eventReactive(input$calc_BPP_Timing, {
@@ -1865,7 +1852,7 @@ server <- function(input, output, session) {
 
 
 
-      df <- hot_to_r(input$alpha_spending_table)
+      df <- rhandsontable::hot_to_r(input$alpha_spending_table)
       alpha_vector <- df$`alpha.spending`
 
       base_call <- paste0(
@@ -1897,7 +1884,7 @@ server <- function(input, output, session) {
 
 
     observe({
-      updateAceEditor(session, "display_func_BPP_Threshold", value = function_call_BPP_Threshold())
+      shinyAce::updateAceEditor(session, "display_func_BPP_Threshold", value = function_call_BPP_Threshold())
     })
 
     calculate_BPP_Threshold <- eventReactive(input$calc_BPP_Threshold, {

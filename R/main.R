@@ -793,6 +793,10 @@ update_priors <- function(data,
                           effect_model,
                           n_samples = 1000) {
 
+  if (!requireNamespace("rjags", quietly = TRUE)) {
+    stop("This function requires the 'rjags' package. Please install it with install.packages('rjags').")
+  }
+
   if (control_model$dist == "Exponential"){
 
     control_jags <- paste0(

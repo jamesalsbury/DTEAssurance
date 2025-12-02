@@ -23,20 +23,25 @@ Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
 Imports: 
     SHELF,
-    shiny,
     stats,
     survival,
     nleqslv,
     nph,
     nphRCT,
     dplyr,
-    rjags,
     rpact,
     magrittr,
     rlang,
     future.apply
 Suggests:
-    testthat (>= 3.0.0)
+    testthat (>= 3.0.0),
+    rjags,
+    shiny,
+    shinyAce,
+    shinyBS,
+    shinyjs,
+    rhandsontable,
+    plotly
 Config/testthat/edition: 3
 Depends: 
     R (>= 4.0)

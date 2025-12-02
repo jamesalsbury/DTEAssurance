@@ -176,7 +176,7 @@ apply_GSD_to_trial <- function(n_c,
     n_events <- event_thresholds[i]
     t_interim <- trial_data$pseudo_time[n_events]
 
-    eligible_df <- trial_data |>
+    eligible_df <- trial_data %>%
       dplyr::filter(.data$rec_time <= t_interim)
 
     eligible_df$status <- eligible_df$pseudo_time < t_interim
@@ -274,7 +274,7 @@ apply_GSD_to_trial <- function(n_c,
     n_events <- event_thresholds[length(info_rates)]
     t_interim <- trial_data$pseudo_time[n_events]
 
-    eligible_df <- trial_data |>
+    eligible_df <- trial_data %>%
       dplyr::filter(.data$rec_time <= t_interim)
 
     eligible_df$status <- eligible_df$pseudo_time < t_interim
