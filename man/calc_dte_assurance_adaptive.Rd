@@ -83,7 +83,7 @@ Class: \code{data.frame}
 Simulates assurance and operating characteristics for a group sequential trial under prior uncertainty about a delayed treatment effect. The function integrates beliefs about control survival, treatment delay, post-delay hazard ratio, recruitment, and group sequential design (GSD) parameters.
 }
 \examples{
-# Minimal example with placeholder inputs
+set.seed(123)
 control_model <- list(dist = "Exponential", parameter_mode = "Fixed",
 fixed_type = "Parameters", lambda = 0.1)
 effect_model <- list(P_S = 1, P_DTE = 0,

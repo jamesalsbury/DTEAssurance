@@ -372,44 +372,49 @@ calc_dte_assurance <- function(n_c,
 #' @export
 
 
-survival_test <- function(data, analysis_method = "LRT", alternative = "one.sided", alpha = 0.05, rho = 0, gamma = 0,
+survival_test <- function(data, analysis_method = "LRT", alternative = "one.sided",
+                          alpha = 0.05, rho = 0, gamma = 0,
                           t_star = NULL, s_star = NULL){
 
-  coxmodel <- survival::coxph(Surv(survival_time, status)~group, data = data)
+  coxmodel <- survival::coxph(Surv(survival_time, status) ~ group, data = data)
   observed_HR <- as.numeric(exp(stats::coef(coxmodel)))
 
   Signif <- 0
+  Z <- NA_real_   # <-- add this line
 
-  if (analysis_method=="LRT"){
+  if (analysis_method == "LRT") {
     test_result <- survival::survdiff(Surv(survival_time, status) ~ group, data = data)
     Z <- (test_result$exp[2] - test_result$obs[2]) / sqrt(test_result$var[2, 2])
-    if (alternative=="one.sided"){
-      Signif <- Z > stats::qnorm(1-alpha)
+
+    if (alternative == "one.sided") {
+      Signif <- Z > stats::qnorm(1 - alpha)
     } else {
-      Signif <- abs(Z) > stats::qnorm(1-alpha/2)
+      Signif <- abs(Z) > stats::qnorm(1 - alpha/2)
     }
 
-  } else if (analysis_method=="WLRT"){
-    test <- nph::logrank.test(data$survival_time, data$status, data$group, rho = rho, gamma = gamma)
-    if (alternative=="one.sided"){
-      Signif <- (test$test$Chisq > stats::qchisq(1-alpha, 1) & observed_HR<1)
+  } else if (analysis_method == "WLRT") {
+    test <- nph::logrank.test(data$survival_time, data$status, data$group,
+                              rho = rho, gamma = gamma)
+    if (alternative == "one.sided") {
+      Signif <- (test$test$Chisq > stats::qchisq(1 - alpha, 1) & observed_HR < 1)
     } else {
-      Signif <- test$test$Chisq > stats::qchisq(1-alpha/2, 1)
+      Signif <- test$test$Chisq > stats::qchisq(1 - alpha/2, 1)
     }
-  } else if (analysis_method=="MW"){
-    test <- nphRCT::wlrt(Surv(survival_time, status)~group,
+
+  } else if (analysis_method == "MW") {
+    test <- nphRCT::wlrt(Surv(survival_time, status) ~ group,
                          data = data, method = "mw",
                          t_star = t_star, s_star = s_star)
-    if (alternative=="one.sided"){
-      Signif <- test$z > stats::qnorm(1-alpha)
+    if (alternative == "one.sided") {
+      Signif <- test$z > stats::qnorm(1 - alpha)
     } else {
-      Signif <- abs(test$z) > stats::qnorm(1-alpha/2)
+      Signif <- abs(test$z) > stats::qnorm(1 - alpha/2)
     }
   }
 
   return(list(Signif = Signif, observed_HR = observed_HR, Z = Z))
-
 }
+
 
 #' Add recruitment time to a survival dataset
 #'
@@ -757,7 +762,6 @@ calc_dte_assurance_adaptive <- function(n_c, n_t,
 #'
 #' @examples
 #' set.seed(123)
-#'
 #' interim_data = data.frame(survival_time = runif(10, min = 0, max = 10),
 #' status = rbinom(10, size = 1, prob = 0.5),
 #' group = c(rep("Control", 5), rep("Treatment", 5)))
@@ -766,9 +770,12 @@ calc_dte_assurance_adaptive <- function(n_c, n_t,
 #'                      t1 = 12,
 #'                      t1_Beta_a = 20,
 #'                      t1_Beta_b = 32)
-#' effect_model = list(delay_SHELF = SHELF::fitdist(c(5.5, 6, 6.5), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 12),
+#'
+#' effect_model = list(delay_SHELF = SHELF::fitdist(c(5.5, 6, 6.5),
+#'                     probs = c(0.25, 0.5, 0.75), lower = 0, upper = 12),
 #'                     delay_dist = "gamma",
-#'                     HR_SHELF = SHELF::fitdist(c(0.5, 0.6, 0.7), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 1),
+#'                     HR_SHELF = SHELF::fitdist(c(0.5, 0.6, 0.7),
+#'                     probs = c(0.25, 0.5, 0.75), lower = 0, upper = 1),
 #'                     HR_dist = "gamma",
 #'                     P_S = 1,
 #'                     P_DTE = 0)
@@ -798,10 +805,13 @@ update_priors <- function(data,
   if (control_model$dist == "Weibull"){
 
 
-      control_jags <- paste0("s1 ~ dbeta(", control_model$t1_Beta_a, ", ", control_model$t1_Beta_b, ")",
-                             "delta ~ ", control_model$diff_Beta_a, ", ", control_model$diff_Beta_b, ")",
-                             "gamma_c <- log(log(s1) / log(s1 - delta) ) / log(t1 / t2)",
-                             "lambda_c <- (-log(s1))^(1 / gamma_c) / t1")
+    control_jags <- paste0(
+      "s1 ~ dbeta(", control_model$t1_Beta_a, ", ", control_model$t1_Beta_b, ")\n",
+      "delta ~ dbeta(", control_model$diff_Beta_a, ", ", control_model$diff_Beta_b, ")\n",
+      "gamma_c <- log(log(s1) / log(s1 - delta)) / log(t1 / t2)\n",
+      "lambda_c <- (-log(s1))^(1 / gamma_c) / t1\n"
+    )
+
 
   }
 
@@ -992,16 +1002,45 @@ return(posterior_df)
 #' @export
 #'
 #' @examples
+#' set.seed(123)
+#' n <- 30
+#' cens_time <- 15
 #'
-#' df <-
+#' time <- runif(n, 0, 12)
+#' rec_time <- runif(n, 0, 12)
 #'
 #'
-#'   BPP_func(df, posterior_df, n_c_planned = 500, n_t_planned = 500,
-#'            rec_time_planned = 34, df_cens_time = 20,
-#'            censoring_model = list(method = "Events", events = 1200),
-#'            analysis_model = list(method = "LRT",
-#'                                  alpha = 0.025,
-#'                                  alternative_hypothesis = "one.sided"))
+#' df <- data.frame(
+#'   time = time,
+#'   group = c(rep("Control", n/2), rep("Treatment", n/2)),
+#'   rec_time = rec_time
+#' )
+#'
+#'
+#' df$pseudo_time <- df$time + df$rec_time
+#' df$status <- df$pseudo_time < cens_time
+#' df$survival_time <- ifelse(df$status == TRUE, df$time, cens_time - df$rec_time)
+#'
+#'
+#' posterior_df <- data.frame(HR = rnorm(20, mean = 0.75, sd = 0.05),
+#'                            delay_time = rep(0, 20),
+#'                            lambda_c = rnorm(20, log(2)/9, sd = 0.01))
+#'
+#'
+#' censoring_model = list(method = "Time", time = 25)
+#' analysis_model = list(method = "LRT",
+#'                       alpha = 0.025,
+#'                       alternative_hypothesis = "one.sided")
+#'
+#' BPP_outcome <- BPP_func(df,
+#'            posterior_df,
+#'            control_distribution = "Exponential",
+#'            n_c_planned = n/2,
+#'            n_t_planned = n/2,
+#'            rec_time_planned = 12, df_cens_time = 15,
+#'            censoring_model = censoring_model,
+#'            analysis_model = analysis_model,
+#'            n_sims = 10)
 #'
 BPP_func <- function(data, posterior_df, control_distribution = "Exponential", n_c_planned, n_t_planned,
                      rec_time_planned, df_cens_time,
@@ -1130,8 +1169,6 @@ BPP_func <- function(data, posterior_df, control_distribution = "Exponential", n
     if (n_before > 0) {
 
       if (control_distribution == "Exponential") {
-
-        # ------- EXISTING EXPONENTIAL LOGIC (unchanged) -------
 
         # Conditional uniform U ~ Unif(0,1)
         u <- stats::runif(n_before)
@@ -1283,18 +1320,6 @@ BPP_func <- function(data, posterior_df, control_distribution = "Exponential", n
       }
 
 
-    final_control_censored_df <-
-      if (nrow(control_censored_df) > 0) {
-        control_censored_df[c("final_time", "group", "rec_time", "final_pseudo_time")]
-      } else {
-        data.frame(
-          time        = numeric(0),
-          group       = character(0),
-          rec_time    = numeric(0),
-          pseudo_time = numeric(0)
-        )
-      }
-
     final_censored_treatment_before_delay <-
       if (nrow(censored_treatment_before_delay) > 0) {
         censored_treatment_before_delay[c("final_time", "group", "rec_time", "final_pseudo_time")]
@@ -1400,6 +1425,41 @@ BPP_func <- function(data, posterior_df, control_distribution = "Exponential", n
 #'
 #' @export
 #'
+#' @examples
+#'
+#'
+#' #' set.seed(123)
+#' control_model = list(dist = "Exponential",
+#'                      parameter_mode = "Distribution",
+#'                      t1 = 12,
+#'                      t1_Beta_a = 20,
+#'                      t1_Beta_b = 32)
+#'
+#' effect_model = list(delay_SHELF = SHELF::fitdist(c(5.5, 6, 6.5),
+#'                     probs = c(0.25, 0.5, 0.75), lower = 0, upper = 12),
+#'                     delay_dist = "gamma",
+#'                     HR_SHELF = SHELF::fitdist(c(0.5, 0.6, 0.7),
+#'                     probs = c(0.25, 0.5, 0.75), lower = 0, upper = 1),
+#'                     HR_dist = "gamma",
+#'                     P_S = 1,
+#'                     P_DTE = 0)
+#'
+#' recruitment_model <- list(method = "power", period = 12, power = 1)
+#'
+#' IA_model = list(events = 20, IF = 0.5)
+#'
+#' analysis_model = list(method = "LRT",
+#'                       alpha = 0.025,
+#'                       alternative_hypothesis = "one.sided")
+#'
+#' timing <- calibrate_BPP_timing(n_c = 15, n_t = 15,
+#'                      control_model = control_model,
+#'                      effect_model = effect_model,
+#'                      recruitment_model = recruitment_model,
+#'                      IA_model = IA_model,
+#'                      analysis_model = analysis_model,
+#'                      n_sims = 2)
+#'
 calibrate_BPP_timing <- function(n_c, n_t,
                                  control_model,
                                  effect_model,
@@ -1500,6 +1560,46 @@ calibrate_BPP_timing <- function(n_c, n_t,
 #'
 #' @export
 #'
+#' @examples
+#' set.seed(123)
+#' control_model = list(dist = "Exponential",
+#'                      parameter_mode = "Distribution",
+#'                      t1 = 12,
+#'                      t1_Beta_a = 20,
+#'                      t1_Beta_b = 32)
+#'
+#' effect_model = list(delay_SHELF = SHELF::fitdist(c(5.5, 6, 6.5),
+#'                     probs = c(0.25, 0.5, 0.75), lower = 0, upper = 12),
+#'                     delay_dist = "gamma",
+#'                     HR_SHELF = SHELF::fitdist(c(0.5, 0.6, 0.7),
+#'                     probs = c(0.25, 0.5, 0.75), lower = 0, upper = 1),
+#'                     HR_dist = "gamma",
+#'                     P_S = 1,
+#'                     P_DTE = 0)
+#'
+#' recruitment_model <- list(method = "power", period = 12, power = 1)
+#'
+#' IA_model = list(events = 20, IF = 0.5)
+#'
+#' analysis_model = list(method = "LRT",
+#'                       alpha = 0.025,
+#'                       alternative_hypothesis = "one.sided")
+#'
+#'
+#' data_generating_model = list(lambda_c = log(2)/12,
+#'                              delay_time = 3,
+#'                              post_delay_HR = 0.75)
+#'
+#'
+#' threshold <- calibrate_BPP_threshold(n_c = 15, n_t = 15,
+#'                      control_model = control_model,
+#'                      effect_model = effect_model,
+#'                      recruitment_model = recruitment_model,
+#'                      IA_model = IA_model,
+#'                      analysis_model = analysis_model,
+#'                      data_generating_model = data_generating_model,
+#'                      n_sims = 2)
+#'
 
 calibrate_BPP_threshold <- function(n_c,
                                      n_t,
@@ -1514,8 +1614,6 @@ calibrate_BPP_threshold <- function(n_c,
 
   BPP_vec <- rep(NA, n_sims)
 
-
-  ##### Now the fixed delay model
   for (i in 1:n_sims){
 
     # --- Simulate survival data ---

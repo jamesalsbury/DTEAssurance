@@ -77,7 +77,7 @@ Class: \code{list}
 Simulates operating characteristics for a clinical trial under prior uncertainty about a delayed treatment effect. The function integrates beliefs about control survival, treatment delay, post-delay hazard ratio, recruitment, censoring, and analysis method to estimate assurance and other trial metrics.
 }
 \examples{
-# Minimal example with placeholder inputs
+set.seed(123)
 control_model <- list(dist = "Exponential", parameter_mode = "Fixed",
 fixed_type = "Parameters", lambda = 0.1)
 effect_model <- list(delay_SHELF = SHELF::fitdist(c(3, 4, 5),

@@ -68,3 +68,39 @@ A vector of length \code{n_sims} corresponding to the value of BPP for each simu
 \description{
 Function to calculate the 'optimal' information fraction to calculate BPP
 }
+\examples{
+
+
+#' set.seed(123)
+control_model = list(dist = "Exponential",
+                     parameter_mode = "Distribution",
+                     t1 = 12,
+                     t1_Beta_a = 20,
+                     t1_Beta_b = 32)
+
+effect_model = list(delay_SHELF = SHELF::fitdist(c(5.5, 6, 6.5),
+                    probs = c(0.25, 0.5, 0.75), lower = 0, upper = 12),
+                    delay_dist = "gamma",
+                    HR_SHELF = SHELF::fitdist(c(0.5, 0.6, 0.7),
+                    probs = c(0.25, 0.5, 0.75), lower = 0, upper = 1),
+                    HR_dist = "gamma",
+                    P_S = 1,
+                    P_DTE = 0)
+
+recruitment_model <- list(method = "power", period = 12, power = 1)
+
+IA_model = list(events = 20, IF = 0.5)
+
+analysis_model = list(method = "LRT",
+                      alpha = 0.025,
+                      alternative_hypothesis = "one.sided")
+
+timing <- calibrate_BPP_timing(n_c = 15, n_t = 15,
+                     control_model = control_model,
+                     effect_model = effect_model,
+                     recruitment_model = recruitment_model,
+                     IA_model = IA_model,
+                     analysis_model = analysis_model,
+                     n_sims = 2)
+
+}
