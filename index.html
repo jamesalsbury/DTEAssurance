@@ -64,18 +64,11 @@ It uses elicited prior distributions—via the <a href="https://CRAN.R-project.o
 <div class="section level2">
 <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
 </h2>
-<p>You can install <code>DTEAssurance</code> from GitHub using:</p>
+<p>You can install <code>DTEAssurance</code> on CRAN using:</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Install from GitHub</span></span>
-<span><span class="fu">devtools</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"jamesalsbury/DTEAssurance"</span><span class="op">)</span></span>
-<span><span class="co">#&gt; Using GitHub PAT from the git credential store.</span></span>
-<span><span class="co">#&gt; Skipping install of 'DTEAssurance' from a github remote, the SHA1 (da7dd954) has not changed since last install.</span></span>
-<span><span class="co">#&gt;   Use `force = TRUE` to force installation</span></span>
-<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://jamesalsbury.github.io/DTEAssurance/">DTEAssurance</a></span><span class="op">)</span></span></code></pre></div>
-<p>Once accepted to CRAN, you’ll be able to install it with:</p>
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"DTEAssurance"</span><span class="op">)</span></span></code></pre></div>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"DTEAssurance"</span><span class="op">)</span></span>
-<span><span class="co">#&gt; Warning: package 'DTEAssurance' is in use and will not be installed</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://jamesalsbury.github.io/DTEAssurance/">DTEAssurance</a></span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="assurance-methods-for-delayed-treatment-effects">Assurance Methods for Delayed Treatment Effects<a class="anchor" aria-label="anchor" href="#assurance-methods-for-delayed-treatment-effects"></a>
@@ -168,7 +161,7 @@ It uses elicited prior distributions—via the <a href="https://CRAN.R-project.o
 </h3>
 <p>You can also use the package offline via the main function:</p>
 <div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu">DTEAssurance</span><span class="fu">::</span><span class="fu">calc_dte_assurance_interim</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="fu">DTEAssurance</span><span class="fu">::</span><span class="fu"><a href="reference/calc_dte_assurance_adaptive.html">calc_dte_assurance_adaptive</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 <p>This function requires the following arguments:</p>
 <ul>
 <li>
@@ -195,9 +188,11 @@ It uses elicited prior distributions—via the <a href="https://CRAN.R-project.o
 <span>HR_dist <span class="op">=</span> <span class="st">"gamma"</span>,</span>
 <span>P_S <span class="op">=</span> <span class="fl">0.9</span>, P_DTE <span class="op">=</span> <span class="fl">0.7</span><span class="op">)</span></span>
 <span><span class="va">recruitment_model</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>method <span class="op">=</span> <span class="st">"power"</span>, period <span class="op">=</span> <span class="fl">12</span>, power <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
-<span><span class="va">GSD_model</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>events <span class="op">=</span> <span class="fl">450</span>, alpha_spending <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"0.01, 0.025"</span><span class="op">)</span>,</span>
-<span>                  beta_spending <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"0.05, 0.1"</span><span class="op">)</span>, IF_vec <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"0.5, 1"</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="va">result</span> <span class="op">&lt;-</span> <span class="fu">calc_dte_assurance_interim</span><span class="op">(</span>n_c <span class="op">=</span> <span class="fl">300</span>, n_t <span class="op">=</span> <span class="fl">300</span>,</span>
+<span><span class="va">GSD_model</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>events <span class="op">=</span> <span class="fl">450</span>,</span>
+<span>                  alpha_spending <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.0125</span>, <span class="fl">0.025</span><span class="op">)</span>,</span>
+<span>                  alpha_IF <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.75</span>, <span class="fl">1</span><span class="op">)</span>,</span>
+<span>                  futility_type <span class="op">=</span> <span class="st">"none"</span><span class="op">)</span></span>
+<span><span class="va">result</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/calc_dte_assurance_adaptive.html">calc_dte_assurance_adaptive</a></span><span class="op">(</span>n_c <span class="op">=</span> <span class="fl">300</span>, n_t <span class="op">=</span> <span class="fl">300</span>,</span>
 <span>                             control_model <span class="op">=</span> <span class="va">control_model</span>,</span>
 <span>                             effect_model <span class="op">=</span> <span class="va">effect_model</span>,</span>
 <span>                             recruitment_model <span class="op">=</span> <span class="va">recruitment_model</span>,</span>
@@ -205,28 +200,26 @@ It uses elicited prior distributions—via the <a href="https://CRAN.R-project.o
 <span>                             n_sims <span class="op">=</span> <span class="fl">500</span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/str.html" class="external-link">str</a></span><span class="op">(</span><span class="va">result</span><span class="op">)</span></span>
-<span><span class="co">#&gt; 'data.frame':    500 obs. of  6 variables:</span></span>
+<span><span class="co">#&gt; 'data.frame':    500 obs. of  5 variables:</span></span>
 <span><span class="co">#&gt;  $ Trial         : int  1 2 3 4 5 6 7 8 9 10 ...</span></span>
-<span><span class="co">#&gt;  $ IF            : chr  "0.5, 1" "0.5, 1" "0.5, 1" "0.5, 1" ...</span></span>
-<span><span class="co">#&gt;  $ Decision      : chr  "Successful at final" "Stop for efficacy" "Stop for futility" "Stop for futility" ...</span></span>
-<span><span class="co">#&gt;  $ StopTime      : num  27.1 13.6 12.5 12.9 13.7 ...</span></span>
+<span><span class="co">#&gt;  $ Decision      : chr  "Stop for efficacy" "Stop for efficacy" "Successful at final" "Stop for efficacy" ...</span></span>
+<span><span class="co">#&gt;  $ StopTime      : num  21.6 20.4 26.8 17.9 18.7 ...</span></span>
 <span><span class="co">#&gt;  $ SampleSize    : int  600 600 600 600 600 600 600 600 600 600 ...</span></span>
 <span><span class="co">#&gt;  $ Final_Decision: chr  "Successful" "Successful" "Successful" "Successful" ...</span></span></code></pre></div>
-<p>If we wish to compare the operating characteristics we can do so by changing the <code>GSD_model</code> and plotting the proportion of outcomes:</p>
 <div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span></span>
-<span><span class="va">GSD_model</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>events <span class="op">=</span> <span class="fl">450</span>, </span>
-<span>                  alpha_spending <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"0.01, 0.025"</span>, <span class="st">"0.01, 0.025"</span>, <span class="st">"0.01, 0.025"</span><span class="op">)</span>,</span>
-<span>                  beta_spending <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"0.05, 0.1"</span>, <span class="st">"0.05, 0.1"</span>, <span class="st">"0.05, 0.1"</span><span class="op">)</span>, </span>
-<span>                  IF_vec <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"0.25, 1"</span>, <span class="st">"0.5, 1"</span>, <span class="st">"0.75, 1"</span><span class="op">)</span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="va">design_summary</span> <span class="op">&lt;-</span> <span class="va">result</span> <span class="op"><a href="reference/pipe.html">%&gt;%</a></span></span>
+<span>        <span class="fu">summarise</span><span class="op">(</span></span>
+<span>          Assurance <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">Decision</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Stop for efficacy"</span>, <span class="st">"Successful at final"</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>          `Pr(Early Fut.)` <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">Decision</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Stop for futility"</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>          `Pr(Early Eff.)` <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">Decision</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Stop for efficacy"</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>          `Average Duration` <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">StopTime</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>, <span class="fl">2</span><span class="op">)</span>,</span>
+<span>          `Average Sample Size` <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html" class="external-link">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">SampleSize</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>, <span class="fl">2</span><span class="op">)</span></span>
+<span>        <span class="op">)</span></span>
 <span></span>
-<span><span class="va">result</span> <span class="op">&lt;-</span> <span class="fu">calc_dte_assurance_interim</span><span class="op">(</span>n_c <span class="op">=</span> <span class="fl">300</span>, n_t <span class="op">=</span> <span class="fl">300</span>,</span>
-<span>                             control_model <span class="op">=</span> <span class="va">control_model</span>,</span>
-<span>                             effect_model <span class="op">=</span> <span class="va">effect_model</span>,</span>
-<span>                             recruitment_model <span class="op">=</span> <span class="va">recruitment_model</span>,</span>
-<span>                             GSD_model <span class="op">=</span> <span class="va">GSD_model</span>,</span>
-<span>                             n_sims <span class="op">=</span> <span class="fl">500</span><span class="op">)</span></span></code></pre></div>
-<p><img src="reference/figures/README-unnamed-chunk-14-1.png" width="100%"></p>
+<span></span>
+<span><span class="va">design_summary</span></span>
+<span><span class="co">#&gt;   Assurance Pr(Early Fut.) Pr(Early Eff.) Average Duration Average Sample Size</span></span>
+<span><span class="co">#&gt; 1       0.7              0          0.528            22.38                 600</span></span></code></pre></div>
 </div>
 </div>
 </div>
