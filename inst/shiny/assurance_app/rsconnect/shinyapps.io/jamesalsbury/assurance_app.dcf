@@ -1,0 +1,12 @@
+name: assurance_app
+title: assurance_app
+username: jamesalsbury
+account: jamesalsbury
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 16226240
+bundleId: 11267511
+url: https://jamesalsbury.shinyapps.io/assurance_app/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE

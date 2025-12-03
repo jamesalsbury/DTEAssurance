@@ -1,3 +1,5 @@
+library(DTEAssurance)
+library(dplyr)
 
 # UI definition
 ui <- fluidPage(
@@ -884,12 +886,12 @@ server <- function(input, output, session) {
       extended_ylim <- c(ylim[1] - buffer, ylim[2] + buffer)
 
       # Create the plot using plotly
-      p <- plot_ly() %>%
-        add_trace(data = efficacy_boundary, x = ~IF, y = ~Z_Stat, type = 'scatter', mode = 'lines+markers',
+      p <- plotly::plot_ly() %>%
+        plotly::add_trace(data = efficacy_boundary, x = ~IF, y = ~Z_Stat, type = 'scatter', mode = 'lines+markers',
                   line = list(color = 'red', width = 3),
                   marker = list(color = 'red', size = 10, symbol = 'circle'),
                   name = "Critical value") %>%
-        layout(yaxis = list(range = extended_ylim, title = "Futility Bound and Critical Value"),
+        plotly::layout(yaxis = list(range = extended_ylim, title = "Futility Bound and Critical Value"),
                title = "Boundaries",
                xaxis = list(title = "Information Fraction"))
 
@@ -954,22 +956,22 @@ server <- function(input, output, session) {
         extended_ylim <- c(plot_range[1] - margin, plot_range[2] + margin)
 
 
-        p <- plot_ly() %>%
-          add_trace(
+        p <- plotly::plot_ly() %>%
+          plotly::add_trace(
             data = eff_df, x = ~IF, y = ~Z_Stat,
             type = "scatter", mode = "lines+markers",
             line = list(color = "red", width = 3),
             marker = list(color = "red", size = 10),
             name = "Efficacy Boundary"
           ) %>%
-          add_trace(
+          plotly::add_trace(
             data = fut_df, x = ~IF, y = ~Z_Stat,
             type = "scatter", mode = "lines+markers",
             line = list(color = "blue", width = 3, dash = "dash"),
             marker = list(color = "blue", size = 10, symbol = "square"),
             name = "Futility Boundary (Beta Spending)"
           ) %>%
-          layout(
+          plotly::layout(
             yaxis = list(range = extended_ylim, title = "Z-Value Boundaries"),
             xaxis = list(title = "Information Fraction"),
             title = "Efficacy and Futility Boundaries (Distinct IFs)"

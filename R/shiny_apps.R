@@ -38,8 +38,6 @@ assurance_shiny_app <- function() {
   }
 
 
-
-
 #' Launch the 'shiny' adaptive assurance app
 #'
 #' Launches a 'shiny' application to simulate group sequential trials with
