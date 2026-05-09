@@ -37,7 +37,7 @@ test_that("calibrate_BPP_threshold runs end-to-end with real simulations", {
     IA_model = IA_model,
     analysis_model = analysis_model,
     data_generating_model = data_generating_model,
-    n_sims = 3
+    n_df_sims = 3
   )
 
   expect_type(out, "list")
@@ -67,7 +67,7 @@ test_that("calibrate_BPP_threshold loop logic works via light mocking", {
     IA_model = IA_model,
     analysis_model = analysis_model,
     data_generating_model = data_generating_model,
-    n_sims = 4
+    n_df_sims = 4
   )
 
   expect_equal(out$BPP_vec, rep(0.5, 4))

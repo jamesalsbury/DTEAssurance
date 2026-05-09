@@ -652,7 +652,7 @@ ui <- fluidPage(
 
         } else if (input$WeibullChoice == "Distribution") {
           controlTime <- seq(0, 100, length.out = 100)
-          n <- 500
+          n <- 5000
 
           # Vectorized sampling
           sampledS1to <- rbeta(n, input$WeibullDistS1BetaA, input$WeibullDistS1BetaB)

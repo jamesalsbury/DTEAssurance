@@ -741,7 +741,9 @@ calc_dte_assurance_adaptive <- function(n_c, n_t,
 #'     \item \code{P_DTE}: Probability of delayed separation, conditional on separation
 #'   }
 #'
-#' @param n_samples Number of posterior samples to generate (default: 1000).
+#' @param n.chains Number of MCMC chains to run (default is 2)
+#' @param n_burnin Number of burn-in samples for the MCMC chain(s) (default is 500)
+#' @param n_samples Number of posterior samples to generate (default is 1000)
 #'
 #' @return A data frame containing Monte Carlo samples from the updated (posterior)
 #'   distribution of the model parameters. Columns normally include:
@@ -791,6 +793,8 @@ calc_dte_assurance_adaptive <- function(n_c, n_t,
 update_priors <- function(data,
                           control_model,
                           effect_model,
+                          n.chains = 2,
+                          n_burnin = 500,
                           n_samples = 1000) {
 
   if (!requireNamespace("rjags", quietly = TRUE)) {
@@ -946,11 +950,12 @@ data_list$pi <- pi_vec
   }
 
 
-
-model = rjags::jags.model(textConnection(modelstring), data = data_list, quiet = T)
-
-
-stats::update(model, n.iter=100)
+model = rjags::jags.model(
+  textConnection(modelstring),
+  data = data_list,
+  n.chains = n.chains,
+  quiet = TRUE
+)
 
 var_names <- if (control_model$dist == "Exponential") {
   c("lambda_c", "HR", "delay_time")
@@ -958,7 +963,13 @@ var_names <- if (control_model$dist == "Exponential") {
   c("lambda_c", "gamma_c", "HR", "delay_time")
 }
 
-output = rjags::coda.samples(model=model, variable.names=var_names, n.iter = n_samples)
+stats::update(model, n.iter = n_burnin)
+
+output <- rjags::coda.samples(
+  model = model,
+  variable.names = var_names,
+  n.iter = n_samples
+)
 
 
 posterior_df <- as.data.frame(as.matrix(output))
@@ -1558,7 +1569,9 @@ calibrate_BPP_timing <- function(n_c, n_t,
 #'     \item \code{delay_time}: time at which the treatment starts to take effect
 #'     \item \code{post_delay_HR}: hazard ratio, after `delay_time`
 #'   }
-#' @param n_sims Number of data sets to simulate (default is 100).
+#' @param n_df_sims Number of data sets to simulate (default is 100).
+#' @param update_priors_sims Number of samples to generate from the posterior (default is 1000)
+#' @param PP_sims Number of simulations used to calculate the predictive probability (default is 2000)
 #'
 #' @return A vector of length `n_sims` corresponding to the value of BPP for each simulated trial
 #'
@@ -1591,6 +1604,7 @@ calibrate_BPP_timing <- function(n_c, n_t,
 #'
 #'
 #' data_generating_model = list(lambda_c = log(2)/12,
+#'                              gamma_c = NULL,
 #'                              delay_time = 3,
 #'                              post_delay_HR = 0.75)
 #'
@@ -1602,7 +1616,7 @@ calibrate_BPP_timing <- function(n_c, n_t,
 #'                      IA_model = IA_model,
 #'                      analysis_model = analysis_model,
 #'                      data_generating_model = data_generating_model,
-#'                      n_sims = 2)
+#'                      n_df_sims = 2)
 #'
 
 calibrate_BPP_threshold <- function(n_c,
@@ -1613,19 +1627,34 @@ calibrate_BPP_threshold <- function(n_c,
                                      IA_model,
                                      analysis_model,
                                      data_generating_model,
-                                     n_sims = 100){
+                                     n_df_sims = 100,
+                                     update_priors_sims = 1000,
+                                     PP_sims = 2000
+                                    ){
 
 
-  BPP_vec <- rep(NA, n_sims)
+  BPP_vec <- rep(NA, n_df_sims)
 
-  for (i in 1:n_sims){
+  for (i in 1:n_df_sims){
 
     # --- Simulate survival data ---
-    data <- sim_dte(n_c, n_t,
-                    data_generating_model$lambda_c,
-                    delay_time = data_generating_model$delay_time,
-                    post_delay_HR = data_generating_model$post_delay_HR,
-                    dist = "Exponential")
+    if (is.null(data_generating_model$gamma_c)){
+      data <- sim_dte(n_c, n_t,
+                      data_generating_model$lambda_c,
+                      delay_time = data_generating_model$delay_time,
+                      post_delay_HR = data_generating_model$post_delay_HR,
+                      dist = "Exponential")
+    } else {
+      data <- sim_dte(n_c, n_t,
+                      data_generating_model$lambda_c,
+                      delay_time = data_generating_model$delay_time,
+                      post_delay_HR = data_generating_model$post_delay_HR,
+                      dist = "Weibull",
+                      gamma_c = data_generating_model$gamma_c)
+    }
+
+
+
 
     # --- Add recruitment time ---
     data <- add_recruitment_time(data,
@@ -1642,8 +1671,8 @@ calibrate_BPP_threshold <- function(n_c,
 
     posterior_samples <- DTEAssurance::update_priors(data,
                                                      control_model = control_model,
-                                                     effect_model = effect_model,
-                                                     n_samples = 100)
+                                                     effect_model = effect_model,                                                     ,
+                                                     n_samples = update_priors_sims)
 
     BPP_outcome <-  DTEAssurance::BPP_func(data,
                                            posterior_samples,
@@ -1654,7 +1683,7 @@ calibrate_BPP_threshold <- function(n_c,
                                            df_cens_time = censored_data$cens_time,
                                            censoring_model = list(method = "Events", events = IA_model$events),
                                            analysis_model = analysis_model,
-                                           n_sims = 50)
+                                           n_sims = PP_sims)
 
     BPP_vec[i] <- mean(BPP_outcome$BPP_df$success)
 

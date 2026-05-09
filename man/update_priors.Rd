@@ -4,7 +4,14 @@
 \alias{update_priors}
 \title{Update prior distributions using interim survival data}
 \usage{
-update_priors(data, control_model, effect_model, n_samples = 1000)
+update_priors(
+  data,
+  control_model,
+  effect_model,
+  n.chains = 2,
+  n_burnin = 500,
+  n_samples = 1000
+)
 }
 \arguments{
 \item{data}{A data frame containing interim survival data with columns:
@@ -33,7 +40,11 @@ update_priors(data, control_model, effect_model, n_samples = 1000)
 \item \code{P_DTE}: Probability of delayed separation, conditional on separation
 }}
 
-\item{n_samples}{Number of posterior samples to generate (default: 1000).}
+\item{n.chains}{Number of MCMC chains to run (default is 2)}
+
+\item{n_burnin}{Number of burn-in samples for the MCMC chain(s) (default is 500)}
+
+\item{n_samples}{Number of posterior samples to generate (default is 1000)}
 }
 \value{
 A data frame containing Monte Carlo samples from the updated (posterior)
