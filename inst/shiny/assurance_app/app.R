@@ -1,3 +1,5 @@
+library(DTEAssurance)
+
 
 ui <- fluidPage(
 
@@ -1441,26 +1443,16 @@ ui <- fluidPage(
 
 
 
-    calculateAssurance <- eventReactive(input$calcAssurance, {
-      call_string <- function_call()  # e.g. "assurance(MCMC_sample = MCMC_sample)"
-
-      # Create an environment with necessary objects
-      eval_env <- new.env()
-
-      result <- tryCatch({
-        eval(parse(text = call_string), envir = eval_env)
-      }, error = function(e) {
-        showNotification(paste("Error:", e$message), type = "error")
-        NULL
-      })
-
+    calculate_assurance <- eventReactive(input$calcAssurance, {
+      call_string <- function_call()
+      result <- eval(parse(text = call_string))
       return(result)
     })
 
 
     output$assurancePlot <- renderPlot({
 
-      assOutput <- calculateAssurance()
+      assOutput <- calculate_assurance()
 
       n <- seq(10, input$numofpatients, length = input$nSampleSize)
 
@@ -1512,7 +1504,7 @@ ui <- fluidPage(
 
     output$OC_table <- DT::renderDT({
 
-      assOutput <- calculateAssurance()
+      assOutput <- calculate_assurance()
 
       n <- seq(10, input$numofpatients, length = input$nSampleSize)
 
