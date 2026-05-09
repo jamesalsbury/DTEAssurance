@@ -14,7 +14,9 @@ calibrate_BPP_threshold(
   IA_model,
   analysis_model,
   data_generating_model,
-  n_sims = 100
+  n_df_sims = 100,
+  update_priors_sims = 1000,
+  PP_sims = 2000
 )
 ```
 
@@ -103,9 +105,18 @@ calibrate_BPP_threshold(
 
   - `post_delay_HR`: hazard ratio, after `delay_time`
 
-- n_sims:
+- n_df_sims:
 
   Number of data sets to simulate (default is 100).
+
+- update_priors_sims:
+
+  Number of samples to generate from the posterior (default is 1000)
+
+- PP_sims:
+
+  Number of simulations used to calculate the predictive probability
+  (default is 2000)
 
 ## Value
 
@@ -141,6 +152,7 @@ analysis_model = list(method = "LRT",
 
 
 data_generating_model = list(lambda_c = log(2)/12,
+                             gamma_c = NULL,
                              delay_time = 3,
                              post_delay_HR = 0.75)
 
@@ -152,5 +164,5 @@ threshold <- calibrate_BPP_threshold(n_c = 15, n_t = 15,
                      IA_model = IA_model,
                      analysis_model = analysis_model,
                      data_generating_model = data_generating_model,
-                     n_sims = 2)
+                     n_df_sims = 2)
 ```

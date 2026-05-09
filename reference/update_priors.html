@@ -47,7 +47,14 @@ exponential or Weibull model for the control arm.</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">update_priors</span><span class="op">(</span><span class="va">data</span>, <span class="va">control_model</span>, <span class="va">effect_model</span>, n_samples <span class="op">=</span> <span class="fl">1000</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">update_priors</span><span class="op">(</span></span>
+<span>  <span class="va">data</span>,</span>
+<span>  <span class="va">control_model</span>,</span>
+<span>  <span class="va">effect_model</span>,</span>
+<span>  n.chains <span class="op">=</span> <span class="fl">2</span>,</span>
+<span>  n_burnin <span class="op">=</span> <span class="fl">500</span>,</span>
+<span>  n_samples <span class="op">=</span> <span class="fl">1000</span></span>
+<span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -80,8 +87,16 @@ exponential or Weibull model for the control arm.</p>
 </ul></dd>
 
 
+<dt id="arg-n-chains">n.chains<a class="anchor" aria-label="anchor" href="#arg-n-chains"></a></dt>
+<dd><p>Number of MCMC chains to run (default is 2)</p></dd>
+
+
+<dt id="arg-n-burnin">n_burnin<a class="anchor" aria-label="anchor" href="#arg-n-burnin"></a></dt>
+<dd><p>Number of burn-in samples for the MCMC chain(s) (default is 500)</p></dd>
+
+
 <dt id="arg-n-samples">n_samples<a class="anchor" aria-label="anchor" href="#arg-n-samples"></a></dt>
-<dd><p>Number of posterior samples to generate (default: 1000).</p></dd>
+<dd><p>Number of posterior samples to generate (default is 1000)</p></dd>
 
 </dl></div>
     <div class="section level2">

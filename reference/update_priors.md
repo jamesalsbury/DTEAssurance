@@ -8,7 +8,14 @@ exponential or Weibull model for the control arm.
 ## Usage
 
 ``` r
-update_priors(data, control_model, effect_model, n_samples = 1000)
+update_priors(
+  data,
+  control_model,
+  effect_model,
+  n.chains = 2,
+  n_burnin = 500,
+  n_samples = 1000
+)
 ```
 
 ## Arguments
@@ -55,9 +62,17 @@ update_priors(data, control_model, effect_model, n_samples = 1000)
   - `P_DTE`: Probability of delayed separation, conditional on
     separation
 
+- n.chains:
+
+  Number of MCMC chains to run (default is 2)
+
+- n_burnin:
+
+  Number of burn-in samples for the MCMC chain(s) (default is 500)
+
 - n_samples:
 
-  Number of posterior samples to generate (default: 1000).
+  Number of posterior samples to generate (default is 1000)
 
 ## Value
 

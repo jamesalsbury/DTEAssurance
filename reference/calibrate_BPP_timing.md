@@ -105,6 +105,7 @@ simulated trial
 
 ``` r
 
+
 #' set.seed(123)
 control_model = list(dist = "Exponential",
                      parameter_mode = "Distribution",

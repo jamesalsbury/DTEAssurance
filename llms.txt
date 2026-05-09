@@ -30,10 +30,12 @@ The methodology is based on the following papers:
 You can install `DTEAssurance` on CRAN using:
 
 ``` r
+
 install.packages("DTEAssurance")
 ```
 
 ``` r
+
 library(DTEAssurance)
 ```
 
@@ -45,6 +47,7 @@ Launch the interactive app to explore assurance under delayed treatment
 effects:
 
 ``` r
+
 DTEAssurance::assurance_shiny_app()
 ```
 
@@ -53,6 +56,7 @@ DTEAssurance::assurance_shiny_app()
 You can also use the package offline via the main function:
 
 ``` r
+
 DTEAssurance::calc_dte_assurance()
 ```
 
@@ -73,6 +77,7 @@ This function requires the following arguments:
 An example of this is shown:
 
 ``` r
+
 control_model <- list(dist = "Exponential", parameter_mode = "Fixed", fixed_type = "Parameters", lambda = 0.1)
 effect_model <- list(delay_SHELF = SHELF::fitdist(c(3, 4, 5), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 10),
 delay_dist = "gamma",
@@ -102,6 +107,7 @@ We can vary the sample sizes and plot the resulting output:
 
 ``` r
 
+
 result <- calc_dte_assurance(n_c = seq(50, 500, by = 50),
                              n_t = seq(50, 500, by = 50),
                              control_model = control_model,
@@ -122,6 +128,7 @@ Launch the interactive `shiny` app to explore assurance under delayed
 treatment effects using group sequential designs:
 
 ``` r
+
 DTEAssurance::assurance_GSD_shiny_app()
 ```
 
@@ -130,6 +137,7 @@ DTEAssurance::assurance_GSD_shiny_app()
 You can also use the package offline via the main function:
 
 ``` r
+
 DTEAssurance::calc_dte_assurance_adaptive()
 ```
 
@@ -148,6 +156,7 @@ This function requires the following arguments:
 An example of this is shown:
 
 ``` r
+
 control_model <- list(dist = "Exponential", parameter_mode = "Fixed", fixed_type = "Parameters", lambda = 0.08)
 effect_model <- list(delay_SHELF = SHELF::fitdist(c(3, 4, 5), probs = c(0.25, 0.5, 0.75), lower = 0, upper = 10),
 delay_dist = "gamma",
@@ -176,6 +185,7 @@ str(result)
 ```
 
 ``` r
+
 design_summary <- result %>%
         summarise(
           Assurance = mean(Decision %in% c("Stop for efficacy", "Successful at final")),
