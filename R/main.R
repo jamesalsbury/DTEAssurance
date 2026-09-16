@@ -674,15 +674,16 @@ calc_dte_assurance_adaptive <- function(n_c, n_t,
       outcome <- apply_GSD_to_trial(
         n_c = n_c,
         n_t = n_t,
-        trial_data        = trial,
-        design            = design,
-        total_events      = GSD_model$events,
-        GSD_model         = GSD_model,
-        control_model     = control_model,        # elicited prior
-        effect_model      = effect_model,         # elicited prior
-        recruitment_model = recruitment_model,
-        analysis_model    = analysis_model,
-        n_BPP_sims        = 50                    # or whatever you choose
+        trial_data          = trial,
+        design              = design,
+        total_events        = GSD_model$events,
+        GSD_model           = GSD_model,
+        control_model       = control_model,
+        effect_model        = effect_model,
+        recruitment_model   = recruitment_model,
+        analysis_model      = analysis_model,
+        update_priors_sims  = 1000,   # was missing entirely -- previously silently defaulted
+        n_BPP_sims          = 1000    # was hardcoded 50
       )
 
       return(data.frame(
@@ -744,17 +745,33 @@ calc_dte_assurance_adaptive <- function(n_c, n_t,
 #' @param n.chains Number of MCMC chains to run (default is 2)
 #' @param n_burnin Number of burn-in samples for the MCMC chain(s) (default is 500)
 #' @param n_samples Number of posterior samples to generate (default is 1000)
+#' @param rhat_threshold Convergence threshold on the Gelman-Rubin
+#'   potential scale reduction factor (default 1.1). Used only to compute
+#'   the \code{"converged"} attribute on the return value; does not affect
+#'   sampling.
 #'
-#' @return A data frame containing Monte Carlo samples from the updated (posterior)
-#'   distribution of the model parameters. Columns normally include:
-#'   \itemize{
-#'     \item \code{lambda_c} Posterior samples for the control hazard parameter.
-#'     \item \code{delay_time} Posterior samples for the delay/changepoint time \eqn{T}.
-#'     \item \code{HR} Posterior samples for the post-delay hazard ratio.
-#'     \item \code{gamma_c} (only if \code{control_distribution = "Weibull"})
-#'           Posterior samples for the Weibull shape parameter.
+#' @return A data frame containing Monte Carlo samples from the updated
+#'   (posterior) distribution of the model parameters, with columns
+#'   \code{lambda_c}, \code{delay_time}, \code{HR}, \code{gamma_c} (Weibull
+#'   only), and \code{Z} (the latent scenario indicator: 1 = no separation,
+#'   2 = immediate separation, 3 = delayed separation). Column access
+#'   (\code{posterior_df$lambda_c}, etc.) is unchanged from previous
+#'   versions of this function -- existing calling code does not need to be
+#'   modified. In addition, three attributes are attached to the returned
+#'   data frame for diagnostic purposes:
+#'   \describe{
+#'     \item{\code{rhat}}{A named numeric vector of per-parameter
+#'       Gelman-Rubin point estimates (accessed via
+#'       \code{attr(posterior_df, "rhat")}).}
+#'     \item{\code{converged}}{\code{TRUE} if every monitored parameter's
+#'       Rhat is below \code{rhat_threshold}, \code{FALSE} if not, or
+#'       \code{NA} if the diagnostic could not be computed (accessed via
+#'       \code{attr(posterior_df, "converged")}).}
+#'     \item{\code{Z_probs}}{A named numeric vector
+#'       \code{c(P_Z1=, P_Z2=, P_Z3=)}, the posterior probability of each
+#'       latent state, i.e. \code{table(posterior_df$Z) / nrow(posterior_df)}
+#'       (accessed via \code{attr(posterior_df, "Z_probs")}).}
 #'   }
-#'
 #'
 #' Priors for \code{lambda_c}, \code{T}, and \code{HR} are constructed from
 #' elicited distributions using the SHELF framework, then updated through
@@ -788,14 +805,18 @@ calc_dte_assurance_adaptive <- function(n_c, n_t,
 #'   effect_model = effect_model,
 #'   n_samples = 10)
 #'
+#' # Diagnostics, e.g.:
+#' attr(posterior_df, "rhat")
+#' attr(posterior_df, "converged")
+#' attr(posterior_df, "Z_probs")
 #'
-
 update_priors <- function(data,
                           control_model,
                           effect_model,
                           n.chains = 2,
                           n_burnin = 500,
-                          n_samples = 1000) {
+                          n_samples = 1000,
+                          rhat_threshold = 1.1) {
 
   if (!requireNamespace("rjags", quietly = TRUE)) {
     stop("This function requires the 'rjags' package. Please install it with install.packages('rjags').")
@@ -870,9 +891,9 @@ model {
   }
 
 
-  if (control_model$dist == "Weibull"){
+if (control_model$dist == "Weibull"){
 
-    modelstring <- paste0("
+  modelstring <- paste0("
 
 data {
   for (j in 1:m){
@@ -912,11 +933,11 @@ model {
 
     }
 "
-)
+  )
 
 
 
-  }
+}
 
 
 data <- data[order(data$group),]
@@ -940,14 +961,14 @@ pi_vec <- c(
 data_list$pi <- pi_vec
 
 
-  if (control_model$dist == "Exponential"){
-    data_list$t1 <- control_model$t1
-  }
+if (control_model$dist == "Exponential"){
+  data_list$t1 <- control_model$t1
+}
 
-  if (control_model$dist == "Weibull"){
-    data_list$t1 <- control_model$t1
-    data_list$t2 <- control_model$t2
-  }
+if (control_model$dist == "Weibull"){
+  data_list$t1 <- control_model$t1
+  data_list$t2 <- control_model$t2
+}
 
 
 model = rjags::jags.model(
@@ -957,10 +978,12 @@ model = rjags::jags.model(
   quiet = TRUE
 )
 
+# --- FIX: Z is now monitored alongside the continuous parameters, giving
+#     direct access to the posterior state probabilities P(Z=k | data). ---
 var_names <- if (control_model$dist == "Exponential") {
-  c("lambda_c", "HR", "delay_time")
+  c("lambda_c", "HR", "delay_time", "Z")
 } else {
-  c("lambda_c", "gamma_c", "HR", "delay_time")
+  c("lambda_c", "gamma_c", "HR", "delay_time", "Z")
 }
 
 stats::update(model, n.iter = n_burnin)
@@ -971,12 +994,46 @@ output <- rjags::coda.samples(
   n.iter = n_samples
 )
 
+# --- FIX: convergence diagnostic (per-parameter Gelman-Rubin Rhat),
+#     computed here so it can be aggregated across a large simulation
+#     study without needing to re-run anything. Wrapped in tryCatch since
+#     this will be called many thousands of times in a full simulation
+#     study, and an occasional numerical failure (e.g. a near-zero-variance
+#     fit) should not halt the study -- it is instead recorded as NA. ---
+conv_diag <- tryCatch({
+  gd <- coda::gelman.diag(output, autoburnin = FALSE, multivariate = FALSE)
+  psrf_vec <- gd$psrf[, "Point est."]
+  names(psrf_vec) <- rownames(gd$psrf)
+  list(
+    rhat = psrf_vec,
+    converged = all(psrf_vec < rhat_threshold, na.rm = TRUE),
+    error = NA_character_
+  )
+}, error = function(e) {
+  list(
+    rhat = stats::setNames(rep(NA_real_, length(var_names)), var_names),
+    converged = NA,
+    error = conditionMessage(e)
+  )
+})
 
 posterior_df <- as.data.frame(as.matrix(output))
+
+# --- FIX: posterior state probabilities, directly from the monitored Z
+#     column (now present in posterior_df since Z is in var_names). ---
+Z_tab <- table(factor(posterior_df$Z, levels = c(1, 2, 3)))
+Z_probs <- as.numeric(Z_tab) / sum(Z_tab)
+names(Z_probs) <- c("P_Z1", "P_Z2", "P_Z3")
+
+attr(posterior_df, "rhat") <- conv_diag$rhat
+attr(posterior_df, "converged") <- conv_diag$converged
+attr(posterior_df, "convergence_error") <- conv_diag$error
+attr(posterior_df, "Z_probs") <- Z_probs
 
 return(posterior_df)
 
 }
+
 
 #' Calculate Bayesian Predictive Probability given interim data and posterior samples
 #'
@@ -998,21 +1055,59 @@ return(posterior_df)
 #' @param n_t_planned Planned maximum number of patients in the treatment group.
 #' @param rec_time_planned Planned maximum recruitment calendar time for the full trial.
 #' @param df_cens_time Calendar time at which \code{df} has been censored (interim analysis time).
-#' @param censoring_model A named list specifying the censoring mechanism for the future data:
-#'   \itemize{
-#'     \item \code{method}: one of \code{"Time"}, \code{"Events"}, or \code{"IF"}.
-#'     \item \code{time}, \code{events}, \code{IF}: parameters for the corresponding method.
-#'   }
-#' @param analysis_model A named list specifying the final analysis and decision rule:
+#' @param analysis_model A named list specifying the analysis method and decision rule:
 #'   \itemize{
 #'     \item \code{method}: e.g. \code{"LRT"}, \code{"WLRT"}, or \code{"MW"}.
-#'     \item \code{alpha}: one-sided type I error level.
+#'     \item \code{alpha}: one-sided type I error level (only used in the legacy
+#'       fallback path, see \code{censoring_model} below).
 #'     \item \code{alternative_hypothesis}: direction of the alternative (e.g. \code{"one.sided"}).
 #'     \item \code{rho}, \code{gamma}, \code{t_star}, \code{s_star}: additional parameters for WLRT or MW (if applicable).
 #'   }
-#' @param n_sims Number of predictive simulations to run (default is 1000).
+#' @param future_boundaries \strong{Recommended.} A list of future, pre-specified,
+#'   fixed decision points to evaluate on each posterior-predictive draw, in
+#'   ascending chronological order, matching the trial's own group-sequential
+#'   design. Each element is a list with:
+#'   \itemize{
+#'     \item \code{events}: the cumulative event count at that analysis (the
+#'       final element should be the maximum planned event count).
+#'     \item \code{crit}: the pre-specified critical value for the test
+#'       statistic \code{Z} at that analysis (e.g. from
+#'       \code{design$criticalValues} of an \code{rpact} group-sequential
+#'       design).
+#'   }
+#'   On each predictive draw, boundaries are checked in order: if \code{Z}
+#'   crosses a boundary, the draw is recorded as successful and evaluation
+#'   stops (mirroring the group-sequential design's own early-stopping
+#'   logic); if the final boundary in the chain is reached without crossing,
+#'   the draw is recorded as unsuccessful. This correctly evaluates the
+#'   adaptive trial-success event (crossing any future efficacy boundary, or
+#'   rejecting \eqn{H_0} at the final analysis), rather than only checking a
+#'   single final test.
 #'
-#' @return A single numeric value giving the Bayesian predictive probability of success at the final analysis under the specified design, censoring model and analysis model.
+#'   \strong{Scope:} \code{future_boundaries} must contain only fixed
+#'   (non-Bayesian) decision points. A design with more than one future
+#'   Bayesian-predictive-probability futility look is not supported here, as
+#'   it would require nested posterior-predictive simulation at each look;
+#'   see the package/manuscript Limitations.
+#' @param censoring_model \strong{Legacy fallback, deprecated.} Used only if
+#'   \code{future_boundaries} is \code{NULL}. A named list specifying a
+#'   single censoring mechanism for the future data (\code{method}: one of
+#'   \code{"Time"}, \code{"Events"}, or \code{"IF"}; plus the corresponding
+#'   \code{time}/\code{events}/\code{IF} parameter), with success determined
+#'   by \code{analysis_model$alpha} rather than a design-specific critical
+#'   value. Retained only for backward compatibility with callers that do
+#'   not have access to a full group-sequential design object; new code
+#'   should always supply \code{future_boundaries}.
+#' @param n_sims Number of predictive simulations to run (default is 500).
+#'   The manuscript reports results based on \code{n_sims = 1000}; confirm
+#'   this argument is set explicitly by the caller rather than relying on
+#'   the default, and report the value used.
+#'
+#' @return A list with a single element \code{BPP_df}, a data frame with
+#'   columns \code{success} (0/1, whether this predictive draw ultimately
+#'   rejects \eqn{H_0}, accounting for any future fixed efficacy boundaries)
+#'   and \code{Z_val} (the test statistic at the analysis where the draw was
+#'   decided). The predictive probability is \code{mean(BPP_df$success)}.
 #'
 #' @export
 #'
@@ -1024,44 +1119,53 @@ return(posterior_df)
 #' time <- runif(n, 0, 12)
 #' rec_time <- runif(n, 0, 12)
 #'
-#'
 #' df <- data.frame(
 #'   time = time,
 #'   group = c(rep("Control", n/2), rep("Treatment", n/2)),
 #'   rec_time = rec_time
 #' )
 #'
-#'
 #' df$pseudo_time <- df$time + df$rec_time
 #' df$status <- df$pseudo_time < cens_time
 #' df$survival_time <- ifelse(df$status == TRUE, df$time, cens_time - df$rec_time)
-#'
 #'
 #' posterior_df <- data.frame(HR = rnorm(20, mean = 0.75, sd = 0.05),
 #'                            delay_time = rep(0, 20),
 #'                            lambda_c = rnorm(20, log(2)/9, sd = 0.01))
 #'
+#' analysis_model <- list(method = "LRT", alpha = 0.025,
+#'                        alternative_hypothesis = "one.sided")
 #'
-#' censoring_model = list(method = "Time", time = 25)
-#' analysis_model = list(method = "LRT",
-#'                       alpha = 0.025,
-#'                       alternative_hypothesis = "one.sided")
+#' # Recommended usage: pass the design's own future boundaries, e.g. a single
+#' # efficacy look at 25 events (Z > 2.24) followed by a final analysis at
+#' # 40 events (Z > 2.00):
+#' future_boundaries <- list(
+#'   list(events = 25, crit = 2.24),
+#'   list(events = 40, crit = 2.00)
+#' )
 #'
-#' BPP_outcome <- BPP_func(df,
-#'            posterior_df,
+#' BPP_outcome <- BPP_func(df, posterior_df,
 #'            control_distribution = "Exponential",
-#'            n_c_planned = n/2,
-#'            n_t_planned = n/2,
+#'            n_c_planned = n/2, n_t_planned = n/2,
 #'            rec_time_planned = 12, df_cens_time = 15,
-#'            censoring_model = censoring_model,
 #'            analysis_model = analysis_model,
+#'            future_boundaries = future_boundaries,
 #'            n_sims = 10)
 #'
 BPP_func <- function(data, posterior_df, control_distribution = "Exponential", n_c_planned, n_t_planned,
                      rec_time_planned, df_cens_time,
-                     censoring_model, analysis_model,
+                     analysis_model,
+                     censoring_model = NULL,
+                     future_boundaries = NULL,
                      n_sims = 500) {
 
+  if (is.null(future_boundaries) && is.null(censoring_model)) {
+    stop("BPP_func: supply either 'future_boundaries' (recommended -- a chain ",
+         "of fixed future efficacy/final decision points matching the trial's ",
+         "group-sequential design) or 'censoring_model' (legacy single-stage ",
+         "fallback, uses a flat alpha rather than design-specific critical ",
+         "values).")
+  }
 
   #The number of unenrolled patients in each group
   n_unenrolled_control <- (n_c_planned) - sum(data$group=="Control")
@@ -1365,27 +1469,76 @@ BPP_func <- function(data, posterior_df, control_distribution = "Exponential", n
 
     final_df <- rbind(final_non_censored_df, final_unenrolled_df, final_control_censored_df, final_censored_treatment_before_delay, final_censored_treatment_after_delay)
 
-    # --- Apply censoring ---
-    if (censoring_model$method == "Time") {
-      censored <- cens_data(final_df, cens_method = "Time", cens_time = censoring_model$time)
-    } else if (censoring_model$method == "Events") {
-      censored <- cens_data(final_df, cens_method = "Events", cens_events = censoring_model$events)
-    } else if (censoring_model$method == "IF") {
-      censored <- cens_data(final_df, cens_method = "IF", cens_IF = censoring_model$IF)
+    # =========================================================================
+    # FIX: evaluate the trial-success event W (Eq. 8) correctly -- check every
+    # future fixed decision point in order, stopping at the first crossed
+    # boundary, rather than testing only a single final analysis at a flat
+    # alpha. This replaces the previous single-stage censor-and-test block.
+    # =========================================================================
+
+    if (!is.null(future_boundaries)) {
+
+      success   <- 0
+      Z_current <- NA_real_
+
+      for (k in seq_along(future_boundaries)) {
+
+        fb <- future_boundaries[[k]]
+        is_last <- (k == length(future_boundaries))
+
+        censored_k <- cens_data(final_df, cens_method = "Events", cens_events = fb$events)
+
+        test_k <- survival_test(censored_k$data,
+                                analysis_method = analysis_model$method,
+                                alpha = analysis_model$alpha,
+                                alternative = analysis_model$alternative_hypothesis,
+                                rho = analysis_model$rho,
+                                gamma = analysis_model$gamma,
+                                t_star = analysis_model$t_star,
+                                s_star = analysis_model$s_star)
+
+        Z_current <- test_k$Z
+
+        if (!is.na(test_k$Z) && test_k$Z > fb$crit) {
+          # Boundary crossed (whether an early efficacy look or the final
+          # analysis) -> trial succeeds, stop evaluating this draw.
+          success <- 1
+          break
+        }
+
+        if (is_last) {
+          # Reached the final analysis without crossing its boundary -> failure.
+          success <- 0
+          break
+        }
+        # Otherwise: not crossed at an early look -> continue to the next
+        # future boundary in the chain (mirrors the real trial continuing).
+      }
+
+      BPP_df[j,] <- c(success, Z_current)
+
+    } else {
+
+      # --- Legacy single-stage fallback (censoring_model + flat alpha) ---
+      if (censoring_model$method == "Time") {
+        censored <- cens_data(final_df, cens_method = "Time", cens_time = censoring_model$time)
+      } else if (censoring_model$method == "Events") {
+        censored <- cens_data(final_df, cens_method = "Events", cens_events = censoring_model$events)
+      } else if (censoring_model$method == "IF") {
+        censored <- cens_data(final_df, cens_method = "IF", cens_IF = censoring_model$IF)
+      }
+
+      test_result <- survival_test(censored$data,
+                                   analysis_method = analysis_model$method,
+                                   alpha = analysis_model$alpha,
+                                   alternative = analysis_model$alternative_hypothesis,
+                                   rho = analysis_model$rho,
+                                   gamma = analysis_model$gamma,
+                                   t_star = analysis_model$t_star,
+                                   s_star = analysis_model$s_star)
+
+      BPP_df[j,] <- c(test_result$Signif, test_result$Z)
     }
-
-    # --- Run statistical test ---
-    test_result <- survival_test(censored$data,
-                                 analysis_method = analysis_model$method,
-                                 alpha = analysis_model$alpha,
-                                 alternative = analysis_model$alternative_hypothesis,
-                                 rho = analysis_model$rho,
-                                 gamma = analysis_model$gamma,
-                                 t_star = analysis_model$t_star,
-                                 s_star = analysis_model$s_star)
-
-
-    BPP_df[j,] <- c(test_result$Signif, test_result$Z)
 
   }
 
@@ -1394,220 +1547,100 @@ BPP_func <- function(data, posterior_df, control_distribution = "Exponential", n
 }
 
 
-
-#' Function to calculate the 'optimal' information fraction to calculate BPP
-#'
-#' @param n_c Number of control patients
-#' @param n_t Number of treatment patients
-#' @param control_model A named list specifying the control arm survival distribution:
-#'   \itemize{
-#'     \item \code{dist}: Distribution type ("Exponential" or "Weibull")
-#'     \item \code{parameter_mode}: Either "Fixed" or "Distribution"
-#'     \item \code{fixed_type}: If "Fixed", specify as "Parameters" or "Landmark"
-#'     \item \code{lambda}, \code{gamma}: Scale and shape parameters
-#'     \item \code{t1}, \code{t2}: Landmark times
-#'     \item \code{surv_t1}, \code{surv_t2}: Survival probabilities at landmarks
-#'     \item \code{t1_Beta_a}, \code{t1_Beta_b}, \code{diff_Beta_a}, \code{diff_Beta_b}: Beta prior parameters
-#'   }
-#' @param effect_model A named list specifying beliefs about the treatment effect:
-#'   \itemize{
-#'     \item \code{delay_SHELF}, \code{HR_SHELF}: SHELF objects encoding beliefs
-#'     \item \code{delay_dist}, \code{HR_dist}: Distribution types ("hist" by default)
-#'     \item \code{P_S}: Probability that survival curves separate
-#'     \item \code{P_DTE}: Probability of delayed separation, conditional on separation
-#'   }
-#' @param recruitment_model A named list specifying the recruitment process:
-#'   \itemize{
-#'     \item \code{method}: "power" or "PWC"
-#'     \item \code{period}, \code{power}: Parameters for power model
-#'     \item \code{rate}, \code{duration}: Comma-separated strings for PWC model
-#'   }
-#' @param IA_model A named list specifying the censoring mechanism for the future data:
-#'   \itemize{
-#'     \item \code{events}: Number of events which is 100% information fraction
-#'     \item \code{IF}: The information fraction at which to censor and calculate BPP
-#'   }
-#' @param analysis_model A named list specifying the final analysis and decision rule:
-#'   \itemize{
-#'     \item \code{method}: e.g. \code{"LRT"}, \code{"WLRT"}, or \code{"MW"}.
-#'     \item \code{alpha}: one-sided type I error level.
-#'     \item \code{alternative_hypothesis}: direction of the alternative (e.g. \code{"one.sided"}).
-#'     \item \code{rho}, \code{gamma}, \code{t_star}, \code{s_star}: additional parameters for WLRT or MW (if applicable).
-#'   }
-#' @param n_sims Number of data sets to simulate (default is 100).
-#'
-#' @return A vector of length `n_sims` corresponding to the value of BPP for each simulated trial
-#'
-#' @export
-#'
-#' @examples
-#'
-#'
-#' #' set.seed(123)
-#' control_model = list(dist = "Exponential",
-#'                      parameter_mode = "Distribution",
-#'                      t1 = 12,
-#'                      t1_Beta_a = 20,
-#'                      t1_Beta_b = 32)
-#'
-#' effect_model = list(delay_SHELF = SHELF::fitdist(c(5.5, 6, 6.5),
-#'                     probs = c(0.25, 0.5, 0.75), lower = 0, upper = 12),
-#'                     delay_dist = "gamma",
-#'                     HR_SHELF = SHELF::fitdist(c(0.5, 0.6, 0.7),
-#'                     probs = c(0.25, 0.5, 0.75), lower = 0, upper = 1),
-#'                     HR_dist = "gamma",
-#'                     P_S = 1,
-#'                     P_DTE = 0)
-#'
-#' recruitment_model <- list(method = "power", period = 12, power = 1)
-#'
-#' IA_model = list(events = 20, IF = 0.5)
-#'
-#' analysis_model = list(method = "LRT",
-#'                       alpha = 0.025,
-#'                       alternative_hypothesis = "one.sided")
-#'
-#' timing <- calibrate_BPP_timing(n_c = 15, n_t = 15,
-#'                      control_model = control_model,
-#'                      effect_model = effect_model,
-#'                      recruitment_model = recruitment_model,
-#'                      IA_model = IA_model,
-#'                      analysis_model = analysis_model,
-#'                      n_sims = 2)
-#'
-calibrate_BPP_timing <- function(n_c, n_t,
-                                 control_model,
-                                 effect_model,
-                                 recruitment_model,
-                                 IA_model,
-                                 analysis_model,
-                                 n_sims = 50){
-
-  outcome_list <- vector("list", length(IA_model$IF))
-
-  for (i in 1:length(IA_model$IF)){
-
-    result <- lapply(
-      seq_len(n_sims),
-      FUN = single_calibration_rep,
-      n_c = n_c,
-      n_t = n_t,
-      control_model = control_model,
-      effect_model = effect_model,
-      recruitment_model = recruitment_model,
-      total_events = IA_model$events,
-      IF = IA_model$IF[i],
-      analysis_model = analysis_model
-    )
-
-
-    BPP_values <- vapply(
-      result,
-      FUN = function(x) mean(x$BPP_outcome$BPP_df$success),
-      FUN.VALUE = numeric(1)
-    )
-
-    cens_time <- vapply(result,
-                        function (x) x$cens_time,
-                        FUN.VALUE =numeric(1)
-    )
-
-
-    outcome_list[[i]]$BPP_values <- BPP_values
-    outcome_list[[i]]$cens_time <- cens_time
-  }
-
-
-
-  return(list(outcome_list = outcome_list))
-
-}
-
-
 #' Function to calculate the 'optimal' BPP threshold value
 #'
 #' @param n_c Number of control patients
 #' @param n_t Number of treatment patients
-#' @param control_model A named list specifying the control arm survival distribution:
+#' @param control_model A named list specifying the control arm survival distribution
+#'   (see \code{\link{update_priors}} for details).
+#' @param effect_model A named list specifying beliefs about the treatment effect
+#'   (see \code{\link{update_priors}} for details).
+#' @param recruitment_model A named list specifying the recruitment process
+#'   (see \code{\link{add_recruitment_time}} for details).
+#' @param IA_model A named list specifying the interim analysis timing:
 #'   \itemize{
-#'     \item \code{dist}: Distribution type ("Exponential" or "Weibull")
-#'     \item \code{parameter_mode}: Either "Fixed" or "Distribution"
-#'     \item \code{fixed_type}: If "Fixed", specify as "Parameters" or "Landmark"
-#'     \item \code{lambda}, \code{gamma}: Scale and shape parameters
-#'     \item \code{t1}, \code{t2}: Landmark times
-#'     \item \code{surv_t1}, \code{surv_t2}: Survival probabilities at landmarks
-#'     \item \code{t1_Beta_a}, \code{t1_Beta_b}, \code{diff_Beta_a}, \code{diff_Beta_b}: Beta prior parameters
+#'     \item \code{events}: total planned event count (100% information fraction).
+#'     \item \code{IF}: the information fraction at which the interim futility
+#'       look occurs (i.e. where the data are censored to compute BPP).
 #'   }
-#' @param effect_model A named list specifying beliefs about the treatment effect:
+#' @param analysis_model A named list specifying the analysis method
+#'   (see \code{\link{BPP_func}} for details).
+#' @param data_generating_model A named list specifying the true data-generating
+#'   parameters used to simulate trials for calibration:
 #'   \itemize{
-#'     \item \code{delay_SHELF}, \code{HR_SHELF}: SHELF objects encoding beliefs
-#'     \item \code{delay_dist}, \code{HR_dist}: Distribution types ("hist" by default)
-#'     \item \code{P_S}: Probability that survival curves separate
-#'     \item \code{P_DTE}: Probability of delayed separation, conditional on separation
+#'     \item \code{lambda_c}: hazard rate for the control group.
+#'     \item \code{gamma_c}: Weibull shape parameter (\code{NULL} for Exponential).
+#'     \item \code{delay_time}: true delay before the treatment effect begins.
+#'     \item \code{post_delay_HR}: true post-delay hazard ratio.
 #'   }
-#' @param recruitment_model A named list specifying the recruitment process:
-#'   \itemize{
-#'     \item \code{method}: "power" or "PWC"
-#'     \item \code{period}, \code{power}: Parameters for power model
-#'     \item \code{rate}, \code{duration}: Comma-separated strings for PWC model
-#'   }
-#' @param IA_model A named list specifying the censoring mechanism for the future data:
-#'   \itemize{
-#'     \item \code{events}: Number of events which is 100% information fraction
-#'     \item \code{IF}: The information fraction at which to censor and calculate BPP
-#'   }
-#' @param analysis_model A named list specifying the final analysis and decision rule:
-#'   \itemize{
-#'     \item \code{method}: e.g. \code{"LRT"}, \code{"WLRT"}, or \code{"MW"}.
-#'     \item \code{alpha}: one-sided type I error level.
-#'     \item \code{alternative_hypothesis}: direction of the alternative (e.g. \code{"one.sided"}).
-#'     \item \code{rho}, \code{gamma}, \code{t_star}, \code{s_star}: additional parameters for WLRT or MW (if applicable).
-#'   }
-#' @param data_generating_model A named list specifying the parameters for the data-generating mechanism
-#'   \itemize{
-#'     \item \code{lambda_c}: hazard rate for the control group
-#'     \item \code{delay_time}: time at which the treatment starts to take effect
-#'     \item \code{post_delay_HR}: hazard ratio, after `delay_time`
-#'   }
-#' @param n_df_sims Number of data sets to simulate (default is 100).
-#' @param update_priors_sims Number of samples to generate from the posterior (default is 1000)
-#' @param PP_sims Number of simulations used to calculate the predictive probability (default is 2000)
+#' @param future_boundaries \strong{Recommended.} A list of future, pre-specified,
+#'   fixed decision points (efficacy look(s) and the final analysis) to check on
+#'   each posterior-predictive draw, matching the true group-sequential design
+#'   under which this BPP threshold will actually be used -- see
+#'   \code{\link{BPP_func}} for the exact structure. If \code{NULL} (not
+#'   recommended, kept only for backward compatibility), BPP is computed via
+#'   the legacy single-stage fallback: censoring directly to \code{IA_model$events}
+#'   and testing at a flat \code{analysis_model$alpha}, which does NOT account
+#'   for any future efficacy boundary the real design may have. A message is
+#'   emitted if this fallback is used.
+#' @param n_df_sims Number of interim datasets to simulate (default is 100).
+#'   For calibration decisions near a specific power/Type I error target,
+#'   consider a substantially larger number and report Monte Carlo standard
+#'   errors alongside the result.
+#' @param update_priors_sims Number of posterior samples to generate per
+#'   interim dataset via \code{\link{update_priors}} (default is 1000).
+#' @param PP_sims Number of predictive simulations used to estimate BPP for
+#'   each interim dataset, passed to \code{\link{BPP_func}} (default is 2000).
+#' @param n_cores Number of cores to parallelise over via
+#'   \code{parallel::mclapply} (default is 1, i.e. sequential
+#'   \code{lapply}; not supported on Windows for \code{n_cores > 1}, per
+#'   base R's \code{mclapply} limitations).
+#' @param seed Optional integer seed. If supplied, each simulated interim
+#'   dataset \code{i} is seeded reproducibly as \code{seed * 10000 + i}. If
+#'   \code{NULL} (default), no seed is set internally -- set one in the
+#'   calling script if reproducibility across runs is required.
 #'
-#' @return A vector of length `n_sims` corresponding to the value of BPP for each simulated trial
+#' @return A list with:
+#'   \describe{
+#'     \item{BPP_vec}{A numeric vector of length \code{n_df_sims}, the
+#'       estimated BPP for each simulated interim dataset.}
+#'     \item{settings}{A list recording the exact settings used (all
+#'       arguments above, plus the installed \code{DTEAssurance} package
+#'       version), for provenance -- save this alongside \code{BPP_vec}
+#'       so it is always possible to confirm what generated a given result.}
+#'   }
 #'
 #' @export
 #'
 #' @examples
 #' set.seed(123)
-#' control_model = list(dist = "Exponential",
-#'                      parameter_mode = "Distribution",
-#'                      t1 = 12,
-#'                      t1_Beta_a = 20,
-#'                      t1_Beta_b = 32)
+#' control_model <- list(dist = "Exponential", parameter_mode = "Distribution",
+#'                       t1 = 12, t1_Beta_a = 20, t1_Beta_b = 32)
 #'
-#' effect_model = list(delay_SHELF = SHELF::fitdist(c(5.5, 6, 6.5),
+#' effect_model <- list(delay_SHELF = SHELF::fitdist(c(5.5, 6, 6.5),
 #'                     probs = c(0.25, 0.5, 0.75), lower = 0, upper = 12),
 #'                     delay_dist = "gamma",
 #'                     HR_SHELF = SHELF::fitdist(c(0.5, 0.6, 0.7),
 #'                     probs = c(0.25, 0.5, 0.75), lower = 0, upper = 1),
 #'                     HR_dist = "gamma",
-#'                     P_S = 1,
-#'                     P_DTE = 0)
+#'                     P_S = 1, P_DTE = 0)
 #'
 #' recruitment_model <- list(method = "power", period = 12, power = 1)
 #'
-#' IA_model = list(events = 20, IF = 0.5)
+#' IA_model <- list(events = 40, IF = 0.5)
 #'
-#' analysis_model = list(method = "LRT",
-#'                       alpha = 0.025,
-#'                       alternative_hypothesis = "one.sided")
+#' analysis_model <- list(method = "LRT", alpha = 0.025,
+#'                        alternative_hypothesis = "one.sided")
 #'
+#' data_generating_model <- list(lambda_c = log(2)/12, gamma_c = NULL,
+#'                               delay_time = 3, post_delay_HR = 0.75)
 #'
-#' data_generating_model = list(lambda_c = log(2)/12,
-#'                              gamma_c = NULL,
-#'                              delay_time = 3,
-#'                              post_delay_HR = 0.75)
-#'
+#' # A single future efficacy look at 30 events (Z > 2.24), then final at 40
+#' # events (Z > 2.00) -- match this to the true design's own boundaries.
+#' future_boundaries <- list(
+#'   list(events = 30, crit = 2.24),
+#'   list(events = 40, crit = 2.00)
+#' )
 #'
 #' threshold <- calibrate_BPP_threshold(n_c = 15, n_t = 15,
 #'                      control_model = control_model,
@@ -1616,29 +1649,39 @@ calibrate_BPP_timing <- function(n_c, n_t,
 #'                      IA_model = IA_model,
 #'                      analysis_model = analysis_model,
 #'                      data_generating_model = data_generating_model,
+#'                      future_boundaries = future_boundaries,
 #'                      n_df_sims = 2)
 #'
-
 calibrate_BPP_threshold <- function(n_c,
-                                     n_t,
-                                     control_model,
-                                     effect_model,
-                                     recruitment_model,
-                                     IA_model,
-                                     analysis_model,
-                                     data_generating_model,
-                                     n_df_sims = 100,
-                                     update_priors_sims = 1000,
-                                     PP_sims = 2000
-                                    ){
+                                    n_t,
+                                    control_model,
+                                    effect_model,
+                                    recruitment_model,
+                                    IA_model,
+                                    analysis_model,
+                                    data_generating_model,
+                                    future_boundaries = NULL,
+                                    n_df_sims = 100,
+                                    update_priors_sims = 1000,
+                                    PP_sims = 2000,
+                                    n_cores = 1,
+                                    seed = NULL) {
 
+  if (is.null(future_boundaries)) {
+    message("calibrate_BPP_threshold: no 'future_boundaries' supplied -- ",
+            "falling back to the legacy single-stage BPP calculation ",
+            "(censoring directly to IA_model$events, testing at a flat ",
+            "analysis_model$alpha). This does NOT account for any future ",
+            "efficacy boundary the real design may have, and will not match ",
+            "the true operating characteristics of a group-sequential design. ",
+            "Supply 'future_boundaries' matching the true design whenever ",
+            "one exists.")
+  }
 
-  BPP_vec <- rep(NA, n_df_sims)
+  run_one <- function(i) {
+    if (!is.null(seed)) set.seed(seed * 10000 + i)
 
-  for (i in 1:n_df_sims){
-
-    # --- Simulate survival data ---
-    if (is.null(data_generating_model$gamma_c)){
+    if (is.null(data_generating_model$gamma_c)) {
       data <- sim_dte(n_c, n_t,
                       data_generating_model$lambda_c,
                       delay_time = data_generating_model$delay_time,
@@ -1653,56 +1696,253 @@ calibrate_BPP_threshold <- function(n_c,
                       gamma_c = data_generating_model$gamma_c)
     }
 
-
-
-
-    # --- Add recruitment time ---
     data <- add_recruitment_time(data,
-                                 rec_method = recruitment_model$method,
-                                 rec_period = recruitment_model$period,
-                                 rec_power = recruitment_model$power,
-                                 rec_rate = recruitment_model$rate,
+                                 rec_method   = recruitment_model$method,
+                                 rec_period   = recruitment_model$period,
+                                 rec_power    = recruitment_model$power,
+                                 rec_rate     = recruitment_model$rate,
                                  rec_duration = recruitment_model$duration)
 
-
-    censored_data <- cens_data(data, cens_method = "Events", cens_events = IA_model$events*IA_model$IF)
-
+    censored_data <- cens_data(data, cens_method = "Events",
+                               cens_events = IA_model$events * IA_model$IF)
     data <- censored_data$data
 
-    posterior_samples <- DTEAssurance::update_priors(data,
-                                                     control_model = control_model,
-                                                     effect_model = effect_model,                                                     ,
-                                                     n_samples = update_priors_sims)
+    posterior_samples <- update_priors(data,
+                                       control_model = control_model,
+                                       effect_model  = effect_model,
+                                       n_samples     = update_priors_sims)
 
-    BPP_outcome <-  DTEAssurance::BPP_func(data,
-                                           posterior_samples,
-                                           control_distribution = control_model$dist,
-                                           n_c_planned = n_c,
-                                           n_t_planned = n_t,
-                                           rec_time_planned = recruitment_model$period,
-                                           df_cens_time = censored_data$cens_time,
-                                           censoring_model = list(method = "Events", events = IA_model$events),
-                                           analysis_model = analysis_model,
-                                           n_sims = PP_sims)
+    BPP_outcome <- BPP_func(
+      data,
+      posterior_samples,
+      control_distribution = control_model$dist,
+      n_c_planned          = n_c,
+      n_t_planned          = n_t,
+      rec_time_planned     = recruitment_model$period,
+      df_cens_time         = censored_data$cens_time,
+      analysis_model       = analysis_model,
+      future_boundaries    = future_boundaries,
+      censoring_model      = if (is.null(future_boundaries)) {
+        list(method = "Events", events = IA_model$events)
+      } else {
+        NULL
+      },
+      n_sims               = PP_sims
+    )
 
-    BPP_vec[i] <- mean(BPP_outcome$BPP_df$success)
-
-
+    mean(BPP_outcome$BPP_df$success)
   }
 
-  return(list(BPP_vec = BPP_vec))
+  if (n_cores > 1) {
+    BPP_vec <- parallel::mclapply(seq_len(n_df_sims), run_one, mc.cores = n_cores)
+  } else {
+    BPP_vec <- lapply(seq_len(n_df_sims), run_one)
+  }
+  BPP_vec <- unlist(BPP_vec)
+
+  settings <- list(
+    n_df_sims          = n_df_sims,
+    update_priors_sims = update_priors_sims,
+    PP_sims            = PP_sims,
+    n_cores            = n_cores,
+    seed               = seed,
+    future_boundaries  = future_boundaries,
+    IA_model           = IA_model,
+    package_version    = tryCatch(
+      as.character(utils::packageVersion("DTEAssurance")),
+      error = function(e) NA_character_
+    ),
+    timestamp          = as.character(Sys.time())
+  )
+
+  return(list(BPP_vec = BPP_vec, settings = settings))
 }
 
 
 
+#' Function to calculate the 'optimal' information fraction to calculate BPP
+#'
+#' @param n_c Number of control patients
+#' @param n_t Number of treatment patients
+#' @param control_model A named list specifying the control arm survival distribution
+#'   (see \code{\link{update_priors}} for details).
+#' @param effect_model A named list specifying beliefs about the treatment effect
+#'   (see \code{\link{update_priors}} for details).
+#' @param recruitment_model A named list specifying the recruitment process
+#'   (see \code{\link{add_recruitment_time}} for details).
+#' @param IA_model A named list specifying the censoring mechanism for the future data:
+#'   \itemize{
+#'     \item \code{events}: Number of events which is 100% information fraction
+#'     \item \code{IF}: A vector of candidate information fractions to evaluate.
+#'       \strong{Every candidate must genuinely precede \code{future_boundaries}}
+#'       (see below) -- e.g. if the true design has an efficacy look at
+#'       IF = 0.75, do not include candidates at or beyond 0.75 in this sweep;
+#'       a futility look scheduled at or after the design's own efficacy look
+#'       is not a well-posed question about that design.
+#'   }
+#' @param analysis_model A named list specifying the final analysis and decision rule
+#'   (see \code{\link{BPP_func}} for details).
+#' @param future_boundaries \strong{Recommended.} The chain of fixed future
+#'   decision points (efficacy look(s) and final analysis) of the true
+#'   group-sequential design under consideration -- see \code{\link{BPP_func}}.
+#'   The same chain is used for every candidate in \code{IA_model$IF} (each
+#'   candidate is checked to ensure it genuinely precedes every boundary in
+#'   the chain; see \code{\link{single_calibration_rep}}). If \code{NULL}
+#'   (not recommended), falls back to the legacy single-stage calculation,
+#'   and a message is emitted.
+#' @param update_priors_sims Number of posterior samples per interim dataset
+#'   (default 1000; was previously hardcoded to 100).
+#' @param PP_sims Number of predictive simulations per interim dataset
+#'   (default 2000; was previously hardcoded to 50).
+#' @param n_sims Number of interim datasets to simulate per candidate timing
+#'   (default is 100).
+#' @param n_cores Number of cores to parallelise over via
+#'   \code{parallel::mclapply} (default is 1, i.e. sequential \code{lapply}).
+#' @param seed Optional integer seed; if supplied, replicate \code{i} under
+#'   candidate timing \code{k} is seeded as \code{seed * 10000 + i} (note:
+#'   replicates are re-seeded identically across candidate timings, so the
+#'   same underlying trial trajectories are reused -- i.e. paired comparison
+#'   across timings -- unless you deliberately want independent draws per
+#'   timing, in which case pass a different \code{seed} per call).
+#'
+#' @return A list with:
+#'   \describe{
+#'     \item{outcome_list}{A list, one element per candidate information
+#'       fraction, each containing \code{BPP_values} (a vector of estimated
+#'       BPP, one per simulated interim dataset) and \code{cens_time} (the
+#'       corresponding calendar times).}
+#'     \item{settings}{A list recording the exact settings used, plus the
+#'       installed \code{DTEAssurance} package version, for provenance.}
+#'   }
+#'
+#' @export
+#'
+#' @examples
+#' set.seed(123)
+#' control_model <- list(dist = "Exponential", parameter_mode = "Distribution",
+#'                       t1 = 12, t1_Beta_a = 20, t1_Beta_b = 32)
+#'
+#' effect_model <- list(delay_SHELF = SHELF::fitdist(c(5.5, 6, 6.5),
+#'                     probs = c(0.25, 0.5, 0.75), lower = 0, upper = 12),
+#'                     delay_dist = "gamma",
+#'                     HR_SHELF = SHELF::fitdist(c(0.5, 0.6, 0.7),
+#'                     probs = c(0.25, 0.5, 0.75), lower = 0, upper = 1),
+#'                     HR_dist = "gamma",
+#'                     P_S = 1, P_DTE = 0)
+#'
+#' recruitment_model <- list(method = "power", period = 12, power = 1)
+#'
+#' # Sweep candidates from 0.2 to 0.7 only -- all genuinely precede the
+#' # design's own efficacy look at IF = 0.75.
+#' IA_model <- list(events = 40, IF = seq(0.2, 0.7, by = 0.1))
+#'
+#' analysis_model <- list(method = "LRT", alpha = 0.025,
+#'                       alternative_hypothesis = "one.sided")
+#'
+#' future_boundaries <- list(
+#'   list(events = 30, crit = 2.24),   # efficacy look at IF = 0.75
+#'   list(events = 40, crit = 2.00)    # final analysis
+#' )
+#'
+#' timing <- calibrate_BPP_timing(n_c = 15, n_t = 15,
+#'                      control_model = control_model,
+#'                      effect_model = effect_model,
+#'                      recruitment_model = recruitment_model,
+#'                      IA_model = IA_model,
+#'                      analysis_model = analysis_model,
+#'                      future_boundaries = future_boundaries,
+#'                      n_sims = 2)
+#'
+calibrate_BPP_timing <- function(n_c, n_t,
+                                 control_model,
+                                 effect_model,
+                                 recruitment_model,
+                                 IA_model,
+                                 analysis_model,
+                                 future_boundaries = NULL,
+                                 update_priors_sims = 1000,
+                                 PP_sims = 2000,
+                                 n_sims = 100,
+                                 n_cores = 1,
+                                 seed = NULL) {
 
+  if (is.null(future_boundaries)) {
+    message("calibrate_BPP_timing: no 'future_boundaries' supplied -- falling ",
+            "back to the legacy single-stage BPP calculation, which does NOT ",
+            "account for any future efficacy boundary the real design may ",
+            "have. Supply 'future_boundaries' matching the true design ",
+            "whenever one exists.")
+  }
 
+  outcome_list <- vector("list", length(IA_model$IF))
 
+  for (i in seq_along(IA_model$IF)) {
 
+    if (n_cores > 1) {
+      result <- parallel::mclapply(
+        seq_len(n_sims),
+        FUN = single_calibration_rep,
+        n_c = n_c, n_t = n_t,
+        control_model = control_model,
+        effect_model = effect_model,
+        recruitment_model = recruitment_model,
+        total_events = IA_model$events,
+        IF = IA_model$IF[i],
+        analysis_model = analysis_model,
+        future_boundaries = future_boundaries,
+        update_priors_sims = update_priors_sims,
+        PP_sims = PP_sims,
+        seed = seed,
+        mc.cores = n_cores
+      )
+    } else {
+      result <- lapply(
+        seq_len(n_sims),
+        FUN = single_calibration_rep,
+        n_c = n_c, n_t = n_t,
+        control_model = control_model,
+        effect_model = effect_model,
+        recruitment_model = recruitment_model,
+        total_events = IA_model$events,
+        IF = IA_model$IF[i],
+        analysis_model = analysis_model,
+        future_boundaries = future_boundaries,
+        update_priors_sims = update_priors_sims,
+        PP_sims = PP_sims,
+        seed = seed
+      )
+    }
 
+    BPP_values <- vapply(
+      result,
+      FUN = function(x) mean(x$BPP_outcome$BPP_df$success),
+      FUN.VALUE = numeric(1)
+    )
 
+    cens_time <- vapply(result,
+                        function(x) x$cens_time,
+                        FUN.VALUE = numeric(1)
+    )
 
+    outcome_list[[i]]$BPP_values <- BPP_values
+    outcome_list[[i]]$cens_time  <- cens_time
+    outcome_list[[i]]$IF         <- IA_model$IF[i]
+  }
 
+  settings <- list(
+    IA_model           = IA_model,
+    update_priors_sims = update_priors_sims,
+    PP_sims            = PP_sims,
+    n_sims             = n_sims,
+    n_cores            = n_cores,
+    seed               = seed,
+    future_boundaries  = future_boundaries,
+    package_version    = tryCatch(
+      as.character(utils::packageVersion("DTEAssurance")),
+      error = function(e) NA_character_
+    ),
+    timestamp          = as.character(Sys.time())
+  )
 
-
-
+  return(list(outcome_list = outcome_list, settings = settings))
+}
