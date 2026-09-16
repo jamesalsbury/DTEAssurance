@@ -165,4 +165,5 @@ threshold <- calibrate_BPP_threshold(n_c = 15, n_t = 15,
                      analysis_model = analysis_model,
                      data_generating_model = data_generating_model,
                      n_df_sims = 2)
+#> calibrate_BPP_threshold: no 'future_boundaries' supplied -- falling back to the legacy single-stage BPP calculation (censoring directly to IA_model$events, testing at a flat analysis_model$alpha). This does NOT account for any future efficacy boundary the real design may have, and will not match the true operating characteristics of a group-sequential design. Supply 'future_boundaries' matching the true design whenever one exists.
 ```

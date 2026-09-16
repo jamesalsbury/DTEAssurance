@@ -137,4 +137,5 @@ timing <- calibrate_BPP_timing(n_c = 15, n_t = 15,
                      IA_model = IA_model,
                      analysis_model = analysis_model,
                      n_sims = 2)
+#> calibrate_BPP_timing: no 'future_boundaries' supplied -- falling back to the legacy single-stage BPP calculation, which does NOT account for any future efficacy boundary the real design may have. Supply 'future_boundaries' matching the true design whenever one exists.
 ```
