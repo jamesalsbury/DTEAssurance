@@ -144,14 +144,30 @@ apply_GSD_to_trial <- function(n_c,
                                effect_model = NULL,
                                recruitment_model = NULL,
                                analysis_model = NULL,
-                               update_priors_sims = 1000,   # was hardcoded 100
-                               n_BPP_sims = 1000) {         # was hardcoded default 50
+                               update_priors_sims = 1000,
+                               n_BPP_sims = 1000) {
+
+  if (is.null(analysis_model)) {
+    analysis_model <- list(method = "LRT", alpha = 0.025,
+                           alternative_hypothesis = "one.sided")
+  }
+
+  compute_Z <- function(eligible_df) {
+    survival_test(eligible_df,
+                  analysis_method = analysis_model$method,
+                  alpha           = analysis_model$alpha,
+                  alternative     = analysis_model$alternative_hypothesis,
+                  rho             = analysis_model$rho,
+                  gamma           = analysis_model$gamma,
+                  t_star          = analysis_model$t_star,
+                  s_star          = analysis_model$s_star)$Z
+  }
 
   trial_data <- trial_data[order(trial_data$pseudo_time),]
 
   if (GSD_model$futility_type %in% c("Beta", "none")) {
     info_rates <- design$informationRates
-  } else if (GSD_model$futility_type == "BPP") {
+  } else if (GSD_model$futility_type %in% c("BPP", "MatchedZ")) {
     info_rates <- sort(unique(c(GSD_model$alpha_IF, GSD_model$futility_IF)))
   }
 
@@ -177,14 +193,13 @@ apply_GSD_to_trial <- function(n_c,
       eligible_df$status, eligible_df$time, t_interim - eligible_df$rec_time
     )
 
-    fit    <- survival::coxph(Surv(survival_time, status) ~ group, data = eligible_df)
-    z_stat_here <- -summary(fit)$coefficients[, "z"]
+    z_stat_here <- compute_Z(eligible_df)
 
     eff_idx <- which(abs(design$informationRates - IF_here) < 1e-8)
     eff_bound <- if (length(eff_idx) == 1) design$criticalValues[eff_idx] else NA
 
-    # 1) Efficacy check (if this IF is an alpha look)
-    if (!is.na(eff_bound) && z_stat_here > eff_bound) {
+    # 1) Efficacy check
+    if (!is.na(eff_bound) && !is.na(z_stat_here) && z_stat_here > eff_bound) {
       decision  <- "Stop for efficacy"
       stop_time <- t_interim
       break
@@ -197,23 +212,30 @@ apply_GSD_to_trial <- function(n_c,
         design$futilityBounds[fut_idx]
       } else NA
 
-      if (!is.na(fut_bound) && z_stat_here < fut_bound) {
+      if (!is.na(fut_bound) && !is.na(z_stat_here) && z_stat_here < fut_bound) {
         decision  <- "Stop for futility"
         stop_time <- t_interim
         break
       }
     }
 
-    # 3) BPP futility (if this IF is a futility look)
+    # 3a) MatchedZ futility (D4/D5)
+    if (!is.null(GSD_model) &&
+        GSD_model$futility_type == "MatchedZ" &&
+        IF_here %in% GSD_model$futility_IF) {
+
+      if (!is.na(z_stat_here) && z_stat_here < GSD_model$futility_boundary_Z) {
+        decision  <- "Stop for futility"
+        stop_time <- t_interim
+        break
+      }
+    }
+
+    # 3b) BPP futility (D3)
     if (!is.null(GSD_model) &&
         GSD_model$futility_type == "BPP" &&
         IF_here %in% GSD_model$futility_IF) {
 
-      # ---------------------------------------------------------------------
-      # FIX: guard against unsupported multiple sequential BPP futility looks
-      # (would require nested posterior-predictive simulation -- out of
-      # scope; see manuscript Limitations).
-      # ---------------------------------------------------------------------
       remaining_futility_IFs <- GSD_model$futility_IF[GSD_model$futility_IF > IF_here]
       if (length(remaining_futility_IFs) > 0) {
         stop("apply_GSD_to_trial: multiple sequential BPP futility looks are ",
@@ -222,12 +244,6 @@ apply_GSD_to_trial <- function(n_c,
              "Limitations (Section 6.3).")
       }
 
-      # ---------------------------------------------------------------------
-      # FIX: build the chain of future FIXED decision points (remaining
-      # efficacy looks + final analysis) from the design object, so BPP_func
-      # evaluates the true adaptive success event W (Eq. 8), instead of only
-      # ever testing a single final analysis at a flat alpha.
-      # ---------------------------------------------------------------------
       future_IFs <- sort(info_rates[info_rates > IF_here])
       future_boundaries <- lapply(future_IFs, function(x) {
         idx <- which(abs(design$informationRates - x) < 1e-8)
@@ -241,11 +257,9 @@ apply_GSD_to_trial <- function(n_c,
         eligible_df,
         control_model = control_model,
         effect_model  = effect_model,
-        n_samples     = update_priors_sims   # FIX: was hardcoded 100
+        n_samples     = update_priors_sims
       )
 
-      # FIX: capture Z-monitoring / convergence diagnostics attached by the
-      # patched update_priors()
       converged <- attr(posterior_samples, "converged")
       Z_probs_attr <- attr(posterior_samples, "Z_probs")
       if (!is.null(Z_probs_attr)) Z_probs <- Z_probs_attr
@@ -258,8 +272,8 @@ apply_GSD_to_trial <- function(n_c,
         rec_time_planned  = recruitment_model$period,
         df_cens_time      = t_interim,
         analysis_model    = analysis_model,
-        future_boundaries = future_boundaries,   # FIX: replaces censoring_model
-        n_sims            = n_BPP_sims           # FIX: was hardcoded default 50
+        future_boundaries = future_boundaries,
+        n_sims            = n_BPP_sims
       )
 
       BPP_val <- mean(BPP_out$BPP_df$success)
@@ -272,9 +286,7 @@ apply_GSD_to_trial <- function(n_c,
     }
   } # end loop
 
-  # -------------------------------
   # Final analysis
-  # -------------------------------
   if (is.na(stop_time)) {
     eff_idx   <- length(design$criticalValues)
     eff_bound <- design$criticalValues[eff_idx]
@@ -289,10 +301,10 @@ apply_GSD_to_trial <- function(n_c,
       eligible_df$status, eligible_df$time, t_interim - eligible_df$rec_time
     )
 
-    fit  <- survival::coxph(Surv(survival_time, status) ~ group, data = eligible_df)
-    z_stat_final <- -summary(fit)$coefficients[, "z"]
+    z_stat_final <- compute_Z(eligible_df)
 
-    decision  <- ifelse(z_stat_final > eff_bound, "Successful at final", "Unsuccessful at final")
+    decision  <- ifelse(!is.na(z_stat_final) && z_stat_final > eff_bound,
+                        "Successful at final", "Unsuccessful at final")
     stop_time <- t_interim
   }
 
@@ -303,8 +315,8 @@ apply_GSD_to_trial <- function(n_c,
     stop_time   = stop_time,
     sample_size = sample_size,
     BPP_val     = BPP_val,
-    converged   = converged,   # NEW
-    Z_probs     = Z_probs      # NEW
+    converged   = converged,
+    Z_probs     = Z_probs
   ))
 }
 
@@ -589,6 +601,12 @@ single_grid_rep <- function(i,
                                      effect_model  = effect_model,
                                      n_samples     = update_priors_sims)
 
+  # FIX: capture the convergence / latent-state diagnostics update_priors()
+  # now computes, instead of discarding posterior_samples' attributes.
+  converged <- attr(posterior_samples, "converged")
+  Zp <- attr(posterior_samples, "Z_probs")
+  if (is.null(Zp)) Zp <- c(P_Z1 = NA_real_, P_Z2 = NA_real_, P_Z3 = NA_real_)
+
   BPP_out <- BPP_func(
     eligible_df, posterior_samples,
     control_distribution = control_model$dist,
@@ -644,7 +662,11 @@ single_grid_rep <- function(i,
     sample_size_interim = sample_size_interim,
     continuation_success = continuation_success,
     continuation_stop_time = continuation_stop_time,
-    continuation_sample_size = continuation_sample_size
+    continuation_sample_size = continuation_sample_size,
+    converged = converged,          # NEW
+    P_Z1 = unname(Zp["P_Z1"]),      # NEW
+    P_Z2 = unname(Zp["P_Z2"]),      # NEW
+    P_Z3 = unname(Zp["P_Z3"])       # NEW
   )
 }
 
@@ -811,6 +833,118 @@ summarize_convergence <- function(posterior_list) {
     prop_converged = mean(converged_vec, na.rm = TRUE),
     max_rhat_by_param = max_rhat_by_param
   )
+}
+
+#' (internal) Simulate one interim dataset and compute Z at the futility look
+#'
+#' @keywords internal
+single_matched_futility_rep <- function(i, n_c, n_t, data_generating_model,
+                                        recruitment_model, futility_IF, total_events,
+                                        analysis_model, seed = NULL) {
+
+  if (!is.null(seed)) set.seed(seed * 10000 + i)
+
+  if (is.null(data_generating_model$gamma_c)) {
+    trial_data <- sim_dte(n_c, n_t, data_generating_model$lambda_c,
+                          delay_time = data_generating_model$delay_time,
+                          post_delay_HR = data_generating_model$post_delay_HR,
+                          dist = "Exponential")
+  } else {
+    trial_data <- sim_dte(n_c, n_t, data_generating_model$lambda_c,
+                          delay_time = data_generating_model$delay_time,
+                          post_delay_HR = data_generating_model$post_delay_HR,
+                          dist = "Weibull", gamma_c = data_generating_model$gamma_c)
+  }
+
+  trial_data <- add_recruitment_time(trial_data,
+                                     rec_method   = recruitment_model$method,
+                                     rec_period   = recruitment_model$period,
+                                     rec_power    = recruitment_model$power,
+                                     rec_rate     = recruitment_model$rate,
+                                     rec_duration = recruitment_model$duration)
+
+  n_events_interim <- ceiling(futility_IF * total_events)
+  censored <- cens_data(trial_data[order(trial_data$pseudo_time), ],
+                        cens_method = "Events", cens_events = n_events_interim)
+
+  Z <- survival_test(censored$data,
+                     analysis_method = analysis_model$method,
+                     alpha           = analysis_model$alpha,
+                     alternative     = analysis_model$alternative_hypothesis,
+                     rho             = analysis_model$rho,
+                     gamma           = analysis_model$gamma,
+                     t_star          = analysis_model$t_star,
+                     s_star          = analysis_model$s_star)$Z
+
+  data.frame(Z = Z)
+}
+
+
+calibrate_matched_futility_boundary <- function(n_c, n_t,
+                                                recruitment_model,
+                                                futility_IF, total_events,
+                                                analysis_model,
+                                                target_null_futility_rate,
+                                                scenarios,
+                                                n_sims = 2000,
+                                                n_cores = 1,
+                                                seed = NULL) {
+
+  if (!"null" %in% names(scenarios)) {
+    stop("calibrate_matched_futility_boundary: 'scenarios' must include an ",
+         "entry named 'null', used to calibrate the boundary.")
+  }
+
+  raw_Z_by_scenario <- list()
+
+  for (scen_name in names(scenarios)) {
+    run_one <- function(i) {
+      single_matched_futility_rep(
+        i, n_c = n_c, n_t = n_t,
+        data_generating_model = scenarios[[scen_name]],
+        recruitment_model = recruitment_model,
+        futility_IF = futility_IF, total_events = total_events,
+        analysis_model = analysis_model, seed = seed
+      )
+    }
+
+    if (n_cores > 1) {
+      result <- parallel::mclapply(seq_len(n_sims), run_one, mc.cores = n_cores)
+    } else {
+      result <- lapply(seq_len(n_sims), run_one)
+    }
+
+    raw_Z_by_scenario[[scen_name]] <- do.call(rbind, result)$Z
+  }
+
+  # Calibrate: boundary is the target_null_futility_rate-quantile of the
+  # null Z distribution, since P(Z < boundary | null) = target rate by
+  # definition of the quantile function.
+  boundary <- stats::quantile(raw_Z_by_scenario[["null"]],
+                              probs = target_null_futility_rate, na.rm = TRUE)
+  boundary <- as.numeric(boundary)
+
+  scenario_futility_rates <- vapply(raw_Z_by_scenario, function(Z) {
+    mean(Z < boundary, na.rm = TRUE)
+  }, numeric(1))
+
+  settings <- list(
+    futility_IF = futility_IF,
+    total_events = total_events,
+    analysis_model = analysis_model,
+    target_null_futility_rate = target_null_futility_rate,
+    n_sims = n_sims,
+    n_cores = n_cores,
+    seed = seed,
+    package_version = tryCatch(as.character(utils::packageVersion("DTEAssurance")),
+                               error = function(e) NA_character_),
+    timestamp = as.character(Sys.time())
+  )
+
+  list(boundary = boundary,
+       scenario_futility_rates = scenario_futility_rates,
+       raw_Z_by_scenario = raw_Z_by_scenario,
+       settings = settings)
 }
 
 #' Pipe operator

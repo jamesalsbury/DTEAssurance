@@ -342,21 +342,51 @@ calc_dte_assurance <- function(n_c,
 
 #' Calculate statistical significance on a survival dataset
 #'
-#' Performs a survival analysis using either the standard log-rank test (LRT) or a weighted log-rank test (WLRT). The function estimates the hazard ratio and determines whether the result is statistically significant based on the specified alpha level and alternative hypothesis.
+#' Performs a survival analysis using the standard log-rank test (LRT), a
+#' weighted log-rank test in the Fleming-Harrington family (WLRT), or the
+#' modestly-weighted log-rank test of Magirr and Burman (MW). The function
+#' estimates the hazard ratio and determines whether the result is
+#' statistically significant based on the specified alpha level and
+#' alternative hypothesis.
 #'
 #' @param data A dataframe containing survival data. Must include columns for survival time, event status, and treatment group.
-#' @param analysis_method Method of analysis: \code{"LRT"} (default) for standard log-rank test, or \code{"WLRT"} for weighted log-rank test.
+#' @param analysis_method Method of analysis: \code{"LRT"} (default) for standard log-rank test, \code{"WLRT"} for a Fleming-Harrington-family weighted log-rank test, or \code{"MW"} for the modestly-weighted log-rank test.
 #' @param alpha Type I error threshold for significance testing.
 #' @param alternative String specifying the alternative hypothesis. Must be one of \code{"one.sided"} or \code{"two.sided"} (default).
 #' @param rho Rho parameter for the Fleming-Harrington weighted log-rank test.
 #' @param gamma Gamma parameter for the Fleming-Harrington weighted log-rank test.
-#' @param t_star Parameter \eqn{t^*} used in modestly weighted tests.
-#' @param s_star Parameter \eqn{s^*} used in modestly weighted tests.
+#' @param t_star Parameter \eqn{t^*} used in the modestly weighted test.
+#' @param s_star Parameter \eqn{s^*} used in the modestly weighted test.
 #'
 #' @return A list containing:
 #' \describe{
 #'   \item{Signif}{Logical indicator of statistical significance based on the chosen test and alpha level.}
 #'   \item{observed_HR}{Estimated hazard ratio from a Cox proportional hazards model.}
+#'   \item{Z}{Signed test statistic, oriented so that positive values favour
+#'     the arm coded as "Treatment" (or the second factor level of
+#'     \code{group}, alphabetically, if levels are unlabelled) -- i.e.
+#'     positive Z corresponds to a hazard ratio below 1 (benefit). This
+#'     convention is consistent across all three methods (verified by
+#'     diagnostic: see notes below) and is what group-sequential boundary
+#'     comparisons in \code{apply_GSD_to_trial}/\code{BPP_func} rely on.}
+#' }
+#'
+#' @section Sign convention notes (verified by diagnostic, 2026):
+#' \itemize{
+#'   \item \strong{LRT}: uses \code{survival::survdiff()}'s own
+#'     \code{(exp[2] - obs[2])} construction, correctly signed by
+#'     construction (positive = benefit).
+#'   \item \strong{WLRT}: uses \code{nph::logrank.test()}'s native
+#'     \code{$test$z} directly. Confirmed correctly signed against LRT on
+#'     an unambiguous large-benefit case (HR = 0.21: LRT Z = 13.20,
+#'     WLRT(rho=0,gamma=1) Z = 13.96 -- same sign, comparable magnitude).
+#'   \item \strong{MW}: \code{nphRCT::wlrt()}'s \code{$z} uses the
+#'     OPPOSITE sign convention to \code{survdiff()} (confirmed by
+#'     diagnostic: on the same unambiguous large-benefit case, HR = 0.245,
+#'     LRT gave Z = +12.27 while raw \code{wlrt()$z} gave -12.30 -- same
+#'     magnitude, flipped sign). The sign is therefore negated below
+#'     (\code{Z <- -test$z}) so that positive Z consistently means benefit
+#'     across all three methods.
 #' }
 #'
 #' @examples
@@ -370,8 +400,6 @@ calc_dte_assurance <- function(n_c,
 #' str(result)
 #'
 #' @export
-
-
 survival_test <- function(data, analysis_method = "LRT", alternative = "one.sided",
                           alpha = 0.05, rho = 0, gamma = 0,
                           t_star = NULL, s_star = NULL){
@@ -380,7 +408,7 @@ survival_test <- function(data, analysis_method = "LRT", alternative = "one.side
   observed_HR <- as.numeric(exp(stats::coef(coxmodel)))
 
   Signif <- 0
-  Z <- NA_real_   # <-- add this line
+  Z <- NA_real_
 
   if (analysis_method == "LRT") {
     test_result <- survival::survdiff(Surv(survival_time, status) ~ group, data = data)
@@ -395,26 +423,41 @@ survival_test <- function(data, analysis_method = "LRT", alternative = "one.side
   } else if (analysis_method == "WLRT") {
     test <- nph::logrank.test(data$survival_time, data$status, data$group,
                               rho = rho, gamma = gamma)
+    # FIX: use nph's own native signed statistic directly. Diagnostic
+    # confirmed this is correctly signed and consistent with LRT's
+    # convention on an unambiguous case, so no sign correction is needed
+    # here (unlike MW below). This replaces an earlier, more fragile
+    # construction (sign(-log(observed_HR)) * sqrt(Chisq)) that discarded
+    # and reconstructed sign information the package already provides.
+    Z <- test$test$z
+
     if (alternative == "one.sided") {
-      Signif <- (test$test$Chisq > stats::qchisq(1 - alpha, 1) & observed_HR < 1)
+      Signif <- Z > stats::qnorm(1 - alpha)
     } else {
-      Signif <- test$test$Chisq > stats::qchisq(1 - alpha/2, 1)
+      Signif <- abs(Z) > stats::qnorm(1 - alpha/2)
     }
 
   } else if (analysis_method == "MW") {
     test <- nphRCT::wlrt(Surv(survival_time, status) ~ group,
                          data = data, method = "mw",
                          t_star = t_star, s_star = s_star)
+    # FIX: nphRCT::wlrt()'s $z uses the OPPOSITE sign convention to
+    # survdiff() -- confirmed by diagnostic (unambiguous HR=0.245 benefit
+    # case gave LRT Z=+12.27 but raw wlrt() z=-12.30). Negate to restore
+    # the "positive Z = benefit" convention used consistently by the LRT
+    # and WLRT branches above and relied on throughout the rest of the
+    # package (group-sequential boundary comparisons, BPP_func, etc.).
+    Z <- -test$z
+
     if (alternative == "one.sided") {
-      Signif <- test$z > stats::qnorm(1 - alpha)
+      Signif <- Z > stats::qnorm(1 - alpha)
     } else {
-      Signif <- abs(test$z) > stats::qnorm(1 - alpha/2)
+      Signif <- abs(Z) > stats::qnorm(1 - alpha/2)
     }
   }
 
   return(list(Signif = Signif, observed_HR = observed_HR, Z = Z))
 }
-
 
 #' Add recruitment time to a survival dataset
 #'
