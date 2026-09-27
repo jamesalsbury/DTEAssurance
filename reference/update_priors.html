@@ -13,7 +13,7 @@ exponential or Weibull model for the control arm."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">DTEAssurance</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -53,7 +53,8 @@ exponential or Weibull model for the control arm.</p>
 <span>  <span class="va">effect_model</span>,</span>
 <span>  n.chains <span class="op">=</span> <span class="fl">2</span>,</span>
 <span>  n_burnin <span class="op">=</span> <span class="fl">500</span>,</span>
-<span>  n_samples <span class="op">=</span> <span class="fl">1000</span></span>
+<span>  n_samples <span class="op">=</span> <span class="fl">1000</span>,</span>
+<span>  rhat_threshold <span class="op">=</span> <span class="fl">1.1</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -98,16 +99,43 @@ exponential or Weibull model for the control arm.</p>
 <dt id="arg-n-samples">n_samples<a class="anchor" aria-label="anchor" href="#arg-n-samples"></a></dt>
 <dd><p>Number of posterior samples to generate (default is 1000)</p></dd>
 
+
+<dt id="arg-rhat-threshold">rhat_threshold<a class="anchor" aria-label="anchor" href="#arg-rhat-threshold"></a></dt>
+<dd><p>Convergence threshold on the Gelman-Rubin
+potential scale reduction factor (default 1.1). Used only to compute
+the <code>"converged"</code> attribute on the return value; does not affect
+sampling.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>A data frame containing Monte Carlo samples from the updated (posterior)
-distribution of the model parameters. Columns normally include:</p><ul><li><p><code>lambda_c</code> Posterior samples for the control hazard parameter.</p></li>
-<li><p><code>delay_time</code> Posterior samples for the delay/changepoint time \(T\).</p></li>
-<li><p><code>HR</code> Posterior samples for the post-delay hazard ratio.</p></li>
-<li><p><code>gamma_c</code> (only if <code>control_distribution = "Weibull"</code>)
-Posterior samples for the Weibull shape parameter.</p></li>
-</ul><p>Priors for <code>lambda_c</code>, <code>T</code>, and <code>HR</code> are constructed from
+    <p>A data frame containing Monte Carlo samples from the updated
+(posterior) distribution of the model parameters, with columns
+<code>lambda_c</code>, <code>delay_time</code>, <code>HR</code>, <code>gamma_c</code> (Weibull
+only), and <code>Z</code> (the latent scenario indicator: 1 = no separation,
+2 = immediate separation, 3 = delayed separation). Column access
+(<code>posterior_df$lambda_c</code>, etc.) is unchanged from previous
+versions of this function – existing calling code does not need to be
+modified. In addition, three attributes are attached to the returned
+data frame for diagnostic purposes:</p><dl><dt><code>rhat</code></dt>
+<dd><p>A named numeric vector of per-parameter
+Gelman-Rubin point estimates (accessed via
+<code>attr(posterior_df, "rhat")</code>).</p></dd>
+
+<dt><code>converged</code></dt>
+<dd><p><code>TRUE</code> if every monitored parameter's
+Rhat is below <code>rhat_threshold</code>, <code>FALSE</code> if not, or
+<code>NA</code> if the diagnostic could not be computed (accessed via
+<code>attr(posterior_df, "converged")</code>).</p></dd>
+
+<dt><code>Z_probs</code></dt>
+<dd><p>A named numeric vector
+<code>c(P_Z1=, P_Z2=, P_Z3=)</code>, the posterior probability of each
+latent state, i.e. <code>table(posterior_df$Z) / nrow(posterior_df)</code>
+(accessed via <code>attr(posterior_df, "Z_probs")</code>).</p></dd>
+
+
+</dl><p>Priors for <code>lambda_c</code>, <code>T</code>, and <code>HR</code> are constructed from
 elicited distributions using the SHELF framework, then updated through
 sampling-based posterior inference.</p>
     </div>
@@ -139,6 +167,15 @@ sampling-based posterior inference.</p>
 <span class="r-in"><span>  effect_model <span class="op">=</span> <span class="va">effect_model</span>,</span></span>
 <span class="r-in"><span>  n_samples <span class="op">=</span> <span class="fl">10</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># Diagnostics, e.g.:</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/attr.html" class="external-link">attr</a></span><span class="op">(</span><span class="va">posterior_df</span>, <span class="st">"rhat"</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>         HR          Z delay_time   lambda_c </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  0.9935484        NaN        NaN  1.0234645 </span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/attr.html" class="external-link">attr</a></span><span class="op">(</span><span class="va">posterior_df</span>, <span class="st">"converged"</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] TRUE</span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/attr.html" class="external-link">attr</a></span><span class="op">(</span><span class="va">posterior_df</span>, <span class="st">"Z_probs"</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> P_Z1 P_Z2 P_Z3 </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    0    1    0 </span>
 <span class="r-in"><span></span></span>
 </code></pre></div>
     </div>

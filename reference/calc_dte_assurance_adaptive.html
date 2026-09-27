@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">DTEAssurance</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -46,6 +46,8 @@
 <span>  <span class="va">recruitment_model</span>,</span>
 <span>  <span class="va">GSD_model</span>,</span>
 <span>  analysis_model <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  update_priors_sims <span class="op">=</span> <span class="fl">1000</span>,</span>
+<span>  n_BPP_sims <span class="op">=</span> <span class="fl">1000</span>,</span>
 <span>  n_sims <span class="op">=</span> <span class="fl">1000</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -91,11 +93,20 @@
 <dt id="arg-gsd-model">GSD_model<a class="anchor" aria-label="anchor" href="#arg-gsd-model"></a></dt>
 <dd><p>A named list specifying the group sequential design:</p><ul><li><p><code>events</code>: Total number of events</p></li>
 <li><p><code>alpha_spending</code>: Cumulative alpha spending vector</p></li>
-<li><p><code>alpha_IF</code>: Information Fraction at which we look for efficacy</p></li>
-<li><p><code>futility_type</code>: <code>beta</code> (for beta-spending), <code>BPP</code> (for Bayesian Predictive Probability) or <code>none</code></p></li>
-<li><p><code>futility_IF</code>: Information Fraction at which we look for futility</p></li>
-<li><p><code>beta_spending</code>: Cumulative beta spending vector</p></li>
-<li><p><code>BPP_threshold</code>: BPP value at which we will stop for futility</p></li>
+<li><p><code>alpha_IF</code>: Information Fraction(s) at which we look for efficacy</p></li>
+<li><p><code>futility_type</code>: One of <code>"none"</code>, <code>"Beta"</code>
+(pre-specified beta-spending, via <code>rpact</code>), <code>"BPP"</code>
+(Bayesian Predictive Probability futility, D3-style), or
+<code>"MatchedZ"</code> (a fixed, externally-calibrated Z-statistic
+cutoff, non-binding – D4/D5-style; see
+<code><a href="calibrate_matched_futility_boundary.html">calibrate_matched_futility_boundary</a></code> for how to
+obtain <code>futility_boundary_Z</code>).</p></li>
+<li><p><code>futility_IF</code>: Information Fraction at which we look for futility
+(required for <code>"BPP"</code> and <code>"MatchedZ"</code>).</p></li>
+<li><p><code>beta_spending</code>: Cumulative beta spending vector (<code>"Beta"</code> only).</p></li>
+<li><p><code>BPP_threshold</code>: BPP value below which we stop for futility (<code>"BPP"</code> only).</p></li>
+<li><p><code>futility_boundary_Z</code>: Z-statistic value below which we
+stop for futility (<code>"MatchedZ"</code> only).</p></li>
 </ul></dd>
 
 
@@ -107,6 +118,19 @@
 </ul></dd>
 
 
+<dt id="arg-update-priors-sims">update_priors_sims<a class="anchor" aria-label="anchor" href="#arg-update-priors-sims"></a></dt>
+<dd><p>Number of posterior samples per interim
+dataset, passed to <code><a href="update_priors.html">update_priors</a></code> (default 1000). Only
+used when <code>GSD_model$futility_type == "BPP"</code>; harmless (ignored)
+otherwise.</p></dd>
+
+
+<dt id="arg-n-bpp-sims">n_BPP_sims<a class="anchor" aria-label="anchor" href="#arg-n-bpp-sims"></a></dt>
+<dd><p>Number of predictive simulations per interim dataset,
+passed to <code><a href="BPP_func.html">BPP_func</a></code> (default 1000). Only used when
+<code>GSD_model$futility_type == "BPP"</code>; harmless (ignored) otherwise.</p></dd>
+
+
 <dt id="arg-n-sims">n_sims<a class="anchor" aria-label="anchor" href="#arg-n-sims"></a></dt>
 <dd><p>Number of simulations to run (default = 1000)</p></dd>
 
@@ -116,11 +140,12 @@
     <p>A data frame with one row per simulated trial and the following columns:</p><dl><dt>Trial</dt>
 <dd><p>Simulation index</p></dd>
 
-<dt>IF</dt>
-<dd><p>Information fraction label used at the decision point</p></dd>
-
 <dt>Decision</dt>
-<dd><p>Interim decision outcome (e.g., "Continue", "Stop for efficacy", "Stop for futility")</p></dd>
+<dd><p>Final interim/final decision outcome – one of
+<code>"Stop for efficacy"</code>, <code>"Stop for futility"</code>,
+<code>"Successful at final"</code>, or <code>"Unsuccessful at final"</code>.
+This is the single source of truth for trial outcome; use it
+directly rather than deriving success/failure independently.</p></dd>
 
 <dt>StopTime</dt>
 <dd><p>Time at which the trial stopped or completed</p></dd>
@@ -128,11 +153,39 @@
 <dt>SampleSize</dt>
 <dd><p>Total sample size at the time of decision</p></dd>
 
-<dt>Final_Decision</dt>
-<dd><p>Final classification of trial success based on the test statistic and threshold</p></dd>
+<dt>Success</dt>
+<dd><p>Logical recode of <code>Decision</code> for convenience:
+<code>TRUE</code> if <code>Decision %in% c("Stop for efficacy",
+    "Successful at final")</code>, <code>FALSE</code> otherwise. Derived directly
+and only from <code>Decision</code> – see "Bug fix" below.</p></dd>
+
+<dt>Converged</dt>
+<dd><p>For <code>"BPP"</code> designs, whether the interim MCMC
+fit converged (see <code><a href="update_priors.html">update_priors</a></code>); <code>NA</code> for
+other futility types, which involve no MCMC step.</p></dd>
 
 
 </dl><p>Class: <code>data.frame</code></p>
+    </div>
+    <div class="section level2">
+    <h2 id="bug-fix-this-version-">Bug fix (this version)<a class="anchor" aria-label="anchor" href="#bug-fix-this-version-"></a></h2>
+    <p>previous versions of this function
+independently recomputed a separate <code>Final_Decision</code> field from
+a hardcoded Cox proportional-hazards Wald statistic at a flat
+<code>qnorm(0.975)</code> threshold, regardless of <code>analysis_model$method</code>
+or the design's actual group-sequential boundaries. This was a
+second, separate copy of the same bug fixed in
+<code>apply_GSD_to_trial()</code> (see its documentation), and could
+silently disagree with the trial's own <code>Decision</code>. This version
+removes that duplicate computation entirely: <code>Success</code> is now
+derived only from <code>Decision</code>, which is itself computed once,
+correctly, inside <code>apply_GSD_to_trial()</code>, via
+<code>analysis_model$method</code> and the design's real boundaries. This
+also collapses what were previously three near-duplicate branches
+(one per futility type) into a single call path, since
+<code>apply_GSD_to_trial()</code> already dispatches correctly on
+<code>GSD_model$futility_type</code> – removing the code duplication that
+allowed the two copies of the bug to drift apart in the first place.</p>
     </div>
 
     <div class="section level2">

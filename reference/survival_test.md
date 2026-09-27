@@ -1,10 +1,11 @@
 # Calculate statistical significance on a survival dataset
 
-Performs a survival analysis using either the standard log-rank test
-(LRT) or a weighted log-rank test (WLRT). The function estimates the
-hazard ratio and determines whether the result is statistically
-significant based on the specified alpha level and alternative
-hypothesis.
+Performs a survival analysis using the standard log-rank test (LRT), a
+weighted log-rank test in the Fleming-Harrington family (WLRT), or the
+modestly-weighted log-rank test of Magirr and Burman (MW). The function
+estimates the hazard ratio and determines whether the result is
+statistically significant based on the specified alpha level and
+alternative hypothesis.
 
 ## Usage
 
@@ -30,8 +31,9 @@ survival_test(
 
 - analysis_method:
 
-  Method of analysis: `"LRT"` (default) for standard log-rank test, or
-  `"WLRT"` for weighted log-rank test.
+  Method of analysis: `"LRT"` (default) for standard log-rank test,
+  `"WLRT"` for a Fleming-Harrington-family weighted log-rank test, or
+  `"MW"` for the modestly-weighted log-rank test.
 
 - alternative:
 
@@ -52,11 +54,11 @@ survival_test(
 
 - t_star:
 
-  Parameter \\t^\*\\ used in modestly weighted tests.
+  Parameter \\t^\*\\ used in the modestly weighted test.
 
 - s_star:
 
-  Parameter \\s^\*\\ used in modestly weighted tests.
+  Parameter \\s^\*\\ used in the modestly weighted test.
 
 ## Value
 
@@ -70,6 +72,36 @@ A list containing:
 - observed_HR:
 
   Estimated hazard ratio from a Cox proportional hazards model.
+
+- Z:
+
+  Signed test statistic, oriented so that positive values favour the arm
+  coded as "Treatment" (or the second factor level of `group`,
+  alphabetically, if levels are unlabelled) – i.e. positive Z
+  corresponds to a hazard ratio below 1 (benefit). This convention is
+  consistent across all three methods (verified by diagnostic: see notes
+  below) and is what group-sequential boundary comparisons in
+  `apply_GSD_to_trial`/`BPP_func` rely on.
+
+## Sign convention notes (verified by diagnostic, 2026)
+
+- **LRT**: uses
+  [`survival::survdiff()`](https://rdrr.io/pkg/survival/man/survdiff.html)'s
+  own `(exp[2] - obs[2])` construction, correctly signed by construction
+  (positive = benefit).
+
+- **WLRT**: uses
+  [`nph::logrank.test()`](https://rdrr.io/pkg/nph/man/logrank.test.html)'s
+  native `$test$z` directly. Confirmed correctly signed against LRT on
+  an unambiguous large-benefit case (HR = 0.21: LRT Z = 13.20,
+  WLRT(rho=0,gamma=1) Z = 13.96 – same sign, comparable magnitude).
+
+- **MW**: [`nphRCT::wlrt()`](https://rdrr.io/pkg/nphRCT/man/wlrt.html)'s
+  `$z` uses the OPPOSITE sign convention to `survdiff()` (confirmed by
+  diagnostic: on the same unambiguous large-benefit case, HR = 0.245,
+  LRT gave Z = +12.27 while raw `wlrt()$z` gave -12.30 – same magnitude,
+  flipped sign). The sign is therefore negated below (`Z <- -test$z`) so
+  that positive Z consistently means benefit across all three methods.
 
 ## Examples
 

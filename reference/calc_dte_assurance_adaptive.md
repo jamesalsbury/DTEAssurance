@@ -17,6 +17,8 @@ calc_dte_assurance_adaptive(
   recruitment_model,
   GSD_model,
   analysis_model = NULL,
+  update_priors_sims = 1000,
+  n_BPP_sims = 1000,
   n_sims = 1000
 )
 ```
@@ -81,16 +83,26 @@ calc_dte_assurance_adaptive(
 
   - `alpha_spending`: Cumulative alpha spending vector
 
-  - `alpha_IF`: Information Fraction at which we look for efficacy
+  - `alpha_IF`: Information Fraction(s) at which we look for efficacy
 
-  - `futility_type`: `beta` (for beta-spending), `BPP` (for Bayesian
-    Predictive Probability) or `none`
+  - `futility_type`: One of `"none"`, `"Beta"` (pre-specified
+    beta-spending, via `rpact`), `"BPP"` (Bayesian Predictive
+    Probability futility, D3-style), or `"MatchedZ"` (a fixed,
+    externally-calibrated Z-statistic cutoff, non-binding – D4/D5-style;
+    see
+    [`calibrate_matched_futility_boundary`](https://jamesalsbury.github.io/DTEAssurance/reference/calibrate_matched_futility_boundary.md)
+    for how to obtain `futility_boundary_Z`).
 
   - `futility_IF`: Information Fraction at which we look for futility
+    (required for `"BPP"` and `"MatchedZ"`).
 
-  - `beta_spending`: Cumulative beta spending vector
+  - `beta_spending`: Cumulative beta spending vector (`"Beta"` only).
 
-  - `BPP_threshold`: BPP value at which we will stop for futility
+  - `BPP_threshold`: BPP value below which we stop for futility (`"BPP"`
+    only).
+
+  - `futility_boundary_Z`: Z-statistic value below which we stop for
+    futility (`"MatchedZ"` only).
 
 - analysis_model:
 
@@ -106,6 +118,20 @@ calc_dte_assurance_adaptive(
   - `rho`, `gamma`, `t_star`, `s_star`: additional parameters for WLRT
     or MW (if applicable).
 
+- update_priors_sims:
+
+  Number of posterior samples per interim dataset, passed to
+  [`update_priors`](https://jamesalsbury.github.io/DTEAssurance/reference/update_priors.md)
+  (default 1000). Only used when `GSD_model$futility_type == "BPP"`;
+  harmless (ignored) otherwise.
+
+- n_BPP_sims:
+
+  Number of predictive simulations per interim dataset, passed to
+  [`BPP_func`](https://jamesalsbury.github.io/DTEAssurance/reference/BPP_func.md)
+  (default 1000). Only used when `GSD_model$futility_type == "BPP"`;
+  harmless (ignored) otherwise.
+
 - n_sims:
 
   Number of simulations to run (default = 1000)
@@ -118,14 +144,13 @@ A data frame with one row per simulated trial and the following columns:
 
   Simulation index
 
-- IF:
-
-  Information fraction label used at the decision point
-
 - Decision:
 
-  Interim decision outcome (e.g., "Continue", "Stop for efficacy", "Stop
-  for futility")
+  Final interim/final decision outcome – one of `"Stop for efficacy"`,
+  `"Stop for futility"`, `"Successful at final"`, or
+  `"Unsuccessful at final"`. This is the single source of truth for
+  trial outcome; use it directly rather than deriving success/failure
+  independently.
 
 - StopTime:
 
@@ -135,12 +160,38 @@ A data frame with one row per simulated trial and the following columns:
 
   Total sample size at the time of decision
 
-- Final_Decision:
+- Success:
 
-  Final classification of trial success based on the test statistic and
-  threshold
+  Logical recode of `Decision` for convenience: `TRUE` if
+  `Decision %in% c("Stop for efficacy", "Successful at final")`, `FALSE`
+  otherwise. Derived directly and only from `Decision` – see "Bug fix"
+  below.
+
+- Converged:
+
+  For `"BPP"` designs, whether the interim MCMC fit converged (see
+  [`update_priors`](https://jamesalsbury.github.io/DTEAssurance/reference/update_priors.md));
+  `NA` for other futility types, which involve no MCMC step.
 
 Class: `data.frame`
+
+## Bug fix (this version)
+
+previous versions of this function independently recomputed a separate
+`Final_Decision` field from a hardcoded Cox proportional-hazards Wald
+statistic at a flat `qnorm(0.975)` threshold, regardless of
+`analysis_model$method` or the design's actual group-sequential
+boundaries. This was a second, separate copy of the same bug fixed in
+`apply_GSD_to_trial()` (see its documentation), and could silently
+disagree with the trial's own `Decision`. This version removes that
+duplicate computation entirely: `Success` is now derived only from
+`Decision`, which is itself computed once, correctly, inside
+`apply_GSD_to_trial()`, via `analysis_model$method` and the design's
+real boundaries. This also collapses what were previously three
+near-duplicate branches (one per futility type) into a single call path,
+since `apply_GSD_to_trial()` already dispatches correctly on
+`GSD_model$futility_type` – removing the code duplication that allowed
+the two copies of the bug to drift apart in the first place.
 
 ## Examples
 

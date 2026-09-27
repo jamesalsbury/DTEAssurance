@@ -97,8 +97,8 @@ result <- calc_dte_assurance(n_c = 300, n_t = 300,
 
 str(result)
 #> List of 4
-#>  $ assurance  : num 0.83
-#>  $ CI         : num [1, 1:2] 0.742 0.898
+#>  $ assurance  : num 0.8
+#>  $ CI         : num [1, 1:2] 0.708 0.873
 #>  $ duration   : num 12
 #>  $ sample_size: num 600
 ```
@@ -176,12 +176,13 @@ result <- calc_dte_assurance_adaptive(n_c = 300, n_t = 300,
                              n_sims = 500)
 
 str(result)
-#> 'data.frame':    500 obs. of  5 variables:
-#>  $ Trial         : int  1 2 3 4 5 6 7 8 9 10 ...
-#>  $ Decision      : chr  "Stop for efficacy" "Stop for efficacy" "Successful at final" "Stop for efficacy" ...
-#>  $ StopTime      : num  21.6 20.4 26.8 17.9 18.7 ...
-#>  $ SampleSize    : int  600 600 600 600 600 600 600 600 600 600 ...
-#>  $ Final_Decision: chr  "Successful" "Successful" "Successful" "Successful" ...
+#> 'data.frame':    500 obs. of  6 variables:
+#>  $ Trial     : int  1 2 3 4 5 6 7 8 9 10 ...
+#>  $ Decision  : chr  "Stop for efficacy" "Stop for efficacy" "Unsuccessful at final" "Stop for efficacy" ...
+#>  $ StopTime  : num  19.8 20.1 27.3 21.4 20.7 ...
+#>  $ SampleSize: int  600 600 600 600 600 600 600 600 600 600 ...
+#>  $ Success   : logi  TRUE TRUE FALSE TRUE TRUE FALSE ...
+#>  $ Converged : logi  NA NA NA NA NA NA ...
 ```
 
 ``` r
@@ -198,5 +199,5 @@ design_summary <- result %>%
 
 design_summary
 #>   Assurance Pr(Early Fut.) Pr(Early Eff.) Average Duration Average Sample Size
-#> 1       0.7              0          0.528            22.38                 600
+#> 1       0.7              0          0.516            22.47                 600
 ```

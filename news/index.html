@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">DTEAssurance</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -31,6 +31,34 @@
 
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="1.2.0" id="dteassurance-120">DTEAssurance 1.2.0<a class="anchor" aria-label="anchor" href="#dteassurance-120"></a></h2>
+<div class="section level3">
+<h3 id="breaking-changes-1-2-0">Breaking changes<a class="anchor" aria-label="anchor" href="#breaking-changes-1-2-0"></a></h3>
+<ul><li>
+<code><a href="../reference/calc_dte_assurance_adaptive.html">calc_dte_assurance_adaptive()</a></code> no longer returns a <code>Final_Decision</code> column. That column was recomputed independently from a Cox Wald statistic at a flat threshold, ignoring <code>analysis_model$method</code> and the design’s boundaries, and could disagree with <code>Decision</code>. Use the new logical <code>Success</code> column, which is derived only from <code>Decision</code>. A <code>Converged</code> column (MCMC convergence at the BPP interim; <code>NA</code> for other futility types) is also returned.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="new-features-1-2-0">New features<a class="anchor" aria-label="anchor" href="#new-features-1-2-0"></a></h3>
+<ul><li>New <code>"MatchedZ"</code> futility type: stop for futility at <code>futility_IF</code> if the interim Z-statistic falls below <code>GSD_model$futility_boundary_Z</code>.</li>
+<li>New exported functions: <code><a href="../reference/calibrate_matched_futility_boundary.html">calibrate_matched_futility_boundary()</a></code> and <code><a href="../reference/single_matched_futility_rep.html">single_matched_futility_rep()</a></code> (calibrate a MatchedZ boundary), and <code><a href="../reference/run_calibration_grid.html">run_calibration_grid()</a></code>, <code><a href="../reference/summarize_grid_by_lambda.html">summarize_grid_by_lambda()</a></code> and <code><a href="../reference/select_lambda_star.html">select_lambda_star()</a></code> (calibrate a BPP futility threshold over a grid).</li>
+<li>
+<code><a href="../reference/update_priors.html">update_priors()</a></code> returns Gelman-Rubin diagnostics and posterior latent-state probabilities as attributes (<code>rhat</code>, <code>converged</code>, <code>Z_probs</code>).</li>
+<li>
+<code><a href="../reference/BPP_func.html">BPP_func()</a></code> accepts <code>future_boundaries</code>, evaluating each predictive draw against the design’s remaining efficacy boundaries rather than a single final test.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="bug-fixes-1-2-0">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-1-2-0"></a></h3>
+<ul><li>
+<code><a href="../reference/survival_test.html">survival_test()</a></code>: <code>"MW"</code> now returns Z with the same sign convention as <code>"LRT"</code>/<code>"WLRT"</code> (positive Z favours treatment); <code>"WLRT"</code> uses the signed statistic from <code><a href="https://rdrr.io/pkg/nph/man/logrank.test.html" class="external-link">nph::logrank.test()</a></code> directly.</li>
+<li>
+<code><a href="../reference/survival_test.html">survival_test()</a></code> no longer fails with “could not find function Surv” when the survival package is not attached.</li>
+<li>
+<code>apply_GSD_to_trial()</code> computes interim and final statistics with <code>analysis_model$method</code> via <code><a href="../reference/survival_test.html">survival_test()</a></code> instead of a hard-coded Cox Wald statistic, and passes <code>update_priors_sims</code>/<code>n_BPP_sims</code> through.</li>
+<li>
+<code><a href="../reference/calc_dte_assurance_adaptive.html">calc_dte_assurance_adaptive()</a></code> and <code>make_rpact_design_from_GSD_model()</code> recognise the <code>"MatchedZ"</code> futility type.</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.1.1" id="dteassurance-111">DTEAssurance 1.1.1<a class="anchor" aria-label="anchor" href="#dteassurance-111"></a></h2>
 <ul><li>Added <code><a href="../reference/update_priors.html">update_priors()</a></code> to update elicited prior distributions using interim data.</li>

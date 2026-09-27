@@ -29,13 +29,24 @@
 - [`calibrate_BPP_timing()`](https://jamesalsbury.github.io/DTEAssurance/reference/calibrate_BPP_timing.md)
   : Function to calculate the 'optimal' information fraction to
   calculate BPP
+- [`calibrate_matched_futility_boundary()`](https://jamesalsbury.github.io/DTEAssurance/reference/calibrate_matched_futility_boundary.md)
+  : Calibrate a fixed Z-statistic futility boundary
 - [`cens_data()`](https://jamesalsbury.github.io/DTEAssurance/reference/cens_data.md)
   : Censor a survival dataset
+- [`run_calibration_grid()`](https://jamesalsbury.github.io/DTEAssurance/reference/run_calibration_grid.md)
+  : Simulate BPP values and true trial outcomes for BPP-threshold
+  calibration
+- [`select_lambda_star()`](https://jamesalsbury.github.io/DTEAssurance/reference/select_lambda_star.md)
+  : Select the BPP futility threshold minimising null expected sample
+  size
 - [`sim_dte()`](https://jamesalsbury.github.io/DTEAssurance/reference/sim_dte.md)
   : Simulates survival times for a delayed treatment effect (DTE)
   scenario, where the treatment group experiences a delayed onset of
   benefit. Control and treatment groups are generated under exponential
   or Weibull distributions.
+- [`summarize_grid_by_lambda()`](https://jamesalsbury.github.io/DTEAssurance/reference/summarize_grid_by_lambda.md)
+  : Summarise calibration-grid output over a grid of BPP futility
+  thresholds
 - [`survival_test()`](https://jamesalsbury.github.io/DTEAssurance/reference/survival_test.md)
   : Calculate statistical significance on a survival dataset
 - [`update_priors()`](https://jamesalsbury.github.io/DTEAssurance/reference/update_priors.md)

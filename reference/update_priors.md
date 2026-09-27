@@ -14,7 +14,8 @@ update_priors(
   effect_model,
   n.chains = 2,
   n_burnin = 500,
-  n_samples = 1000
+  n_samples = 1000,
+  rhat_threshold = 1.1
 )
 ```
 
@@ -74,19 +75,40 @@ update_priors(
 
   Number of posterior samples to generate (default is 1000)
 
+- rhat_threshold:
+
+  Convergence threshold on the Gelman-Rubin potential scale reduction
+  factor (default 1.1). Used only to compute the `"converged"` attribute
+  on the return value; does not affect sampling.
+
 ## Value
 
 A data frame containing Monte Carlo samples from the updated (posterior)
-distribution of the model parameters. Columns normally include:
+distribution of the model parameters, with columns `lambda_c`,
+`delay_time`, `HR`, `gamma_c` (Weibull only), and `Z` (the latent
+scenario indicator: 1 = no separation, 2 = immediate separation, 3 =
+delayed separation). Column access (`posterior_df$lambda_c`, etc.) is
+unchanged from previous versions of this function – existing calling
+code does not need to be modified. In addition, three attributes are
+attached to the returned data frame for diagnostic purposes:
 
-- `lambda_c` Posterior samples for the control hazard parameter.
+- `rhat`:
 
-- `delay_time` Posterior samples for the delay/changepoint time \\T\\.
+  A named numeric vector of per-parameter Gelman-Rubin point estimates
+  (accessed via `attr(posterior_df, "rhat")`).
 
-- `HR` Posterior samples for the post-delay hazard ratio.
+- `converged`:
 
-- `gamma_c` (only if `control_distribution = "Weibull"`) Posterior
-  samples for the Weibull shape parameter.
+  `TRUE` if every monitored parameter's Rhat is below `rhat_threshold`,
+  `FALSE` if not, or `NA` if the diagnostic could not be computed
+  (accessed via `attr(posterior_df, "converged")`).
+
+- `Z_probs`:
+
+  A named numeric vector `c(P_Z1=, P_Z2=, P_Z3=)`, the posterior
+  probability of each latent state, i.e.
+  `table(posterior_df$Z) / nrow(posterior_df)` (accessed via
+  `attr(posterior_df, "Z_probs")`).
 
 Priors for `lambda_c`, `T`, and `HR` are constructed from elicited
 distributions using the SHELF framework, then updated through
@@ -120,4 +142,13 @@ posterior_df <- update_priors(
   effect_model = effect_model,
   n_samples = 10)
 
+# Diagnostics, e.g.:
+attr(posterior_df, "rhat")
+#>         HR          Z delay_time   lambda_c 
+#>  0.9935484        NaN        NaN  1.0234645 
+attr(posterior_df, "converged")
+#> [1] TRUE
+attr(posterior_df, "Z_probs")
+#> P_Z1 P_Z2 P_Z3 
+#>    0    1    0 
 ```

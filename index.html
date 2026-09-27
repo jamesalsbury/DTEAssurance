@@ -22,7 +22,7 @@
 
     <a class="navbar-brand me-2" href="index.html">DTEAssurance</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -127,8 +127,8 @@ It uses elicited prior distributions—via the <a href="https://CRAN.R-project.o
 <span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/str.html" class="external-link">str</a></span><span class="op">(</span><span class="va">result</span><span class="op">)</span></span>
 <span><span class="co">#&gt; List of 4</span></span>
-<span><span class="co">#&gt;  $ assurance  : num 0.83</span></span>
-<span><span class="co">#&gt;  $ CI         : num [1, 1:2] 0.742 0.898</span></span>
+<span><span class="co">#&gt;  $ assurance  : num 0.8</span></span>
+<span><span class="co">#&gt;  $ CI         : num [1, 1:2] 0.708 0.873</span></span>
 <span><span class="co">#&gt;  $ duration   : num 12</span></span>
 <span><span class="co">#&gt;  $ sample_size: num 600</span></span></code></pre></div>
 <p>We can vary the sample sizes and plot the resulting output:</p>
@@ -200,12 +200,13 @@ It uses elicited prior distributions—via the <a href="https://CRAN.R-project.o
 <span>                             n_sims <span class="op">=</span> <span class="fl">500</span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/str.html" class="external-link">str</a></span><span class="op">(</span><span class="va">result</span><span class="op">)</span></span>
-<span><span class="co">#&gt; 'data.frame':    500 obs. of  5 variables:</span></span>
-<span><span class="co">#&gt;  $ Trial         : int  1 2 3 4 5 6 7 8 9 10 ...</span></span>
-<span><span class="co">#&gt;  $ Decision      : chr  "Stop for efficacy" "Stop for efficacy" "Successful at final" "Stop for efficacy" ...</span></span>
-<span><span class="co">#&gt;  $ StopTime      : num  21.6 20.4 26.8 17.9 18.7 ...</span></span>
-<span><span class="co">#&gt;  $ SampleSize    : int  600 600 600 600 600 600 600 600 600 600 ...</span></span>
-<span><span class="co">#&gt;  $ Final_Decision: chr  "Successful" "Successful" "Successful" "Successful" ...</span></span></code></pre></div>
+<span><span class="co">#&gt; 'data.frame':    500 obs. of  6 variables:</span></span>
+<span><span class="co">#&gt;  $ Trial     : int  1 2 3 4 5 6 7 8 9 10 ...</span></span>
+<span><span class="co">#&gt;  $ Decision  : chr  "Stop for efficacy" "Stop for efficacy" "Unsuccessful at final" "Stop for efficacy" ...</span></span>
+<span><span class="co">#&gt;  $ StopTime  : num  19.8 20.1 27.3 21.4 20.7 ...</span></span>
+<span><span class="co">#&gt;  $ SampleSize: int  600 600 600 600 600 600 600 600 600 600 ...</span></span>
+<span><span class="co">#&gt;  $ Success   : logi  TRUE TRUE FALSE TRUE TRUE FALSE ...</span></span>
+<span><span class="co">#&gt;  $ Converged : logi  NA NA NA NA NA NA ...</span></span></code></pre></div>
 <div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">design_summary</span> <span class="op">&lt;-</span> <span class="va">result</span> <span class="op"><a href="reference/pipe.html">%&gt;%</a></span></span>
 <span>        <span class="fu">summarise</span><span class="op">(</span></span>
@@ -219,7 +220,7 @@ It uses elicited prior distributions—via the <a href="https://CRAN.R-project.o
 <span></span>
 <span><span class="va">design_summary</span></span>
 <span><span class="co">#&gt;   Assurance Pr(Early Fut.) Pr(Early Eff.) Average Duration Average Sample Size</span></span>
-<span><span class="co">#&gt; 1       0.7              0          0.528            22.38                 600</span></span></code></pre></div>
+<span><span class="co">#&gt; 1       0.7              0          0.516            22.47                 600</span></span></code></pre></div>
 </div>
 </div>
 </div>

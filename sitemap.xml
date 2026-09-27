@@ -17,10 +17,15 @@
 <url><loc>https://jamesalsbury.github.io/DTEAssurance/reference/calc_dte_assurance_adaptive.html</loc></url>
 <url><loc>https://jamesalsbury.github.io/DTEAssurance/reference/calibrate_BPP_threshold.html</loc></url>
 <url><loc>https://jamesalsbury.github.io/DTEAssurance/reference/calibrate_BPP_timing.html</loc></url>
+<url><loc>https://jamesalsbury.github.io/DTEAssurance/reference/calibrate_matched_futility_boundary.html</loc></url>
 <url><loc>https://jamesalsbury.github.io/DTEAssurance/reference/cens_data.html</loc></url>
 <url><loc>https://jamesalsbury.github.io/DTEAssurance/reference/index.html</loc></url>
 <url><loc>https://jamesalsbury.github.io/DTEAssurance/reference/pipe.html</loc></url>
+<url><loc>https://jamesalsbury.github.io/DTEAssurance/reference/run_calibration_grid.html</loc></url>
+<url><loc>https://jamesalsbury.github.io/DTEAssurance/reference/select_lambda_star.html</loc></url>
 <url><loc>https://jamesalsbury.github.io/DTEAssurance/reference/sim_dte.html</loc></url>
+<url><loc>https://jamesalsbury.github.io/DTEAssurance/reference/single_matched_futility_rep.html</loc></url>
+<url><loc>https://jamesalsbury.github.io/DTEAssurance/reference/summarize_grid_by_lambda.html</loc></url>
 <url><loc>https://jamesalsbury.github.io/DTEAssurance/reference/survival_test.html</loc></url>
 <url><loc>https://jamesalsbury.github.io/DTEAssurance/reference/update_priors.html</loc></url>
 <url><loc>https://jamesalsbury.github.io/DTEAssurance/reference/utils-pipe.html</loc></url>
