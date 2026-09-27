@@ -590,11 +590,20 @@ add_recruitment_time <- function(data, rec_method,
 #'   \itemize{
 #'     \item \code{events}: Total number of events
 #'     \item \code{alpha_spending}: Cumulative alpha spending vector
-#'     \item \code{alpha_IF}: Information Fraction at which we look for efficacy
-#'     \item \code{futility_type}: \code{beta} (for beta-spending), \code{BPP} (for Bayesian Predictive Probability) or \code{none}
+#'     \item \code{alpha_IF}: Information Fraction(s) at which we look for efficacy
+#'     \item \code{futility_type}: One of \code{"none"}, \code{"Beta"}
+#'       (pre-specified beta-spending, via \code{rpact}), \code{"BPP"}
+#'       (Bayesian Predictive Probability futility, D3-style), or
+#'       \code{"MatchedZ"} (a fixed, externally-calibrated Z-statistic
+#'       cutoff, non-binding -- D4/D5-style; see
+#'       \code{\link{calibrate_matched_futility_boundary}} for how to
+#'       obtain \code{futility_boundary_Z}).
 #'     \item \code{futility_IF}: Information Fraction at which we look for futility
-#'     \item \code{beta_spending}: Cumulative beta spending vector
-#'     \item \code{BPP_threshold}: BPP value at which we will stop for futility
+#'       (required for \code{"BPP"} and \code{"MatchedZ"}).
+#'     \item \code{beta_spending}: Cumulative beta spending vector (\code{"Beta"} only).
+#'     \item \code{BPP_threshold}: BPP value below which we stop for futility (\code{"BPP"} only).
+#'     \item \code{futility_boundary_Z}: Z-statistic value below which we
+#'       stop for futility (\code{"MatchedZ"} only).
 #'   }
 #' @param analysis_model A named list specifying the final analysis and decision rule:
 #'   \itemize{
@@ -603,18 +612,52 @@ add_recruitment_time <- function(data, rec_method,
 #'     \item \code{alternative_hypothesis}: direction of the alternative (e.g. \code{"one.sided"}).
 #'     \item \code{rho}, \code{gamma}, \code{t_star}, \code{s_star}: additional parameters for WLRT or MW (if applicable).
 #'   }
+#' @param update_priors_sims Number of posterior samples per interim
+#'   dataset, passed to \code{\link{update_priors}} (default 1000). Only
+#'   used when \code{GSD_model$futility_type == "BPP"}; harmless (ignored)
+#'   otherwise.
+#' @param n_BPP_sims Number of predictive simulations per interim dataset,
+#'   passed to \code{\link{BPP_func}} (default 1000). Only used when
+#'   \code{GSD_model$futility_type == "BPP"}; harmless (ignored) otherwise.
 #' @param n_sims Number of simulations to run (default = 1000)
 #'
 #' @return A data frame with one row per simulated trial and the following columns:
 #' \describe{
 #'   \item{Trial}{Simulation index}
-#'   \item{IF}{Information fraction label used at the decision point}
-#'   \item{Decision}{Interim decision outcome (e.g., "Continue", "Stop for efficacy", "Stop for futility")}
+#'   \item{Decision}{Final interim/final decision outcome -- one of
+#'     \code{"Stop for efficacy"}, \code{"Stop for futility"},
+#'     \code{"Successful at final"}, or \code{"Unsuccessful at final"}.
+#'     This is the single source of truth for trial outcome; use it
+#'     directly rather than deriving success/failure independently.}
 #'   \item{StopTime}{Time at which the trial stopped or completed}
 #'   \item{SampleSize}{Total sample size at the time of decision}
-#'   \item{Final_Decision}{Final classification of trial success based on the test statistic and threshold}
+#'   \item{Success}{Logical recode of \code{Decision} for convenience:
+#'     \code{TRUE} if \code{Decision \%in\% c("Stop for efficacy",
+#'     "Successful at final")}, \code{FALSE} otherwise. Derived directly
+#'     and only from \code{Decision} -- see "Bug fix" below.}
+#'   \item{Converged}{For \code{"BPP"} designs, whether the interim MCMC
+#'     fit converged (see \code{\link{update_priors}}); \code{NA} for
+#'     other futility types, which involve no MCMC step.}
 #' }
 #' Class: \code{data.frame}
+#'
+#' @section Bug fix (this version): previous versions of this function
+#'   independently recomputed a separate \code{Final_Decision} field from
+#'   a hardcoded Cox proportional-hazards Wald statistic at a flat
+#'   \code{qnorm(0.975)} threshold, regardless of \code{analysis_model$method}
+#'   or the design's actual group-sequential boundaries. This was a
+#'   second, separate copy of the same bug fixed in
+#'   \code{\link{apply_GSD_to_trial}} (see its documentation), and could
+#'   silently disagree with the trial's own \code{Decision}. This version
+#'   removes that duplicate computation entirely: \code{Success} is now
+#'   derived only from \code{Decision}, which is itself computed once,
+#'   correctly, inside \code{\link{apply_GSD_to_trial}}, via
+#'   \code{analysis_model$method} and the design's real boundaries. This
+#'   also collapses what were previously three near-duplicate branches
+#'   (one per futility type) into a single call path, since
+#'   \code{\link{apply_GSD_to_trial}} already dispatches correctly on
+#'   \code{GSD_model$futility_type} -- removing the code duplication that
+#'   allowed the two copies of the bug to drift apart in the first place.
 #'
 #' @examples
 #' set.seed(123)
@@ -639,117 +682,96 @@ add_recruitment_time <- function(data, rec_method,
 #'
 #' @export
 
-
 calc_dte_assurance_adaptive <- function(n_c, n_t,
-                                       control_model,
-                                       effect_model,
-                                       recruitment_model,
-                                       GSD_model,
-                                       analysis_model = NULL,
-                                       n_sims = 1000) {
+                                        control_model,
+                                        effect_model,
+                                        recruitment_model,
+                                        GSD_model,
+                                        analysis_model = NULL,
+                                        update_priors_sims = 1000,
+                                        n_BPP_sims = 1000,
+                                        n_sims = 1000) {
 
-  if (!is.null(GSD_model$futility_type) &&
-      GSD_model$futility_type == "BPP" &&
+  if (is.null(GSD_model$futility_type) ||
+      !GSD_model$futility_type %in% c("none", "Beta", "BPP", "MatchedZ")) {
+    stop("GSD_model$futility_type must be one of 'none', 'Beta', 'BPP', or 'MatchedZ'.")
+  }
+
+  if (GSD_model$futility_type == "BPP" &&
       !identical(control_model$parameter_mode, "Distribution")) {
-
     stop(
       "Invalid specification: when `GSD_model$futility_type` is \"BPP\", ",
       "`control_model$parameter_mode` must be \"Distribution\"."
     )
   }
 
+  if (GSD_model$futility_type == "MatchedZ" &&
+      (is.null(GSD_model$futility_boundary_Z) || is.null(GSD_model$futility_IF))) {
+    stop(
+      "Invalid specification: when `GSD_model$futility_type` is ",
+      "\"MatchedZ\", `GSD_model$futility_boundary_Z` and ",
+      "`GSD_model$futility_IF` must both be specified -- see ",
+      "calibrate_matched_futility_boundary() for how to obtain these."
+    )
+  }
+
+  if (is.null(analysis_model)) {
+    analysis_model <- list(method = "LRT", alpha = 0.025,
+                           alternative_hypothesis = "one.sided")
+  }
+
+  rpact_design <- make_rpact_design_from_GSD_model(GSD_model)
+  design       <- rpact_design$design
 
   results <- future.apply::future_lapply(seq_len(n_sims), function(i) {
 
-    # --- simulate one trial ---
     trial <- simulate_trial_with_recruitment(
       n_c, n_t, control_model, effect_model, recruitment_model
     )
 
-    trial_data <- trial[order(trial$pseudo_time),]
-    n_events   <- GSD_model$events
-    t_interim  <- trial_data$pseudo_time[n_events]
-
-    eligible_df <- trial_data %>%
-      dplyr::filter(.data$rec_time <= t_interim)
-
-    # Censoring logic
-    eligible_df$status <- eligible_df$pseudo_time < t_interim
-    eligible_df$survival_time <- ifelse(
-      eligible_df$status,
-      eligible_df$time,
-      t_interim - eligible_df$rec_time
+    # --- FIX: single, unified call to apply_GSD_to_trial() for every
+    # futility_type. apply_GSD_to_trial() already dispatches correctly on
+    # GSD_model$futility_type internally (none/Beta -> boundary-only;
+    # BPP -> posterior-predictive futility; MatchedZ -> fixed calibrated
+    # Z-cutoff futility), so no branching is needed here. control_model/
+    # effect_model/recruitment_model/update_priors_sims/n_BPP_sims are
+    # only actually used inside apply_GSD_to_trial()'s BPP branch; passing
+    # them unconditionally is harmless for other futility types. ---
+    outcome <- apply_GSD_to_trial(
+      n_c = n_c, n_t = n_t,
+      trial_data          = trial,
+      design              = design,
+      total_events        = GSD_model$events,
+      GSD_model           = GSD_model,
+      control_model       = control_model,
+      effect_model        = effect_model,
+      recruitment_model   = recruitment_model,
+      analysis_model      = analysis_model,
+      update_priors_sims  = update_priors_sims,
+      n_BPP_sims          = n_BPP_sims
     )
 
-    # Interim Cox model (for final decision)
-    fit         <- survival::coxph(Surv(survival_time, status) ~ group, data = eligible_df)
-    fit_summary <- summary(fit)
-    z_stat      <- -fit_summary$coefficients[, "z"]
-
-    # --- Futility type: beta-spending ---
-    if (GSD_model$futility_type %in% c("Beta", "none")) {
-
-      rpact_design <- make_rpact_design_from_GSD_model(GSD_model)
-      design       <- rpact_design$design
-
-      outcome <- apply_GSD_to_trial(trial_data = trial, GSD_model = GSD_model, design = design, total_events = GSD_model$events)
-
-      return(data.frame(
-        Trial          = i,
-        Decision       = outcome$decision,
-        StopTime       = outcome$stop_time,
-        SampleSize     = outcome$sample_size,
-        Final_Decision = ifelse(
-          z_stat > stats::qnorm(1 - 0.025),
-          "Successful",
-          "Unsuccessful"
-        )
-      ))
-    }
-
-    # --- placeholder for future types ---
-    if (GSD_model$futility_type == "BPP") {
-
-      # Build rpact design (still needed for efficacy boundaries)
-      rpact_design <- make_rpact_design_from_GSD_model(GSD_model)
-      design       <- rpact_design$design
-
-      outcome <- apply_GSD_to_trial(
-        n_c = n_c,
-        n_t = n_t,
-        trial_data          = trial,
-        design              = design,
-        total_events        = GSD_model$events,
-        GSD_model           = GSD_model,
-        control_model       = control_model,
-        effect_model        = effect_model,
-        recruitment_model   = recruitment_model,
-        analysis_model      = analysis_model,
-        update_priors_sims  = 1000,   # was missing entirely -- previously silently defaulted
-        n_BPP_sims          = 1000    # was hardcoded 50
-      )
-
-      return(data.frame(
-        Trial          = i,
-        Decision       = outcome$decision,
-        StopTime       = outcome$stop_time,
-        SampleSize     = outcome$sample_size,
-        Final_Decision = ifelse(
-          z_stat > stats::qnorm(1 - 0.025),
-          "Successful",
-          "Unsuccessful"
-        )
-      ))
-    }
-
-
+    # --- FIX: Success is now derived ONLY from outcome$decision (the
+    # single source of truth, computed once inside apply_GSD_to_trial()
+    # using analysis_model$method and the design's real boundaries). The
+    # previous, separate, independently-computed Final_Decision field
+    # (hardcoded Cox Wald statistic vs. a flat qnorm(0.975) threshold,
+    # ignoring analysis_model$method and the design's actual boundaries)
+    # has been removed entirely -- it was a second copy of the same bug
+    # fixed in apply_GSD_to_trial(), and could silently disagree with
+    # Decision. ---
+    data.frame(
+      Trial      = i,
+      Decision   = outcome$decision,
+      StopTime   = outcome$stop_time,
+      SampleSize = outcome$sample_size,
+      Success    = outcome$decision %in% c("Stop for efficacy", "Successful at final"),
+      Converged  = if (!is.null(outcome$converged)) outcome$converged else NA
+    )
 
   }, future.seed = TRUE)
 
-  # Combine into single data frame
-  results_df <- do.call(rbind, results)
-
-  return(results_df)
+  do.call(rbind, results)
 }
 
 

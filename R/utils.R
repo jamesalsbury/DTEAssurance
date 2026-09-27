@@ -454,26 +454,36 @@ single_calibration_rep <- function(i,
 
 make_rpact_design_from_GSD_model <- function(GSD_model) {
 
-  # 1. Extract alpha side
   alpha_IF       <- GSD_model$alpha_IF
   alpha_spending <- GSD_model$alpha_spending
+  fut_type       <- GSD_model$futility_type
 
-  # 2. Futility type
-  fut_type <- GSD_model$futility_type
-
-  # 3. Combined IF grid
-  if (fut_type %in% c("Beta", "BPP")) {
-    # For Beta and BPP, include futility information fraction(s)
+  # FIX: "MatchedZ" (D4/D5) needs futility_IF included in the information-
+  # rate grid, with zero alpha spent there, exactly like "BPP" (D3) already
+  # does -- this is what lets the futility look sit as a pure monitoring
+  # point without affecting the efficacy boundaries (confirmed empirically
+  # earlier: design objects built with vs. without this extra point give
+  # identical criticalValues). Previously only "Beta" and "BPP" were
+  # recognized here; "MatchedZ" fell through to the "Unknown futility type"
+  # error below.
+  if (fut_type %in% c("Beta", "BPP", "MatchedZ")) {
     fut_IF <- GSD_model$futility_IF
     IF_all <- sort(unique(c(alpha_IF, fut_IF)))
   } else if (fut_type == "none") {
-    # No futility: only alpha IFs
     IF_all <- sort(unique(alpha_IF))
   } else {
     stop("Unknown futility type in GSD_model")
   }
 
   K <- length(IF_all)
+
+  # ... rest of the function is UNCHANGED -- the later beta_spending_full
+  # and design-building logic already fall through correctly to the
+  # generic "no beta spending, typeBetaSpending='none'" path for any
+  # fut_type other than "Beta", so MatchedZ needs no further changes there.
+
+  # [unchanged: steps 4-6 exactly as before]
+
 
   #==================================================
   # 4. Expand alpha spending to the full IF grid
