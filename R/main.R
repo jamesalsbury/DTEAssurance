@@ -647,15 +647,15 @@ add_recruitment_time <- function(data, rec_method,
 #'   \code{qnorm(0.975)} threshold, regardless of \code{analysis_model$method}
 #'   or the design's actual group-sequential boundaries. This was a
 #'   second, separate copy of the same bug fixed in
-#'   \code{\link{apply_GSD_to_trial}} (see its documentation), and could
+#'   \code{apply_GSD_to_trial()} (see its documentation), and could
 #'   silently disagree with the trial's own \code{Decision}. This version
 #'   removes that duplicate computation entirely: \code{Success} is now
 #'   derived only from \code{Decision}, which is itself computed once,
-#'   correctly, inside \code{\link{apply_GSD_to_trial}}, via
+#'   correctly, inside \code{apply_GSD_to_trial()}, via
 #'   \code{analysis_model$method} and the design's real boundaries. This
 #'   also collapses what were previously three near-duplicate branches
 #'   (one per futility type) into a single call path, since
-#'   \code{\link{apply_GSD_to_trial}} already dispatches correctly on
+#'   \code{apply_GSD_to_trial()} already dispatches correctly on
 #'   \code{GSD_model$futility_type} -- removing the code duplication that
 #'   allowed the two copies of the bug to drift apart in the first place.
 #'
@@ -1202,11 +1202,11 @@ return(posterior_df)
 #'                        alternative_hypothesis = "one.sided")
 #'
 #' # Recommended usage: pass the design's own future boundaries, e.g. a single
-#' # efficacy look at 25 events (Z > 2.24) followed by a final analysis at
-#' # 40 events (Z > 2.00):
+#' # efficacy look at 20 events (Z > 2.24) followed by a final analysis at
+#' # 28 events (Z > 2.00):
 #' future_boundaries <- list(
-#'   list(events = 25, crit = 2.24),
-#'   list(events = 40, crit = 2.00)
+#'   list(events = 20, crit = 2.24),
+#'   list(events = 28, crit = 2.00)
 #' )
 #'
 #' BPP_outcome <- BPP_func(df, posterior_df,
@@ -1707,7 +1707,7 @@ BPP_func <- function(data, posterior_df, control_distribution = "Exponential", n
 #'   list(events = 40, crit = 2.00)
 #' )
 #'
-#' threshold <- calibrate_BPP_threshold(n_c = 15, n_t = 15,
+#' threshold <- calibrate_BPP_threshold(n_c = 25, n_t = 25,
 #'                      control_model = control_model,
 #'                      effect_model = effect_model,
 #'                      recruitment_model = recruitment_model,
@@ -1852,7 +1852,7 @@ calibrate_BPP_threshold <- function(n_c,
 #'   group-sequential design under consideration -- see \code{\link{BPP_func}}.
 #'   The same chain is used for every candidate in \code{IA_model$IF} (each
 #'   candidate is checked to ensure it genuinely precedes every boundary in
-#'   the chain; see \code{\link{single_calibration_rep}}). If \code{NULL}
+#'   the chain; see \code{single_calibration_rep()}). If \code{NULL}
 #'   (not recommended), falls back to the legacy single-stage calculation,
 #'   and a message is emitted.
 #' @param update_priors_sims Number of posterior samples per interim dataset
@@ -1909,7 +1909,7 @@ calibrate_BPP_threshold <- function(n_c,
 #'   list(events = 40, crit = 2.00)    # final analysis
 #' )
 #'
-#' timing <- calibrate_BPP_timing(n_c = 15, n_t = 15,
+#' timing <- calibrate_BPP_timing(n_c = 25, n_t = 25,
 #'                      control_model = control_model,
 #'                      effect_model = effect_model,
 #'                      recruitment_model = recruitment_model,

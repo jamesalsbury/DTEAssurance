@@ -12,7 +12,12 @@ calibrate_BPP_timing(
   recruitment_model,
   IA_model,
   analysis_model,
-  n_sims = 50
+  future_boundaries = NULL,
+  update_priors_sims = 1000,
+  PP_sims = 2000,
+  n_sims = 100,
+  n_cores = 1,
+  seed = NULL
 )
 }
 \arguments{
@@ -20,87 +25,105 @@ calibrate_BPP_timing(
 
 \item{n_t}{Number of treatment patients}
 
-\item{control_model}{A named list specifying the control arm survival distribution:
-\itemize{
-\item \code{dist}: Distribution type ("Exponential" or "Weibull")
-\item \code{parameter_mode}: Either "Fixed" or "Distribution"
-\item \code{fixed_type}: If "Fixed", specify as "Parameters" or "Landmark"
-\item \code{lambda}, \code{gamma}: Scale and shape parameters
-\item \code{t1}, \code{t2}: Landmark times
-\item \code{surv_t1}, \code{surv_t2}: Survival probabilities at landmarks
-\item \code{t1_Beta_a}, \code{t1_Beta_b}, \code{diff_Beta_a}, \code{diff_Beta_b}: Beta prior parameters
-}}
+\item{control_model}{A named list specifying the control arm survival distribution
+(see \code{\link{update_priors}} for details).}
 
-\item{effect_model}{A named list specifying beliefs about the treatment effect:
-\itemize{
-\item \code{delay_SHELF}, \code{HR_SHELF}: SHELF objects encoding beliefs
-\item \code{delay_dist}, \code{HR_dist}: Distribution types ("hist" by default)
-\item \code{P_S}: Probability that survival curves separate
-\item \code{P_DTE}: Probability of delayed separation, conditional on separation
-}}
+\item{effect_model}{A named list specifying beliefs about the treatment effect
+(see \code{\link{update_priors}} for details).}
 
-\item{recruitment_model}{A named list specifying the recruitment process:
-\itemize{
-\item \code{method}: "power" or "PWC"
-\item \code{period}, \code{power}: Parameters for power model
-\item \code{rate}, \code{duration}: Comma-separated strings for PWC model
-}}
+\item{recruitment_model}{A named list specifying the recruitment process
+(see \code{\link{add_recruitment_time}} for details).}
 
 \item{IA_model}{A named list specifying the censoring mechanism for the future data:
 \itemize{
 \item \code{events}: Number of events which is 100\% information fraction
-\item \code{IF}: The information fraction at which to censor and calculate BPP
+\item \code{IF}: A vector of candidate information fractions to evaluate.
+\strong{Every candidate must genuinely precede \code{future_boundaries}}
+(see below) -- e.g. if the true design has an efficacy look at
+IF = 0.75, do not include candidates at or beyond 0.75 in this sweep;
+a futility look scheduled at or after the design's own efficacy look
+is not a well-posed question about that design.
 }}
 
-\item{analysis_model}{A named list specifying the final analysis and decision rule:
-\itemize{
-\item \code{method}: e.g. \code{"LRT"}, \code{"WLRT"}, or \code{"MW"}.
-\item \code{alpha}: one-sided type I error level.
-\item \code{alternative_hypothesis}: direction of the alternative (e.g. \code{"one.sided"}).
-\item \code{rho}, \code{gamma}, \code{t_star}, \code{s_star}: additional parameters for WLRT or MW (if applicable).
-}}
+\item{analysis_model}{A named list specifying the final analysis and decision rule
+(see \code{\link{BPP_func}} for details).}
 
-\item{n_sims}{Number of data sets to simulate (default is 100).}
+\item{future_boundaries}{\strong{Recommended.} The chain of fixed future
+decision points (efficacy look(s) and final analysis) of the true
+group-sequential design under consideration -- see \code{\link{BPP_func}}.
+The same chain is used for every candidate in \code{IA_model$IF} (each
+candidate is checked to ensure it genuinely precedes every boundary in
+the chain; see \code{single_calibration_rep()}). If \code{NULL}
+(not recommended), falls back to the legacy single-stage calculation,
+and a message is emitted.}
+
+\item{update_priors_sims}{Number of posterior samples per interim dataset
+(default 1000; was previously hardcoded to 100).}
+
+\item{PP_sims}{Number of predictive simulations per interim dataset
+(default 2000; was previously hardcoded to 50).}
+
+\item{n_sims}{Number of interim datasets to simulate per candidate timing
+(default is 100).}
+
+\item{n_cores}{Number of cores to parallelise over via
+\code{parallel::mclapply} (default is 1, i.e. sequential \code{lapply}).}
+
+\item{seed}{Optional integer seed; if supplied, replicate \code{i} under
+candidate timing \code{k} is seeded as \code{seed * 10000 + i} (note:
+replicates are re-seeded identically across candidate timings, so the
+same underlying trial trajectories are reused -- i.e. paired comparison
+across timings -- unless you deliberately want independent draws per
+timing, in which case pass a different \code{seed} per call).}
 }
 \value{
-A vector of length \code{n_sims} corresponding to the value of BPP for each simulated trial
+A list with:
+\describe{
+\item{outcome_list}{A list, one element per candidate information
+fraction, each containing \code{BPP_values} (a vector of estimated
+BPP, one per simulated interim dataset) and \code{cens_time} (the
+corresponding calendar times).}
+\item{settings}{A list recording the exact settings used, plus the
+installed \code{DTEAssurance} package version, for provenance.}
+}
 }
 \description{
 Function to calculate the 'optimal' information fraction to calculate BPP
 }
 \examples{
+set.seed(123)
+control_model <- list(dist = "Exponential", parameter_mode = "Distribution",
+                      t1 = 12, t1_Beta_a = 20, t1_Beta_b = 32)
 
-
-#' set.seed(123)
-control_model = list(dist = "Exponential",
-                     parameter_mode = "Distribution",
-                     t1 = 12,
-                     t1_Beta_a = 20,
-                     t1_Beta_b = 32)
-
-effect_model = list(delay_SHELF = SHELF::fitdist(c(5.5, 6, 6.5),
+effect_model <- list(delay_SHELF = SHELF::fitdist(c(5.5, 6, 6.5),
                     probs = c(0.25, 0.5, 0.75), lower = 0, upper = 12),
                     delay_dist = "gamma",
                     HR_SHELF = SHELF::fitdist(c(0.5, 0.6, 0.7),
                     probs = c(0.25, 0.5, 0.75), lower = 0, upper = 1),
                     HR_dist = "gamma",
-                    P_S = 1,
-                    P_DTE = 0)
+                    P_S = 1, P_DTE = 0)
 
 recruitment_model <- list(method = "power", period = 12, power = 1)
 
-IA_model = list(events = 20, IF = 0.5)
+# Sweep candidates from 0.2 to 0.7 only -- all genuinely precede the
+# design's own efficacy look at IF = 0.75.
+IA_model <- list(events = 40, IF = seq(0.2, 0.7, by = 0.1))
 
-analysis_model = list(method = "LRT",
-                      alpha = 0.025,
+analysis_model <- list(method = "LRT", alpha = 0.025,
                       alternative_hypothesis = "one.sided")
 
-timing <- calibrate_BPP_timing(n_c = 15, n_t = 15,
+future_boundaries <- list(
+  list(events = 30, crit = 2.24),   # efficacy look at IF = 0.75
+  list(events = 40, crit = 2.00)    # final analysis
+)
+
+timing <- calibrate_BPP_timing(n_c = 25, n_t = 25,
                      control_model = control_model,
                      effect_model = effect_model,
                      recruitment_model = recruitment_model,
                      IA_model = IA_model,
                      analysis_model = analysis_model,
+                     future_boundaries = future_boundaries,
                      n_sims = 2)
 
 }

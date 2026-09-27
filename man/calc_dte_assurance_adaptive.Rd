@@ -12,6 +12,8 @@ calc_dte_assurance_adaptive(
   recruitment_model,
   GSD_model,
   analysis_model = NULL,
+  update_priors_sims = 1000,
+  n_BPP_sims = 1000,
   n_sims = 1000
 )
 }
@@ -50,11 +52,20 @@ calc_dte_assurance_adaptive(
 \itemize{
 \item \code{events}: Total number of events
 \item \code{alpha_spending}: Cumulative alpha spending vector
-\item \code{alpha_IF}: Information Fraction at which we look for efficacy
-\item \code{futility_type}: \code{beta} (for beta-spending), \code{BPP} (for Bayesian Predictive Probability) or \code{none}
+\item \code{alpha_IF}: Information Fraction(s) at which we look for efficacy
+\item \code{futility_type}: One of \code{"none"}, \code{"Beta"}
+(pre-specified beta-spending, via \code{rpact}), \code{"BPP"}
+(Bayesian Predictive Probability futility, D3-style), or
+\code{"MatchedZ"} (a fixed, externally-calibrated Z-statistic
+cutoff, non-binding -- D4/D5-style; see
+\code{\link{calibrate_matched_futility_boundary}} for how to
+obtain \code{futility_boundary_Z}).
 \item \code{futility_IF}: Information Fraction at which we look for futility
-\item \code{beta_spending}: Cumulative beta spending vector
-\item \code{BPP_threshold}: BPP value at which we will stop for futility
+(required for \code{"BPP"} and \code{"MatchedZ"}).
+\item \code{beta_spending}: Cumulative beta spending vector (\code{"Beta"} only).
+\item \code{BPP_threshold}: BPP value below which we stop for futility (\code{"BPP"} only).
+\item \code{futility_boundary_Z}: Z-statistic value below which we
+stop for futility (\code{"MatchedZ"} only).
 }}
 
 \item{analysis_model}{A named list specifying the final analysis and decision rule:
@@ -65,23 +76,61 @@ calc_dte_assurance_adaptive(
 \item \code{rho}, \code{gamma}, \code{t_star}, \code{s_star}: additional parameters for WLRT or MW (if applicable).
 }}
 
+\item{update_priors_sims}{Number of posterior samples per interim
+dataset, passed to \code{\link{update_priors}} (default 1000). Only
+used when \code{GSD_model$futility_type == "BPP"}; harmless (ignored)
+otherwise.}
+
+\item{n_BPP_sims}{Number of predictive simulations per interim dataset,
+passed to \code{\link{BPP_func}} (default 1000). Only used when
+\code{GSD_model$futility_type == "BPP"}; harmless (ignored) otherwise.}
+
 \item{n_sims}{Number of simulations to run (default = 1000)}
 }
 \value{
 A data frame with one row per simulated trial and the following columns:
 \describe{
 \item{Trial}{Simulation index}
-\item{IF}{Information fraction label used at the decision point}
-\item{Decision}{Interim decision outcome (e.g., "Continue", "Stop for efficacy", "Stop for futility")}
+\item{Decision}{Final interim/final decision outcome -- one of
+\code{"Stop for efficacy"}, \code{"Stop for futility"},
+\code{"Successful at final"}, or \code{"Unsuccessful at final"}.
+This is the single source of truth for trial outcome; use it
+directly rather than deriving success/failure independently.}
 \item{StopTime}{Time at which the trial stopped or completed}
 \item{SampleSize}{Total sample size at the time of decision}
-\item{Final_Decision}{Final classification of trial success based on the test statistic and threshold}
+\item{Success}{Logical recode of \code{Decision} for convenience:
+\code{TRUE} if \code{Decision \%in\% c("Stop for efficacy",
+    "Successful at final")}, \code{FALSE} otherwise. Derived directly
+and only from \code{Decision} -- see "Bug fix" below.}
+\item{Converged}{For \code{"BPP"} designs, whether the interim MCMC
+fit converged (see \code{\link{update_priors}}); \code{NA} for
+other futility types, which involve no MCMC step.}
 }
 Class: \code{data.frame}
 }
 \description{
 Simulates assurance and operating characteristics for a group sequential trial under prior uncertainty about a delayed treatment effect. The function integrates beliefs about control survival, treatment delay, post-delay hazard ratio, recruitment, and group sequential design (GSD) parameters.
 }
+\section{Bug fix (this version)}{
+ previous versions of this function
+independently recomputed a separate \code{Final_Decision} field from
+a hardcoded Cox proportional-hazards Wald statistic at a flat
+\code{qnorm(0.975)} threshold, regardless of \code{analysis_model$method}
+or the design's actual group-sequential boundaries. This was a
+second, separate copy of the same bug fixed in
+\code{apply_GSD_to_trial()} (see its documentation), and could
+silently disagree with the trial's own \code{Decision}. This version
+removes that duplicate computation entirely: \code{Success} is now
+derived only from \code{Decision}, which is itself computed once,
+correctly, inside \code{apply_GSD_to_trial()}, via
+\code{analysis_model$method} and the design's real boundaries. This
+also collapses what were previously three near-duplicate branches
+(one per futility type) into a single call path, since
+\code{apply_GSD_to_trial()} already dispatches correctly on
+\code{GSD_model$futility_type} -- removing the code duplication that
+allowed the two copies of the bug to drift apart in the first place.
+}
+
 \examples{
 set.seed(123)
 control_model <- list(dist = "Exponential", parameter_mode = "Fixed",

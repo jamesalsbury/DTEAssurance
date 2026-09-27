@@ -13,9 +13,12 @@ calibrate_BPP_threshold(
   IA_model,
   analysis_model,
   data_generating_model,
+  future_boundaries = NULL,
   n_df_sims = 100,
   update_priors_sims = 1000,
-  PP_sims = 2000
+  PP_sims = 2000,
+  n_cores = 1,
+  seed = NULL
 )
 }
 \arguments{
@@ -23,104 +26,118 @@ calibrate_BPP_threshold(
 
 \item{n_t}{Number of treatment patients}
 
-\item{control_model}{A named list specifying the control arm survival distribution:
+\item{control_model}{A named list specifying the control arm survival distribution
+(see \code{\link{update_priors}} for details).}
+
+\item{effect_model}{A named list specifying beliefs about the treatment effect
+(see \code{\link{update_priors}} for details).}
+
+\item{recruitment_model}{A named list specifying the recruitment process
+(see \code{\link{add_recruitment_time}} for details).}
+
+\item{IA_model}{A named list specifying the interim analysis timing:
 \itemize{
-\item \code{dist}: Distribution type ("Exponential" or "Weibull")
-\item \code{parameter_mode}: Either "Fixed" or "Distribution"
-\item \code{fixed_type}: If "Fixed", specify as "Parameters" or "Landmark"
-\item \code{lambda}, \code{gamma}: Scale and shape parameters
-\item \code{t1}, \code{t2}: Landmark times
-\item \code{surv_t1}, \code{surv_t2}: Survival probabilities at landmarks
-\item \code{t1_Beta_a}, \code{t1_Beta_b}, \code{diff_Beta_a}, \code{diff_Beta_b}: Beta prior parameters
+\item \code{events}: total planned event count (100\% information fraction).
+\item \code{IF}: the information fraction at which the interim futility
+look occurs (i.e. where the data are censored to compute BPP).
 }}
 
-\item{effect_model}{A named list specifying beliefs about the treatment effect:
+\item{analysis_model}{A named list specifying the analysis method
+(see \code{\link{BPP_func}} for details).}
+
+\item{data_generating_model}{A named list specifying the true data-generating
+parameters used to simulate trials for calibration:
 \itemize{
-\item \code{delay_SHELF}, \code{HR_SHELF}: SHELF objects encoding beliefs
-\item \code{delay_dist}, \code{HR_dist}: Distribution types ("hist" by default)
-\item \code{P_S}: Probability that survival curves separate
-\item \code{P_DTE}: Probability of delayed separation, conditional on separation
+\item \code{lambda_c}: hazard rate for the control group.
+\item \code{gamma_c}: Weibull shape parameter (\code{NULL} for Exponential).
+\item \code{delay_time}: true delay before the treatment effect begins.
+\item \code{post_delay_HR}: true post-delay hazard ratio.
 }}
 
-\item{recruitment_model}{A named list specifying the recruitment process:
-\itemize{
-\item \code{method}: "power" or "PWC"
-\item \code{period}, \code{power}: Parameters for power model
-\item \code{rate}, \code{duration}: Comma-separated strings for PWC model
-}}
+\item{future_boundaries}{\strong{Recommended.} A list of future, pre-specified,
+fixed decision points (efficacy look(s) and the final analysis) to check on
+each posterior-predictive draw, matching the true group-sequential design
+under which this BPP threshold will actually be used -- see
+\code{\link{BPP_func}} for the exact structure. If \code{NULL} (not
+recommended, kept only for backward compatibility), BPP is computed via
+the legacy single-stage fallback: censoring directly to \code{IA_model$events}
+and testing at a flat \code{analysis_model$alpha}, which does NOT account
+for any future efficacy boundary the real design may have. A message is
+emitted if this fallback is used.}
 
-\item{IA_model}{A named list specifying the censoring mechanism for the future data:
-\itemize{
-\item \code{events}: Number of events which is 100\% information fraction
-\item \code{IF}: The information fraction at which to censor and calculate BPP
-}}
+\item{n_df_sims}{Number of interim datasets to simulate (default is 100).
+For calibration decisions near a specific power/Type I error target,
+consider a substantially larger number and report Monte Carlo standard
+errors alongside the result.}
 
-\item{analysis_model}{A named list specifying the final analysis and decision rule:
-\itemize{
-\item \code{method}: e.g. \code{"LRT"}, \code{"WLRT"}, or \code{"MW"}.
-\item \code{alpha}: one-sided type I error level.
-\item \code{alternative_hypothesis}: direction of the alternative (e.g. \code{"one.sided"}).
-\item \code{rho}, \code{gamma}, \code{t_star}, \code{s_star}: additional parameters for WLRT or MW (if applicable).
-}}
+\item{update_priors_sims}{Number of posterior samples to generate per
+interim dataset via \code{\link{update_priors}} (default is 1000).}
 
-\item{data_generating_model}{A named list specifying the parameters for the data-generating mechanism
-\itemize{
-\item \code{lambda_c}: hazard rate for the control group
-\item \code{delay_time}: time at which the treatment starts to take effect
-\item \code{post_delay_HR}: hazard ratio, after \code{delay_time}
-}}
+\item{PP_sims}{Number of predictive simulations used to estimate BPP for
+each interim dataset, passed to \code{\link{BPP_func}} (default is 2000).}
 
-\item{n_df_sims}{Number of data sets to simulate (default is 100).}
+\item{n_cores}{Number of cores to parallelise over via
+\code{parallel::mclapply} (default is 1, i.e. sequential
+\code{lapply}; not supported on Windows for \code{n_cores > 1}, per
+base R's \code{mclapply} limitations).}
 
-\item{update_priors_sims}{Number of samples to generate from the posterior (default is 1000)}
-
-\item{PP_sims}{Number of simulations used to calculate the predictive probability (default is 2000)}
+\item{seed}{Optional integer seed. If supplied, each simulated interim
+dataset \code{i} is seeded reproducibly as \code{seed * 10000 + i}. If
+\code{NULL} (default), no seed is set internally -- set one in the
+calling script if reproducibility across runs is required.}
 }
 \value{
-A vector of length \code{n_sims} corresponding to the value of BPP for each simulated trial
+A list with:
+\describe{
+\item{BPP_vec}{A numeric vector of length \code{n_df_sims}, the
+estimated BPP for each simulated interim dataset.}
+\item{settings}{A list recording the exact settings used (all
+arguments above, plus the installed \code{DTEAssurance} package
+version), for provenance -- save this alongside \code{BPP_vec}
+so it is always possible to confirm what generated a given result.}
+}
 }
 \description{
 Function to calculate the 'optimal' BPP threshold value
 }
 \examples{
 set.seed(123)
-control_model = list(dist = "Exponential",
-                     parameter_mode = "Distribution",
-                     t1 = 12,
-                     t1_Beta_a = 20,
-                     t1_Beta_b = 32)
+control_model <- list(dist = "Exponential", parameter_mode = "Distribution",
+                      t1 = 12, t1_Beta_a = 20, t1_Beta_b = 32)
 
-effect_model = list(delay_SHELF = SHELF::fitdist(c(5.5, 6, 6.5),
+effect_model <- list(delay_SHELF = SHELF::fitdist(c(5.5, 6, 6.5),
                     probs = c(0.25, 0.5, 0.75), lower = 0, upper = 12),
                     delay_dist = "gamma",
                     HR_SHELF = SHELF::fitdist(c(0.5, 0.6, 0.7),
                     probs = c(0.25, 0.5, 0.75), lower = 0, upper = 1),
                     HR_dist = "gamma",
-                    P_S = 1,
-                    P_DTE = 0)
+                    P_S = 1, P_DTE = 0)
 
 recruitment_model <- list(method = "power", period = 12, power = 1)
 
-IA_model = list(events = 20, IF = 0.5)
+IA_model <- list(events = 40, IF = 0.5)
 
-analysis_model = list(method = "LRT",
-                      alpha = 0.025,
-                      alternative_hypothesis = "one.sided")
+analysis_model <- list(method = "LRT", alpha = 0.025,
+                       alternative_hypothesis = "one.sided")
 
+data_generating_model <- list(lambda_c = log(2)/12, gamma_c = NULL,
+                              delay_time = 3, post_delay_HR = 0.75)
 
-data_generating_model = list(lambda_c = log(2)/12,
-                             gamma_c = NULL,
-                             delay_time = 3,
-                             post_delay_HR = 0.75)
+# A single future efficacy look at 30 events (Z > 2.24), then final at 40
+# events (Z > 2.00) -- match this to the true design's own boundaries.
+future_boundaries <- list(
+  list(events = 30, crit = 2.24),
+  list(events = 40, crit = 2.00)
+)
 
-
-threshold <- calibrate_BPP_threshold(n_c = 15, n_t = 15,
+threshold <- calibrate_BPP_threshold(n_c = 25, n_t = 25,
                      control_model = control_model,
                      effect_model = effect_model,
                      recruitment_model = recruitment_model,
                      IA_model = IA_model,
                      analysis_model = analysis_model,
                      data_generating_model = data_generating_model,
+                     future_boundaries = future_boundaries,
                      n_df_sims = 2)
 
 }

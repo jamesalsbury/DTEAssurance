@@ -42,12 +42,14 @@ test_that("calc_dte_assurance_adaptive returns expected structure and values", {
   expect_false(is.null(result))
   expect_true(is.data.frame(result))
   expect_equal(nrow(result), 2)
-  expect_true(all(c("Trial", "Decision", "StopTime", "SampleSize", "Final_Decision") %in% names(result)))
+  expect_true(all(c("Trial", "Decision", "StopTime", "SampleSize", "Success", "Converged") %in% names(result)))
   expect_type(result$Trial, "integer")
   expect_type(result$Decision, "character")
   expect_type(result$StopTime, "double")
   expect_type(result$SampleSize, "integer")
-  expect_type(result$Final_Decision, "character")
+  expect_type(result$Success, "logical")
+  expect_equal(result$Success,
+               result$Decision %in% c("Stop for efficacy", "Successful at final"))
 })
 
 
@@ -88,10 +90,12 @@ test_that("calc_dte_assurance_adaptive returns expected structure and values", {
   expect_false(is.null(result))
   expect_true(is.data.frame(result))
   expect_equal(nrow(result), 2)
-  expect_true(all(c("Trial", "Decision", "StopTime", "SampleSize", "Final_Decision") %in% names(result)))
+  expect_true(all(c("Trial", "Decision", "StopTime", "SampleSize", "Success", "Converged") %in% names(result)))
   expect_type(result$Trial, "integer")
   expect_type(result$Decision, "character")
   expect_type(result$StopTime, "double")
   expect_type(result$SampleSize, "integer")
-  expect_type(result$Final_Decision, "character")
+  expect_type(result$Success, "logical")
+  expect_equal(result$Success,
+               result$Decision %in% c("Stop for efficacy", "Successful at final"))
 })

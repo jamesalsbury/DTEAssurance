@@ -67,3 +67,25 @@ test_that("survival_test returns expected structure with LRT", {
   expect_true(result$observed_HR > 0)
 })
 
+
+test_that("LRT, WLRT and MW all give positive Z for a clear treatment benefit", {
+  skip_if_not_installed("nph")
+  skip_if_not_installed("nphRCT")
+
+  set.seed(1)
+  df <- sim_dte(500, 500, lambda_c = log(2) / 12, delay_time = 0,
+                post_delay_HR = 0.2)
+  df <- add_recruitment_time(df, rec_method = "power", rec_period = 12,
+                             rec_power = 1)
+  df <- cens_data(df, cens_method = "Events", cens_events = 300)$data
+
+  Z_LRT  <- survival_test(df, analysis_method = "LRT")$Z
+  Z_WLRT <- survival_test(df, analysis_method = "WLRT", rho = 0, gamma = 0)$Z
+  Z_MW   <- survival_test(df, analysis_method = "MW", t_star = 12)$Z
+
+  expect_gt(Z_LRT, 5)
+  expect_gt(Z_WLRT, 5)
+  expect_gt(Z_MW, 5)
+  # WLRT with rho = gamma = 0 is the standard log-rank test
+  expect_equal(Z_WLRT, Z_LRT, tolerance = 1e-6)
+})
