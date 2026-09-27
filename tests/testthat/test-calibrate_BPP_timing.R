@@ -8,7 +8,8 @@ test_that("calibrate_BPP_timing returns correct structure with mocked single_cal
                               recruitment_model,
                               total_events,
                               IF,
-                              analysis_model) {
+                              analysis_model,
+                              ...) {
 
     BPP_df <- data.frame(
       success = rep(IF > 0.5, 3), # deterministic

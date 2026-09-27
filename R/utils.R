@@ -681,6 +681,52 @@ single_grid_rep <- function(i,
 }
 
 
+#' Simulate BPP values and true trial outcomes for BPP-threshold calibration
+#'
+#' For a single fixed data-generating scenario, simulates \code{n_sims}
+#' trials, computes the Bayesian predictive probability (BPP) at the
+#' futility look, and records what actually happens to each trial if it is
+#' allowed to continue through the remaining fixed decision points in
+#' \code{future_boundaries}. Because the BPP value does not depend on the
+#' futility threshold \eqn{\lambda}, the output can be summarised over a
+#' whole grid of thresholds afterwards via \code{\link{summarize_grid_by_lambda}}
+#' without re-simulating.
+#'
+#' @param n_c,n_t Planned number of patients in the control / treatment group.
+#' @param control_model,effect_model Prior specification used for the
+#'   interim posterior update (see \code{\link{update_priors}}).
+#'   \code{control_model$parameter_mode} must be \code{"Distribution"}.
+#' @param recruitment_model Recruitment specification (see
+#'   \code{\link{add_recruitment_time}}): \code{method}, \code{period},
+#'   \code{power}, \code{rate}, \code{duration}.
+#' @param data_generating_model A named list giving the true scenario used to
+#'   simulate data: \code{lambda_c}, \code{delay_time}, \code{post_delay_HR},
+#'   and optionally \code{gamma_c} (Weibull control arm if supplied,
+#'   exponential otherwise).
+#' @param futility_IF Information fraction of the BPP futility look.
+#' @param total_events Maximum planned number of events.
+#' @param future_boundaries List of future fixed decision points, each a list
+#'   with \code{events} and \code{crit} (see \code{\link{BPP_func}}).
+#' @param analysis_model Analysis specification (see \code{\link{survival_test}}).
+#' @param update_priors_sims Number of posterior samples per interim dataset.
+#' @param PP_sims Number of posterior-predictive simulations per interim dataset.
+#' @param n_sims Number of simulated trials.
+#' @param n_cores Number of cores (uses \code{parallel::mclapply} when > 1).
+#' @param seed Optional integer seed; replicate \code{i} uses
+#'   \code{seed * 10000 + i}.
+#'
+#' @return A list with elements
+#'   \describe{
+#'     \item{\code{raw}}{A data frame with one row per simulated trial and
+#'       columns \code{BPP_val}, \code{t_interim}, \code{sample_size_interim},
+#'       \code{continuation_success}, \code{continuation_stop_time},
+#'       \code{continuation_sample_size}, \code{converged}, \code{P_Z1},
+#'       \code{P_Z2}, \code{P_Z3}.}
+#'     \item{\code{settings}}{The settings used, package version and a timestamp.}
+#'   }
+#'
+#' @seealso \code{\link{summarize_grid_by_lambda}}, \code{\link{select_lambda_star}}
+#' @export
 run_calibration_grid <- function(n_c, n_t,
                                  control_model,
                                  effect_model,
@@ -752,6 +798,25 @@ run_calibration_grid <- function(n_c, n_t,
 }
 
 
+#' Summarise calibration-grid output over a grid of BPP futility thresholds
+#'
+#' Applies each candidate BPP futility threshold \eqn{\lambda} to the raw
+#' output of \code{\link{run_calibration_grid}}: a trial stops for futility
+#' if its interim BPP is below \eqn{\lambda}, otherwise it takes its
+#' simulated continuation outcome.
+#'
+#' @param raw The \code{raw} element returned by \code{\link{run_calibration_grid}}.
+#' @param lambda_grid Numeric vector of candidate BPP thresholds.
+#' @param conf_level Confidence level for the one-sided lower confidence
+#'   bound on power (Clopper-Pearson; default 0.90).
+#'
+#' @return A data frame with one row per \eqn{\lambda} and columns
+#'   \code{lambda}, \code{P_early_fut}, \code{power_or_typeI},
+#'   \code{power_LCB}, \code{ESS} (expected sample size) and
+#'   \code{duration} (expected trial duration).
+#'
+#' @seealso \code{\link{run_calibration_grid}}, \code{\link{select_lambda_star}}
+#' @export
 summarize_grid_by_lambda <- function(raw, lambda_grid, conf_level = 0.90) {
 
   n <- nrow(raw)
@@ -781,6 +846,25 @@ summarize_grid_by_lambda <- function(raw, lambda_grid, conf_level = 0.90) {
 }
 
 
+#' Select the BPP futility threshold minimising null expected sample size
+#'
+#' Among candidate thresholds for which the lower confidence bound on power
+#' is at least \code{power_floor} under every alternative scenario, selects
+#' the one with the smallest expected sample size under the null scenario.
+#'
+#' @param summary_by_scenario A named list of data frames, one per scenario,
+#'   each as returned by \code{\link{summarize_grid_by_lambda}} over the same
+#'   \code{lambda_grid}.
+#' @param power_floor Minimum acceptable lower confidence bound on power.
+#' @param null_scenario Name of the null scenario in \code{summary_by_scenario}.
+#' @param alt_scenarios Character vector of alternative scenario names.
+#'
+#' @return A list with \code{lambda_star} (the selected threshold, or
+#'   \code{NA} with a warning if none is feasible) and
+#'   \code{feasibility_table}.
+#'
+#' @seealso \code{\link{run_calibration_grid}}, \code{\link{summarize_grid_by_lambda}}
+#' @export
 select_lambda_star <- function(summary_by_scenario, power_floor, null_scenario, alt_scenarios) {
 
   lambda_grid <- summary_by_scenario[[null_scenario]]$lambda
@@ -845,9 +929,29 @@ summarize_convergence <- function(posterior_list) {
   )
 }
 
-#' (internal) Simulate one interim dataset and compute Z at the futility look
+#' Simulate one interim dataset and compute Z at the futility look
+#'
+#' Single replicate used by \code{\link{calibrate_matched_futility_boundary}}:
+#' simulates one trial under a fixed data-generating scenario, censors it at
+#' \code{ceiling(futility_IF * total_events)} events, and returns the test
+#' statistic from \code{\link{survival_test}} (positive Z favours treatment).
+#'
+#' @param i Replicate index (used with \code{seed}).
+#' @param n_c,n_t Number of patients in the control / treatment group.
+#' @param data_generating_model True scenario: \code{lambda_c},
+#'   \code{delay_time}, \code{post_delay_HR}, optionally \code{gamma_c}.
+#' @param recruitment_model Recruitment specification (see
+#'   \code{\link{add_recruitment_time}}).
+#' @param futility_IF Information fraction of the futility look.
+#' @param total_events Maximum planned number of events.
+#' @param analysis_model Analysis specification (see \code{\link{survival_test}}).
+#' @param seed Optional integer seed; replicate \code{i} uses
+#'   \code{seed * 10000 + i}.
+#'
+#' @return A one-row data frame with column \code{Z}.
 #'
 #' @keywords internal
+#' @export
 single_matched_futility_rep <- function(i, n_c, n_t, data_generating_model,
                                         recruitment_model, futility_IF, total_events,
                                         analysis_model, seed = NULL) {
@@ -890,6 +994,52 @@ single_matched_futility_rep <- function(i, n_c, n_t, data_generating_model,
 }
 
 
+#' Calibrate a fixed Z-statistic futility boundary
+#'
+#' Finds the Z-statistic futility boundary at \code{futility_IF} such that
+#' the probability of stopping for futility under the \code{"null"}
+#' scenario equals \code{target_null_futility_rate} (the corresponding
+#' empirical quantile of the simulated null Z distribution), and reports
+#' the resulting futility-stopping rate under every supplied scenario. The
+#' result is used as \code{GSD_model$futility_boundary_Z} with
+#' \code{GSD_model$futility_type = "MatchedZ"} in
+#' \code{\link{calc_dte_assurance_adaptive}}.
+#'
+#' @param n_c,n_t Number of patients in the control / treatment group.
+#' @param recruitment_model Recruitment specification (see
+#'   \code{\link{add_recruitment_time}}).
+#' @param futility_IF Information fraction of the futility look.
+#' @param total_events Maximum planned number of events.
+#' @param analysis_model Analysis specification (see \code{\link{survival_test}}).
+#' @param target_null_futility_rate Target probability of stopping for
+#'   futility under the null scenario.
+#' @param scenarios Named list of data-generating scenarios (see
+#'   \code{\link{single_matched_futility_rep}}); must include one named
+#'   \code{"null"}.
+#' @param n_sims Number of simulated trials per scenario (default 2000).
+#' @param n_cores Number of cores (uses \code{parallel::mclapply} when > 1).
+#' @param seed Optional integer seed.
+#'
+#' @return A list with \code{boundary}, \code{scenario_futility_rates},
+#'   \code{raw_Z_by_scenario} and \code{settings}.
+#'
+#' @examples
+#' scenarios <- list(
+#'   null = list(lambda_c = log(2) / 12, delay_time = 0, post_delay_HR = 1),
+#'   alt  = list(lambda_c = log(2) / 12, delay_time = 3, post_delay_HR = 0.6)
+#' )
+#' cal <- calibrate_matched_futility_boundary(
+#'   n_c = 100, n_t = 100,
+#'   recruitment_model = list(method = "power", period = 12, power = 1),
+#'   futility_IF = 0.5, total_events = 120,
+#'   analysis_model = list(method = "LRT", alpha = 0.025,
+#'                         alternative_hypothesis = "one.sided"),
+#'   target_null_futility_rate = 0.5,
+#'   scenarios = scenarios, n_sims = 20, seed = 1)
+#' cal$boundary
+#' cal$scenario_futility_rates
+#'
+#' @export
 calibrate_matched_futility_boundary <- function(n_c, n_t,
                                                 recruitment_model,
                                                 futility_IF, total_events,
@@ -979,6 +1129,7 @@ NULL
 #' @keywords internal
 #'
 #' @importFrom rlang .data
+#' @importFrom survival Surv
 NULL
 
 

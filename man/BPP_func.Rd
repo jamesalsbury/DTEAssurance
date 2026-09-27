@@ -12,8 +12,9 @@ BPP_func(
   n_t_planned,
   rec_time_planned,
   df_cens_time,
-  censoring_model,
   analysis_model,
+  censoring_model = NULL,
+  future_boundaries = NULL,
   n_sims = 500
 )
 }
@@ -43,24 +44,63 @@ either \code{"Exponential"} (default) or \code{"Weibull"}.}
 
 \item{df_cens_time}{Calendar time at which \code{df} has been censored (interim analysis time).}
 
-\item{censoring_model}{A named list specifying the censoring mechanism for the future data:
-\itemize{
-\item \code{method}: one of \code{"Time"}, \code{"Events"}, or \code{"IF"}.
-\item \code{time}, \code{events}, \code{IF}: parameters for the corresponding method.
-}}
-
-\item{analysis_model}{A named list specifying the final analysis and decision rule:
+\item{analysis_model}{A named list specifying the analysis method and decision rule:
 \itemize{
 \item \code{method}: e.g. \code{"LRT"}, \code{"WLRT"}, or \code{"MW"}.
-\item \code{alpha}: one-sided type I error level.
+\item \code{alpha}: one-sided type I error level (only used in the legacy
+fallback path, see \code{censoring_model} below).
 \item \code{alternative_hypothesis}: direction of the alternative (e.g. \code{"one.sided"}).
 \item \code{rho}, \code{gamma}, \code{t_star}, \code{s_star}: additional parameters for WLRT or MW (if applicable).
 }}
 
-\item{n_sims}{Number of predictive simulations to run (default is 1000).}
+\item{censoring_model}{\strong{Legacy fallback, deprecated.} Used only if
+\code{future_boundaries} is \code{NULL}. A named list specifying a
+single censoring mechanism for the future data (\code{method}: one of
+\code{"Time"}, \code{"Events"}, or \code{"IF"}; plus the corresponding
+\code{time}/\code{events}/\code{IF} parameter), with success determined
+by \code{analysis_model$alpha} rather than a design-specific critical
+value. Retained only for backward compatibility with callers that do
+not have access to a full group-sequential design object; new code
+should always supply \code{future_boundaries}.}
+
+\item{future_boundaries}{\strong{Recommended.} A list of future, pre-specified,
+fixed decision points to evaluate on each posterior-predictive draw, in
+ascending chronological order, matching the trial's own group-sequential
+design. Each element is a list with:
+\itemize{
+\item \code{events}: the cumulative event count at that analysis (the
+final element should be the maximum planned event count).
+\item \code{crit}: the pre-specified critical value for the test
+statistic \code{Z} at that analysis (e.g. from
+\code{design$criticalValues} of an \code{rpact} group-sequential
+design).
+}
+On each predictive draw, boundaries are checked in order: if \code{Z}
+crosses a boundary, the draw is recorded as successful and evaluation
+stops (mirroring the group-sequential design's own early-stopping
+logic); if the final boundary in the chain is reached without crossing,
+the draw is recorded as unsuccessful. This correctly evaluates the
+adaptive trial-success event (crossing any future efficacy boundary, or
+rejecting \eqn{H_0} at the final analysis), rather than only checking a
+single final test.
+
+\strong{Scope:} \code{future_boundaries} must contain only fixed
+(non-Bayesian) decision points. A design with more than one future
+Bayesian-predictive-probability futility look is not supported here, as
+it would require nested posterior-predictive simulation at each look;
+see the package/manuscript Limitations.}
+
+\item{n_sims}{Number of predictive simulations to run (default is 500).
+The manuscript reports results based on \code{n_sims = 1000}; confirm
+this argument is set explicitly by the caller rather than relying on
+the default, and report the value used.}
 }
 \value{
-A single numeric value giving the Bayesian predictive probability of success at the final analysis under the specified design, censoring model and analysis model.
+A list with a single element \code{BPP_df}, a data frame with
+columns \code{success} (0/1, whether this predictive draw ultimately
+rejects \eqn{H_0}, accounting for any future fixed efficacy boundaries)
+and \code{Z_val} (the test statistic at the analysis where the draw was
+decided). The predictive probability is \code{mean(BPP_df$success)}.
 }
 \description{
 Calculate Bayesian Predictive Probability given interim data and posterior samples
@@ -73,37 +113,37 @@ cens_time <- 15
 time <- runif(n, 0, 12)
 rec_time <- runif(n, 0, 12)
 
-
 df <- data.frame(
   time = time,
   group = c(rep("Control", n/2), rep("Treatment", n/2)),
   rec_time = rec_time
 )
 
-
 df$pseudo_time <- df$time + df$rec_time
 df$status <- df$pseudo_time < cens_time
 df$survival_time <- ifelse(df$status == TRUE, df$time, cens_time - df$rec_time)
-
 
 posterior_df <- data.frame(HR = rnorm(20, mean = 0.75, sd = 0.05),
                            delay_time = rep(0, 20),
                            lambda_c = rnorm(20, log(2)/9, sd = 0.01))
 
+analysis_model <- list(method = "LRT", alpha = 0.025,
+                       alternative_hypothesis = "one.sided")
 
-censoring_model = list(method = "Time", time = 25)
-analysis_model = list(method = "LRT",
-                      alpha = 0.025,
-                      alternative_hypothesis = "one.sided")
+# Recommended usage: pass the design's own future boundaries, e.g. a single
+# efficacy look at 20 events (Z > 2.24) followed by a final analysis at
+# 28 events (Z > 2.00):
+future_boundaries <- list(
+  list(events = 20, crit = 2.24),
+  list(events = 28, crit = 2.00)
+)
 
-BPP_outcome <- BPP_func(df,
-           posterior_df,
+BPP_outcome <- BPP_func(df, posterior_df,
            control_distribution = "Exponential",
-           n_c_planned = n/2,
-           n_t_planned = n/2,
+           n_c_planned = n/2, n_t_planned = n/2,
            rec_time_planned = 12, df_cens_time = 15,
-           censoring_model = censoring_model,
            analysis_model = analysis_model,
+           future_boundaries = future_boundaries,
            n_sims = 10)
 
 }

@@ -46,7 +46,8 @@ test_that("apply_GSD_to_trial returns expected structure", {
 
   # --- validation ---
   expect_type(result, "list")
-  expect_named(result, c("decision", "stop_time", "sample_size"))
+  expect_named(result, c("decision", "stop_time", "sample_size",
+                        "BPP_val", "converged", "Z_probs"))
 
   expect_type(result$decision, "character")
   expect_true(is.numeric(result$stop_time))
