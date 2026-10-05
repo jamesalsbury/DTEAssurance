@@ -148,6 +148,45 @@ simulate_trial_with_recruitment <- function(n_c, n_t,
 }
 
 
+#' Apply a group-sequential design to one simulated trial
+#'
+#' Runs the looks of a group-sequential design on one simulated trial, in
+#' order, stopping at the first look whose rule is met: efficacy if Z exceeds
+#' the efficacy critical value, futility under the design's futility rule
+#' (\code{"Beta"}: Z below the beta-spending bound; \code{"MatchedZ"}: Z
+#' below \code{GSD_model$futility_boundary_Z}; \code{"PP"}: predictive
+#' probability below \code{GSD_model$kappa}), and otherwise the final
+#' analysis. Each look cuts the trial with \code{\link{cens_data}} at
+#' \code{floor(IF * total_events)} events. This is the engine of
+#' \code{\link{calc_dte_assurance_adaptive}}. For simulation studies, use
+#' \code{\link{run_paired_scenario}} and \code{\link{apply_design_rule}},
+#' which evaluate all designs on the same replicates.
+#'
+#' @param n_c,n_t Planned number of patients in the control / treatment arm.
+#' @param trial_data A simulated trial with columns \code{time}, \code{group},
+#'   \code{rec_time} and \code{pseudo_time}.
+#' @param design The \code{rpact} design, from \code{\link{make_gsd_design}}.
+#' @param total_events Maximum planned number of events.
+#' @param GSD_model The design specification (see
+#'   \code{\link{calc_dte_assurance_adaptive}}).
+#' @param control_model,effect_model,recruitment_model Analysis prior and
+#'   recruitment model, used only for \code{"PP"} futility (recruitment must
+#'   be \code{method = "power"} with \code{power = 1}).
+#' @param analysis_model Test specification (\code{method}, \code{alpha},
+#'   \code{alternative_hypothesis}, and \code{rho}, \code{gamma},
+#'   \code{t_star}, \code{s_star} as needed); defaults to a one-sided LRT
+#'   at 0.025.
+#' @param update_priors_sims,PP_sims MCMC samples per chain and predictive
+#'   draws; required for \code{"PP"} futility.
+#' @param .PP_val Internal, for testing: a precomputed predictive
+#'   probability to use at the PP futility look instead of computing it.
+#'
+#' @return A list with \code{decision} (\code{"Stop for efficacy"},
+#'   \code{"Stop for futility"}, \code{"Successful at final"} or
+#'   \code{"Unsuccessful at final"}), \code{stop_time}, \code{sample_size},
+#'   \code{PP_val}, \code{converged} and \code{Z_probs}.
+#'
+#' @export
 apply_GSD_to_trial <- function(n_c,
                                n_t,
                                trial_data,
@@ -159,14 +198,15 @@ apply_GSD_to_trial <- function(n_c,
                                recruitment_model = NULL,
                                analysis_model = NULL,
                                update_priors_sims = NULL,
-                               PP_sims = NULL) {
+                               PP_sims = NULL,
+                               .PP_val = NULL) {
 
   if (is.null(analysis_model)) {
     analysis_model <- list(method = "LRT", alpha = 0.025,
                            alternative_hypothesis = "one.sided")
   }
 
-  if (identical(GSD_model$futility_type, "PP")) {
+  if (identical(GSD_model$futility_type, "PP") && is.null(.PP_val)) {
     if (is.null(update_priors_sims) || is.null(PP_sims)) {
       stop("apply_GSD_to_trial: 'update_priors_sims' and 'PP_sims' must be ",
            "supplied when GSD_model$futility_type is \"PP\".", call. = FALSE)
@@ -252,32 +292,36 @@ apply_GSD_to_trial <- function(n_c,
              "Limitations (Section 6.3).")
       }
 
-      future_boundaries <- make_future_boundaries(design, total_events, IF_here)
+      if (!is.null(.PP_val)) {
+        PP_val <- .PP_val
+      } else {
+        future_boundaries <- make_future_boundaries(design, total_events, IF_here)
 
-      posterior_samples <- DTEAssurance::update_priors(
-        eligible_df,
-        control_model = control_model,
-        effect_model  = effect_model,
-        n_samples     = update_priors_sims
-      )
+        posterior_samples <- update_priors(
+          eligible_df,
+          control_model = control_model,
+          effect_model  = effect_model,
+          n_samples     = update_priors_sims
+        )
 
-      converged <- attr(posterior_samples, "converged")
-      Z_probs_attr <- attr(posterior_samples, "Z_probs")
-      if (!is.null(Z_probs_attr)) Z_probs <- Z_probs_attr
+        converged <- attr(posterior_samples, "converged")
+        Z_probs_attr <- attr(posterior_samples, "Z_probs")
+        if (!is.null(Z_probs_attr)) Z_probs <- Z_probs_attr
 
-      PP_out <- DTEAssurance::PP_func(
-        eligible_df, posterior_samples,
-        control_distribution = control_model$dist,
-        n_c_planned       = n_c,
-        n_t_planned       = n_t,
-        rec_time_planned  = recruitment_model$period,
-        df_cens_time      = t_interim,
-        analysis_model    = analysis_model,
-        future_boundaries = future_boundaries,
-        n_sims            = PP_sims
-      )
+        PP_out <- PP_func(
+          eligible_df, posterior_samples,
+          control_distribution = control_model$dist,
+          n_c_planned       = n_c,
+          n_t_planned       = n_t,
+          rec_time_planned  = recruitment_model$period,
+          df_cens_time      = t_interim,
+          analysis_model    = analysis_model,
+          future_boundaries = future_boundaries,
+          n_sims            = PP_sims
+        )
 
-      PP_val <- mean(PP_out$PP_df$success)
+        PP_val <- mean(PP_out$PP_df$success)
+      }
 
       if (PP_val < GSD_model$kappa) {
         decision    <- "Stop for futility"
@@ -463,14 +507,46 @@ normalise_futility_spec <- function(GSD_model) {
 }
 
 
-# Build the rpact group-sequential design for a GSD_model.
-#
-# GSD_model$alpha_spending is the user-specified CUMULATIVE alpha spent at
-# each efficacy look GSD_model$alpha_IF (rpact typeOfDesign = "asUser").
-# Futility looks (futility_IF) are added to the information-rate grid with
-# zero additional alpha spent, so they leave the efficacy critical values
-# unchanged. Information fractions are rounded to 6 dp before comparison.
-make_rpact_design_from_GSD_model <- function(GSD_model) {
+#' Build the group-sequential design for a GSD_model
+#'
+#' Builds the \code{rpact} group-sequential design used by
+#' \code{\link{calc_dte_assurance_adaptive}}, \code{\link{apply_GSD_to_trial}}
+#' and \code{\link{single_paired_rep}}. \code{GSD_model$alpha_spending} is
+#' the user-specified \emph{cumulative} alpha spent at each efficacy look
+#' \code{GSD_model$alpha_IF} (\code{rpact}'s \code{typeOfDesign = "asUser"}).
+#' For \code{"PP"} and \code{"MatchedZ"} futility, the futility look
+#' (\code{futility_IF}) is added to the information-rate grid with zero
+#' alpha spent, so its critical value is \code{Inf} and the efficacy critical
+#' values are exactly those of the efficacy-only design. For \code{"Beta"}
+#' futility, \code{GSD_model$beta_spending} is the cumulative beta spent at
+#' each \code{futility_IF} (\code{typeBetaSpending = "bsUser"}).
+#' Information fractions are rounded to 6 dp before they are compared.
+#'
+#' \code{make_rpact_design_from_GSD_model()} is the previous name, kept as an
+#' alias for one release.
+#'
+#' @param GSD_model A named list with \code{alpha_IF}, \code{alpha_spending},
+#'   \code{futility_type} (\code{"none"}, \code{"Beta"}, \code{"PP"} or
+#'   \code{"MatchedZ"}) and, for futility designs, \code{futility_IF} (and
+#'   \code{beta_spending} for \code{"Beta"}). See
+#'   \code{\link{calc_dte_assurance_adaptive}}.
+#'
+#' @return A list with \code{design} (the \code{rpact} design object;
+#'   \code{design$informationRates} and \code{design$criticalValues} give
+#'   the looks and their Z critical values), \code{IF_all},
+#'   \code{alpha_spending_full} and \code{beta_spending_full}.
+#'
+#' @examples
+#' # Efficacy look at 75% information and final analysis, with a PP futility
+#' # look at 50% information (zero alpha spent there)
+#' gsd <- make_gsd_design(list(alpha_IF = c(0.75, 1),
+#'                             alpha_spending = c(0.0125, 0.025),
+#'                             futility_type = "PP", futility_IF = 0.5))
+#' gsd$design$informationRates
+#' gsd$design$criticalValues
+#'
+#' @export
+make_gsd_design <- function(GSD_model) {
 
   GSD_model      <- normalise_futility_spec(GSD_model)
   # Information fractions are rounded to 6 dp before they are compared.
@@ -594,6 +670,10 @@ make_rpact_design_from_GSD_model <- function(GSD_model) {
     beta_spending_full  = beta_spending_full
   ))
 }
+
+#' @rdname make_gsd_design
+#' @export
+make_rpact_design_from_GSD_model <- make_gsd_design
 
 single_grid_rep <- function(i,
                             n_c, n_t,

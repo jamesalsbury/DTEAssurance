@@ -38,10 +38,10 @@ test_that("futility_type 'BPP' and BPP_threshold are mapped to 'PP' and kappa wi
   base <- list(alpha_IF = c(0.75, 1), alpha_spending = c(0.0125, 0.025),
                futility_IF = 0.5)
   expect_warning(
-    old <- make_rpact_design_from_GSD_model(c(base, futility_type = "BPP")),
+    old <- make_gsd_design(c(base, futility_type = "BPP")),
     "'BPP' is deprecated"
   )
-  new <- make_rpact_design_from_GSD_model(c(base, futility_type = "PP"))
+  new <- make_gsd_design(c(base, futility_type = "PP"))
   expect_equal(old$IF_all, new$IF_all)
   expect_equal(old$design$criticalValues, new$design$criticalValues)
 })

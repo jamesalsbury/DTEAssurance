@@ -726,7 +726,7 @@ calc_dte_assurance_adaptive <- function(n_c, n_t,
                            alternative_hypothesis = "one.sided")
   }
 
-  rpact_design <- make_rpact_design_from_GSD_model(GSD_model)
+  rpact_design <- make_gsd_design(GSD_model)
   design       <- rpact_design$design
 
   results <- future.apply::future_lapply(seq_len(n_sims), function(i) {

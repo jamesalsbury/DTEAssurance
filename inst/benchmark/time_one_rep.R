@@ -12,7 +12,7 @@ library(DTEAssurance)
 n_reps <- as.integer(commandArgs(trailingOnly = TRUE)[1])
 if (is.na(n_reps)) n_reps <- 10L
 
-design <- DTEAssurance:::make_rpact_design_from_GSD_model(
+design <- make_gsd_design(
   list(alpha_IF = c(0.75, 1), alpha_spending = c(0.0125, 0.025),
        futility_type = "PP", futility_IF = 0.5)
 )$design

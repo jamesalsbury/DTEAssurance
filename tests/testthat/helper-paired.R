@@ -1,6 +1,6 @@
 # Small, fast settings shared by the paired-replicate tests.
 paired_test_setup <- function() {
-  design <- make_rpact_design_from_GSD_model(
+  design <- make_gsd_design(
     list(alpha_IF = c(0.75, 1), alpha_spending = c(0.0125, 0.025),
          futility_type = "PP", futility_IF = 0.5)
   )$design

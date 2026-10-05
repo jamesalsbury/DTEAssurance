@@ -20,7 +20,7 @@ test_that("cens_data at k events leaves exactly k events (spec test 2)", {
 })
 
 test_that("make_future_boundaries returns the looks strictly after from_IF", {
-  design <- make_rpact_design_from_GSD_model(
+  design <- make_gsd_design(
     list(alpha_IF = c(0.75, 1), alpha_spending = c(0.0125, 0.025),
          futility_type = "PP", futility_IF = 0.5))$design
   fb <- make_future_boundaries(design, 840, 0.5)
@@ -32,9 +32,9 @@ test_that("make_future_boundaries returns the looks strictly after from_IF", {
 
 test_that("rpact critical values at 0.75 and 1 do not change when a futility look is added (spec test 6)", {
   base <- list(alpha_IF = c(0.75, 1), alpha_spending = c(0.0125, 0.025))
-  ref <- make_rpact_design_from_GSD_model(c(base, futility_type = "none"))$design
+  ref <- make_gsd_design(c(base, futility_type = "none"))$design
   for (f in c(0.3, 0.4, 0.5, 0.6, 0.7)) {
-    d <- make_rpact_design_from_GSD_model(c(base, futility_type = "PP",
+    d <- make_gsd_design(c(base, futility_type = "PP",
                                             futility_IF = f))$design
     expect_equal(d$criticalValues[d$informationRates %in% c(0.75, 1)],
                  ref$criticalValues, tolerance = 1e-6)

@@ -358,3 +358,100 @@ run_paired_scenario <- function(n_sims, seed, ..., n_cores = 1,
 
   list(raw = raw, settings = settings)
 }
+
+
+#' Apply a design rule to paired replicate output
+#'
+#' Turns the output of \code{\link{run_paired_scenario}} into the decisions
+#' of one design, post hoc. The efficacy look is only checked if the trial
+#' was not stopped at the futility look. A missing test statistic never
+#' crosses a boundary (as in \code{\link{apply_GSD_to_trial}}).
+#'
+#' \describe{
+#'   \item{D1}{Fixed design: success iff \code{Z_fin_LRT > crit_final}.}
+#'   \item{D2}{Efficacy look then final: \code{"Stop for efficacy"} if
+#'     \code{Z_eff_LRT > crit_eff}, otherwise the final analysis with
+#'     \code{Z_fin_LRT > crit_fin}.}
+#'   \item{D3}{D2 plus PP futility: \code{"Stop for futility"} if
+#'     \code{PP_val < kappa}.}
+#'   \item{D4}{D2 plus Z futility: \code{"Stop for futility"} if
+#'     \code{Z_int_LRT < z_fut}.}
+#'   \item{D5}{As D4 with the modestly weighted statistics
+#'     \code{Z_int_MW_t<t>}, \code{Z_eff_MW_t<t>}, \code{Z_fin_MW_t<t>} for
+#'     \code{t = mw_t_star}.}
+#' }
+#'
+#' @param raw The \code{raw} element returned by \code{\link{run_paired_scenario}}.
+#' @param rule A list with \code{type} (\code{"D1"} to \code{"D5"}) and the
+#'   rule's parameters: \code{crit_final} (D1); \code{crit_eff},
+#'   \code{crit_fin} (D2-D5); \code{kappa} (D3); \code{z_fut} (D4, D5);
+#'   \code{mw_t_star} (D5).
+#'
+#' @return A data frame with one row per replicate and columns
+#'   \code{decision} (\code{"Stop for efficacy"}, \code{"Stop for futility"},
+#'   \code{"Successful at final"} or \code{"Unsuccessful at final"}),
+#'   \code{success}, \code{early_fut}, \code{early_eff}, \code{sample_size}
+#'   and \code{duration}. Rows for failed replicates (non-missing
+#'   \code{error}) are \code{NA}.
+#'
+#' @seealso \code{\link{run_paired_scenario}}, \code{\link{summarize_grid_by_kappa}}
+#' @export
+apply_design_rule <- function(raw, rule) {
+
+  type <- rule$type
+  needed <- switch(type,
+                   D1 = "crit_final",
+                   D2 = c("crit_eff", "crit_fin"),
+                   D3 = c("kappa", "crit_eff", "crit_fin"),
+                   D4 = c("z_fut", "crit_eff", "crit_fin"),
+                   D5 = c("z_fut", "mw_t_star", "crit_eff", "crit_fin"),
+                   stop("apply_design_rule: rule$type must be one of D1-D5."))
+  missing_par <- needed[!needed %in% names(rule)]
+  if (length(missing_par) > 0) {
+    stop("apply_design_rule: rule ", type, " needs ", paste(missing_par, collapse = ", "), ".")
+  }
+
+  stat <- if (type == "D5") paste0("MW_t", rule$mw_t_star) else "LRT"
+  col <- function(prefix) {
+    nm <- paste0(prefix, "_", stat)
+    if (!nm %in% names(raw)) stop("apply_design_rule: column ", nm, " not found in raw.")
+    raw[[nm]]
+  }
+  crosses_above <- function(z, crit) !is.na(z) & z > crit
+  crosses_below <- function(z, crit) !is.na(z) & z < crit
+
+  n <- nrow(raw)
+  no_stop <- rep(FALSE, n)
+
+  if (type == "D1") {
+    fut <- no_stop
+    eff <- no_stop
+    fin_success <- crosses_above(raw$Z_fin_LRT, rule$crit_final)
+  } else {
+    fut <- switch(type,
+                  D2 = no_stop,
+                  D3 = raw$PP_val < rule$kappa,
+                  D4 = ,
+                  D5 = crosses_below(col("Z_int"), rule$z_fut))
+    eff <- !fut & crosses_above(col("Z_eff"), rule$crit_eff)
+    fin_success <- crosses_above(col("Z_fin"), rule$crit_fin)
+  }
+
+  decision <- ifelse(fut, "Stop for futility",
+                     ifelse(eff, "Stop for efficacy",
+                            ifelse(fin_success, "Successful at final",
+                                   "Unsuccessful at final")))
+  out <- data.frame(
+    decision = decision,
+    success = decision %in% c("Stop for efficacy", "Successful at final"),
+    early_fut = fut,
+    early_eff = eff,
+    sample_size = ifelse(fut, raw$n_int, ifelse(eff, raw$n_eff, raw$n_fin)),
+    duration = ifelse(fut, raw$t_int, ifelse(eff, raw$t_eff, raw$t_fin)),
+    stringsAsFactors = FALSE
+  )
+
+  failed <- !is.na(raw$error) | is.na(fut)
+  out[failed, ] <- NA
+  out
+}

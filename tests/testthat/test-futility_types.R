@@ -38,7 +38,7 @@ test_that("apply_GSD_to_trial runs for none, PP and MatchedZ", {
 
   for (nm in names(s$GSD_models)) {
     G <- s$GSD_models[[nm]]
-    design <- make_rpact_design_from_GSD_model(G)$design
+    design <- make_gsd_design(G)$design
     converged <- vapply(seq_len(3), function(i) {
       trial <- simulate_trial_with_recruitment(75, 75, s$control_model,
                                                s$effect_model,
@@ -65,7 +65,7 @@ test_that("apply_GSD_to_trial stops for futility under MatchedZ when Z is below 
   s <- futility_setup()
   G <- s$GSD_models$MatchedZ
   G$futility_boundary_Z <- 100  # impossible to exceed -> always stop at the futility look
-  design <- make_rpact_design_from_GSD_model(G)$design
+  design <- make_gsd_design(G)$design
   set.seed(7)
   trial <- simulate_trial_with_recruitment(75, 75, s$control_model,
                                            s$effect_model, s$recruitment_model)
