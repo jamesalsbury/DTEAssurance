@@ -20,7 +20,9 @@
 #'
 #' @param ... Arguments passed to the replacement function.
 #' @param raw,lambda_grid,conf_level See \code{\link{summarize_grid_by_kappa}}
-#'   (\code{lambda_grid} is passed as \code{kappa_grid}).
+#'   (\code{lambda_grid} is passed as \code{kappa_grid}; the two-sided
+#'   \code{conf_level} is converted to the equivalent one-sided
+#'   \code{lcb_level}).
 #'
 #' @return The return value of the replacement function.
 #'
@@ -64,7 +66,10 @@ calibrate_BPP_timing <- function(...) {
 summarize_grid_by_lambda <- function(raw, lambda_grid, conf_level = 0.90) {
   .Deprecated("summarize_grid_by_kappa", package = "DTEAssurance",
               msg = deprecated_msg("summarize_grid_by_lambda", "summarize_grid_by_kappa"))
-  summarize_grid_by_kappa(raw, kappa_grid = lambda_grid, conf_level = conf_level)
+  # The old two-sided conf_level interval has the same lower bound as a
+  # one-sided bound at level 1 - (1 - conf_level) / 2.
+  summarize_grid_by_kappa(raw, kappa_grid = lambda_grid,
+                          lcb_level = 1 - (1 - conf_level) / 2)
 }
 
 #' @rdname DTEAssurance-deprecated

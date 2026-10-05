@@ -1243,10 +1243,13 @@ server <- function(input, output, session) {
       )
     }
 
-    # Close GSD_model and finish
+    # Close GSD_model and finish. PP designs must state the MCMC and
+    # predictive simulation sizes explicitly (the previous defaults).
     base_call <- paste0(
       base_call,
-      "\n ), \n n_sims = ",
+      "\n ), \n ",
+      if (input$fut_method == "PP") "update_priors_sims = 1000, \n PP_sims = 1000, \n " else "",
+      "n_sims = ",
       input$n_sims_simulate,
       ")"
     )

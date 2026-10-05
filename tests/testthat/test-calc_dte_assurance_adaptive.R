@@ -84,6 +84,8 @@ test_that("calc_dte_assurance_adaptive returns expected structure and values", {
     recruitment_model = recruitment_model,
     GSD_model = GSD_model,
     analysis_model = analysis_model,
+    update_priors_sims = 100,
+    PP_sims = 20,
     n_sims = 2
   )
 

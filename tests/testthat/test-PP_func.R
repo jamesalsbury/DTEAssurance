@@ -24,7 +24,7 @@ test_that("PP_func runs with Exponential control and returns correct structure",
       list(data = df)
     },
 
-    survival_test = function(df, analysis_method, alpha, alternative, rho, gamma, t_star, s_star) {
+    survival_test = function(df, analysis_method, alpha, alternative, rho, gamma, t_star, s_star, ...) {
       list(Signif = 1, Z = 2.0)
     },
 

@@ -1,4 +1,75 @@
-# DTEAssurance (development version)
+# DTEAssurance 1.3.0
+
+Results from 1.2.0 are not reproduced exactly: the event-cut convention
+(below) and the exponential predictive simulation changed.
+
+## Changes in behaviour
+
+* One event-cut convention everywhere. `cens_data(cens_method = "Events",
+  cens_events = k)` is now the only routine that cuts a trial at an analysis
+  (used by `apply_GSD_to_trial()`, `single_grid_rep()` and the new paired
+  runner). Cutting at `k` events leaves exactly `k` events: previously the
+  group-sequential code censored the `k`-th event. Event counts at an
+  information fraction are `floor(IF * total_events)` (with a small
+  tolerance), replacing `ceiling()`; information fractions are rounded to
+  6 dp wherever they are compared.
+* `PP_func()`: an exponential control arm now runs the Weibull code path with
+  `gamma_c = 1`. This fixes the exponential branch for treated patients
+  censored before the delay, where one uniform draw both chose the branch and
+  placed the event time, so the late-branch time could fall below the delay.
+  Weibull results are unchanged.
+* `make_rpact_design_from_GSD_model()`: for `"PP"` and `"MatchedZ"`
+  futility, the efficacy critical values are taken from the efficacy-only
+  design. A zero-alpha futility look cannot change them, but rpact's
+  numerical integration moved them by about 8e-5 when the futility look was
+  close to an efficacy look (e.g. 0.7 and 0.75).
+* `update_priors()`: `converged` is now computed over finite R-hat values
+  only and is `NA` (not `TRUE`) when none are finite.
+* `summarize_grid_by_kappa()` and `select_kappa_star()` are replaced.
+  `power_LCB` is now a one-sided 95% exact (Clopper-Pearson) lower bound
+  (argument `lcb_level`, replacing `conf_level`); new columns `n`,
+  `n_NA_dropped`, `power_SE`, `ESS_SE`; replicates with `NA` `PP_val` are
+  dropped with a warning; `exclude_nonconverged` option. `select_kappa_star()`
+  accepts per-scenario floors, treats an `NA` lower bound as infeasible,
+  breaks ties in null ESS towards the larger kappa, and reports power and
+  floors in the feasibility table.
+
+## New features
+
+* `single_paired_rep()` and `run_paired_scenario()`: one simulated trial per
+  replicate with one PP evaluation, recording interim, efficacy-look and
+  final statistics (log-rank and modestly weighted log-rank) so that every
+  design (D1-D5) and kappa is a post hoc summary. `run_paired_scenario()`
+  runs in parallel chunks with an RDS checkpoint and resumes from it.
+* `compute_relative_floors()`: D2 power minus a margin, per alternative
+  scenario, for use as `power_floor`.
+* `update_priors(jags_seed = )` makes the MCMC reproducible, and new
+  attributes `rhat_max`, `n_nonfinite_rhat` and `n_retained_total`.
+* `survival_test(return_HR = )`: `FALSE` skips the Cox fit (used by the PP
+  and group-sequential code, where the hazard ratio is not needed).
+* `calc_dte_assurance_adaptive()` returns `PP_val`, `P_Z1`, `P_Z2`, `P_Z3`
+  per trial and a `settings` attribute (arguments, package and R versions,
+  git commit if available, timestamp).
+* Internal `simulate_trial_with_recruitment(force_state = )` fixes the
+  latent state, and the simulated data carry a `truth` attribute.
+* `inst/benchmark/time_one_rep.R` (in the source repository only) times one
+  paired replicate at the manuscript settings.
+
+## Stricter inputs
+
+* `PP_func()`: `n_sims` is required.
+* `calc_dte_assurance_adaptive()`: `update_priors_sims` and `PP_sims` are
+  required when `futility_type = "PP"`.
+* The PP code paths stop unless recruitment is uniform
+  (`recruitment_model$method = "power"`, `power = 1`), the assumption under
+  which `PP_func()` draws future recruitment times.
+
+## Documentation
+
+* `update_priors()`: `n_samples` is per chain (total `n.chains * n_samples`).
+* `"MatchedZ"` futility is applied as binding (the trial stops).
+* `GSD_model$alpha_spending` is user-specified cumulative alpha
+  (`typeOfDesign = "asUser"`).
 
 ## Renamed to match the manuscript notation (no behaviour change)
 

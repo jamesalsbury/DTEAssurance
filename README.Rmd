@@ -226,7 +226,26 @@ manuscript (Salsbury et al., <doi:10.48550/arXiv.2509.07602>) as follows.
 | $M$ (posterior-predictive draws) | `PP_sims` |
 | retained MCMC draws | `update_priors_sims` (per chain; total = `n.chains` x this) |
 | IF (information fraction) | `futility_IF`, `alpha_IF` |
-| D1, ..., D5 | built post hoc from `run_paired_scenario()` output |
+| D1, ..., D5 | built post hoc from `run_paired_scenario()` output (see below) |
+
+### Designs D1-D5 from paired replicates
+
+`run_paired_scenario()` simulates each trial once, computes the PP at the
+futility look once, and records the test statistics at the interim
+(`Z_int_*`), the efficacy look (`Z_eff_*`) and the final analysis
+(`Z_fin_*`) without stopping the trial. Every design is then a summary of the
+same replicates. With `c_eff` and `c_fin` the critical values of the
+group-sequential design at the efficacy look and the final analysis:
+
+- **D1** (fixed design): success if `Z_fin_LRT` exceeds the final-only
+  critical value.
+- **D2** (efficacy look only): success if `Z_eff_LRT > c_eff`, otherwise
+  `Z_fin_LRT > c_fin`. This is `continuation_success`.
+- **D3** (D2 plus PP futility): stop for futility if `PP_val < kappa`;
+  `summarize_grid_by_kappa()` evaluates a grid of kappa and
+  `select_kappa_star()` picks kappa*.
+- **D4, D5** (D2 plus Z futility): stop for futility if an interim
+  statistic (`Z_int_LRT` or `Z_int_MW_t*`) is below a cutoff.
 
 The PP futility rule is selected with `GSD_model$futility_type = "PP"` and
 `GSD_model$kappa`. The names `BPP_func()`, `calibrate_BPP_threshold()`,

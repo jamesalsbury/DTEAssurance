@@ -86,7 +86,9 @@ test_that("calc_dte_assurance_adaptive runs for none, PP and MatchedZ", {
       update_priors_sims = 100, PP_sims = 20, n_sims = 3
     )
     expect_equal(names(res), c("Trial", "Decision", "StopTime", "SampleSize",
-                               "Success", "Converged"))
+                               "Success", "Converged", "PP_val",
+                               "P_Z1", "P_Z2", "P_Z3"))
+    expect_false(is.null(attr(res, "settings")))
     expect_equal(res$Success,
                  res$Decision %in% c("Stop for efficacy", "Successful at final"))
     if (nm == "PP") {

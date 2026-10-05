@@ -64,6 +64,15 @@ sim_dte <- function(n_c, n_t, lambda_c, delay_time, post_delay_HR, dist = "Expon
 #'
 #' Applies administrative censoring to a survival dataset using one of three methods: fixed time, fixed number of events, or fixed information fraction. The input data must contain columns for pseudo survival time, recruitment time, and observed time.
 #'
+#' This is the single routine used throughout the package to cut a trial at
+#' an analysis. The cut is made at calendar time \code{t}, the calendar time
+#' of the \code{k}-th event (\code{"Events"}); patients recruited before
+#' \code{t} are included, and a patient has an event if
+#' \code{pseudo_time <= t}. Cutting at \code{k} events therefore leaves
+#' exactly \code{k} events in the data (assuming no tied event times).
+#' \code{cens_events} is floored with a small tolerance, so a non-integer
+#' such as \code{840 * 0.3} is treated as 252.
+#'
 #' @param data A dataframe containing uncensored survival data with columns: \code{pseudo_time}, \code{rec_time}, and \code{time}
 #' @param cens_method Censoring method: \code{"Time"} (default), \code{"Events"}, or \code{"IF"}
 #' @param cens_time Time point for censoring (required if \code{cens_method = "Time"})
@@ -109,13 +118,15 @@ cens_data <- function(data,
 
   if (cens_method == "Events") {
     if (is.null(cens_events)) stop("Please specify 'cens_events' for method 'Events'")
+    cens_events <- as.integer(floor(cens_events + 1e-8))
+    if (cens_events < 1) stop("'cens_events' must be at least 1")
     if (cens_events > nrow(data)) stop("'cens_events' exceeds number of observations")
     cens_time <- data$pseudo_time[cens_events]
   }
 
   if (cens_method == "IF") {
     if (is.null(cens_IF)) stop("Please specify 'cens_IF' for method 'IF'")
-    index <- floor(nrow(data) * cens_IF)
+    index <- floor(nrow(data) * round(cens_IF, 6) + 1e-8)
     if (index < 1 || index > nrow(data)) stop("Invalid 'cens_IF' value")
     cens_time <- data$pseudo_time[index]
   }
@@ -357,11 +368,17 @@ calc_dte_assurance <- function(n_c,
 #' @param gamma Gamma parameter for the Fleming-Harrington weighted log-rank test.
 #' @param t_star Parameter \eqn{t^*} used in the modestly weighted test.
 #' @param s_star Parameter \eqn{s^*} used in the modestly weighted test.
+#' @param return_HR If \code{TRUE} (default), fit a Cox model and return the
+#'   estimated hazard ratio as \code{observed_HR}. If \code{FALSE}, the Cox
+#'   fit is skipped (it does not affect \code{Signif} or \code{Z}) and
+#'   \code{observed_HR} is \code{NA}. The group-sequential and predictive
+#'   probability code uses \code{FALSE}.
 #'
 #' @return A list containing:
 #' \describe{
 #'   \item{Signif}{Logical indicator of statistical significance based on the chosen test and alpha level.}
-#'   \item{observed_HR}{Estimated hazard ratio from a Cox proportional hazards model.}
+#'   \item{observed_HR}{Estimated hazard ratio from a Cox proportional hazards
+#'     model, or \code{NA} if \code{return_HR = FALSE}.}
 #'   \item{Z}{Signed test statistic, oriented so that positive values favour
 #'     the arm coded as "Treatment" (or the second factor level of
 #'     \code{group}, alphabetically, if levels are unlabelled) -- i.e.
@@ -402,10 +419,13 @@ calc_dte_assurance <- function(n_c,
 #' @export
 survival_test <- function(data, analysis_method = "LRT", alternative = "one.sided",
                           alpha = 0.05, rho = 0, gamma = 0,
-                          t_star = NULL, s_star = NULL){
+                          t_star = NULL, s_star = NULL, return_HR = TRUE){
 
-  coxmodel <- survival::coxph(Surv(survival_time, status) ~ group, data = data)
-  observed_HR <- as.numeric(exp(stats::coef(coxmodel)))
+  observed_HR <- NA_real_
+  if (return_HR) {
+    coxmodel <- survival::coxph(Surv(survival_time, status) ~ group, data = data)
+    observed_HR <- as.numeric(exp(stats::coef(coxmodel)))
+  }
 
   Signif <- 0
   Z <- NA_real_
@@ -589,13 +609,19 @@ add_recruitment_time <- function(data, rec_method,
 #' @param GSD_model A named list specifying the group sequential design:
 #'   \itemize{
 #'     \item \code{events}: Total number of events
-#'     \item \code{alpha_spending}: Cumulative alpha spending vector
+#'     \item \code{alpha_spending}: User-specified \emph{cumulative} alpha
+#'       spent by each efficacy look (one value per element of
+#'       \code{alpha_IF}; the design uses \code{rpact}'s
+#'       \code{typeOfDesign = "asUser"}). Futility looks are added to the
+#'       design with zero alpha spent, so they do not change the efficacy
+#'       critical values.
 #'     \item \code{alpha_IF}: Information Fraction(s) at which we look for efficacy
 #'     \item \code{futility_type}: One of \code{"none"}, \code{"Beta"}
 #'       (pre-specified beta-spending, via \code{rpact}), \code{"PP"}
 #'       (predictive probability futility, D3-style), or
 #'       \code{"MatchedZ"} (a fixed, externally-calibrated Z-statistic
-#'       cutoff, non-binding -- D4/D5-style; see
+#'       cutoff, D4/D5-style; the rule is applied as binding, i.e. the
+#'       simulated trial stops when Z falls below the cutoff; see
 #'       \code{\link{calibrate_matched_futility_boundary}} for how to
 #'       obtain \code{futility_boundary_Z}).
 #'     \item \code{futility_IF}: Information Fraction at which we look for futility
@@ -612,13 +638,12 @@ add_recruitment_time <- function(data, rec_method,
 #'     \item \code{alternative_hypothesis}: direction of the alternative (e.g. \code{"one.sided"}).
 #'     \item \code{rho}, \code{gamma}, \code{t_star}, \code{s_star}: additional parameters for WLRT or MW (if applicable).
 #'   }
-#' @param update_priors_sims Number of posterior samples per interim
-#'   dataset, passed to \code{\link{update_priors}} (default 1000). Only
-#'   used when \code{GSD_model$futility_type == "PP"}; harmless (ignored)
-#'   otherwise.
+#' @param update_priors_sims Number of posterior samples per chain for
+#'   each interim dataset, passed to \code{\link{update_priors}}. Required
+#'   when \code{GSD_model$futility_type == "PP"}; ignored otherwise.
 #' @param PP_sims Number of predictive simulations per interim dataset,
-#'   passed to \code{\link{PP_func}} (default 1000). Only used when
-#'   \code{GSD_model$futility_type == "PP"}; harmless (ignored) otherwise.
+#'   passed to \code{\link{PP_func}}. Required when
+#'   \code{GSD_model$futility_type == "PP"}; ignored otherwise.
 #' @param n_sims Number of simulations to run (default = 1000)
 #'
 #' @return A data frame with one row per simulated trial and the following columns:
@@ -638,8 +663,16 @@ add_recruitment_time <- function(data, rec_method,
 #'   \item{Converged}{For \code{"PP"} designs, whether the interim MCMC
 #'     fit converged (see \code{\link{update_priors}}); \code{NA} for
 #'     other futility types, which involve no MCMC step.}
+#'   \item{PP_val}{For \code{"PP"} designs, the predictive probability at
+#'     the futility look; \code{NA} otherwise (or if the trial stopped for
+#'     efficacy before the futility look).}
+#'   \item{P_Z1, P_Z2, P_Z3}{For \code{"PP"} designs, the posterior
+#'     probabilities of the three latent states at the futility look;
+#'     \code{NA} otherwise.}
 #' }
-#' Class: \code{data.frame}
+#' Class: \code{data.frame}, with attribute \code{settings}: a list of all
+#' arguments, the package version, R version, git commit (if available) and
+#' a timestamp.
 #'
 #' @section Bug fix (this version): previous versions of this function
 #'   independently recomputed a separate \code{Final_Decision} field from
@@ -688,11 +721,17 @@ calc_dte_assurance_adaptive <- function(n_c, n_t,
                                         recruitment_model,
                                         GSD_model,
                                         analysis_model = NULL,
-                                        update_priors_sims = 1000,
-                                        PP_sims = 1000,
+                                        update_priors_sims = NULL,
+                                        PP_sims = NULL,
                                         n_sims = 1000) {
 
   GSD_model <- normalise_futility_spec(GSD_model)
+
+  if (identical(GSD_model$futility_type, "PP") &&
+      (is.null(update_priors_sims) || is.null(PP_sims))) {
+    stop("calc_dte_assurance_adaptive: 'update_priors_sims' and 'PP_sims' ",
+         "must be supplied when GSD_model$futility_type is \"PP\".", call. = FALSE)
+  }
 
   if (is.null(GSD_model$futility_type) ||
       !GSD_model$futility_type %in% c("none", "Beta", "PP", "MatchedZ")) {
@@ -768,12 +807,26 @@ calc_dte_assurance_adaptive <- function(n_c, n_t,
       StopTime   = outcome$stop_time,
       SampleSize = outcome$sample_size,
       Success    = outcome$decision %in% c("Stop for efficacy", "Successful at final"),
-      Converged  = if (!is.null(outcome$converged)) outcome$converged else NA
+      Converged  = if (!is.null(outcome$converged)) outcome$converged else NA,
+      PP_val     = outcome$PP_val,
+      P_Z1       = unname(outcome$Z_probs["P_Z1"]),
+      P_Z2       = unname(outcome$Z_probs["P_Z2"]),
+      P_Z3       = unname(outcome$Z_probs["P_Z3"])
     )
 
   }, future.seed = TRUE)
 
-  do.call(rbind, results)
+  out <- do.call(rbind, results)
+  attr(out, "settings") <- c(
+    list(n_c = n_c, n_t = n_t,
+         control_model = control_model, effect_model = effect_model,
+         recruitment_model = recruitment_model, GSD_model = GSD_model,
+         analysis_model = analysis_model,
+         update_priors_sims = update_priors_sims, PP_sims = PP_sims,
+         n_sims = n_sims),
+    run_provenance()
+  )
+  out
 }
 
 
@@ -811,11 +864,19 @@ calc_dte_assurance_adaptive <- function(n_c, n_t,
 #'
 #' @param n.chains Number of MCMC chains to run (default is 2)
 #' @param n_burnin Number of burn-in samples for the MCMC chain(s) (default is 500)
-#' @param n_samples Number of posterior samples to generate (default is 1000)
+#' @param n_samples Number of posterior samples retained \strong{per chain}
+#'   after burn-in (default is 1000). The returned data frame has
+#'   \code{n.chains * n_samples} rows (2,000 with the defaults).
 #' @param rhat_threshold Convergence threshold on the Gelman-Rubin
 #'   potential scale reduction factor (default 1.1). Used only to compute
 #'   the \code{"converged"} attribute on the return value; does not affect
 #'   sampling.
+#' @param jags_seed Optional integer seed for JAGS. If supplied, chain
+#'   \code{ch} is initialised with the \code{"base::Wichmann-Hill"} RNG and
+#'   seed \code{jags_seed + ch}, so repeated calls with the same
+#'   \code{jags_seed} return identical draws. If \code{NULL} (default), JAGS
+#'   seeds its chains itself and the draws are not reproducible with
+#'   \code{set.seed()}.
 #'
 #' @return A data frame containing Monte Carlo samples from the updated
 #'   (posterior) distribution of the model parameters, with columns
@@ -830,10 +891,17 @@ calc_dte_assurance_adaptive <- function(n_c, n_t,
 #'     \item{\code{rhat}}{A named numeric vector of per-parameter
 #'       Gelman-Rubin point estimates (accessed via
 #'       \code{attr(posterior_df, "rhat")}).}
-#'     \item{\code{converged}}{\code{TRUE} if every monitored parameter's
-#'       Rhat is below \code{rhat_threshold}, \code{FALSE} if not, or
-#'       \code{NA} if the diagnostic could not be computed (accessed via
-#'       \code{attr(posterior_df, "converged")}).}
+#'     \item{\code{converged}}{\code{TRUE} if every \emph{finite} R-hat
+#'       is below \code{rhat_threshold}, \code{FALSE} if not, or \code{NA}
+#'       if there are no finite R-hat values (or the diagnostic could not be
+#'       computed). Non-finite values (\code{NaN} arises for parameters that
+#'       are constant across draws, e.g. \code{delay_time} when \code{Z != 3}
+#'       throughout) are not treated as failures; they are counted in
+#'       \code{n_nonfinite_rhat}.}
+#'     \item{\code{rhat_max}}{The largest finite R-hat (\code{NA} if none).}
+#'     \item{\code{n_nonfinite_rhat}}{The number of non-finite R-hat values.}
+#'     \item{\code{n_retained_total}}{The number of retained draws over all
+#'       chains, \code{n.chains * n_samples}.}
 #'     \item{\code{Z_probs}}{A named numeric vector
 #'       \code{c(P_Z1=, P_Z2=, P_Z3=)}, the posterior probability of each
 #'       latent state, i.e. \code{table(posterior_df$Z) / nrow(posterior_df)}
@@ -883,7 +951,8 @@ update_priors <- function(data,
                           n.chains = 2,
                           n_burnin = 500,
                           n_samples = 1000,
-                          rhat_threshold = 1.1) {
+                          rhat_threshold = 1.1,
+                          jags_seed = NULL) {
 
   if (!requireNamespace("rjags", quietly = TRUE)) {
     stop("This function requires the 'rjags' package. Please install it with install.packages('rjags').")
@@ -1038,9 +1107,20 @@ if (control_model$dist == "Weibull"){
 }
 
 
+# Seeds stay within the valid integer range even if jags_seed is close to
+# .Machine$integer.max (identical to jags_seed + ch otherwise).
+inits <- if (is.null(jags_seed)) {
+  NULL
+} else {
+  lapply(seq_len(n.chains), function(ch)
+    list(.RNG.name = "base::Wichmann-Hill",
+         .RNG.seed = as.integer((jags_seed + ch - 1) %% (.Machine$integer.max - 1) + 1)))
+}
+
 model = rjags::jags.model(
   textConnection(modelstring),
   data = data_list,
+  inits = inits,
   n.chains = n.chains,
   quiet = TRUE
 )
@@ -1071,17 +1151,12 @@ conv_diag <- tryCatch({
   gd <- coda::gelman.diag(output, autoburnin = FALSE, multivariate = FALSE)
   psrf_vec <- gd$psrf[, "Point est."]
   names(psrf_vec) <- rownames(gd$psrf)
-  list(
-    rhat = psrf_vec,
-    converged = all(psrf_vec < rhat_threshold, na.rm = TRUE),
-    error = NA_character_
-  )
+  c(list(rhat = psrf_vec, error = NA_character_),
+    rhat_summary(psrf_vec, rhat_threshold))
 }, error = function(e) {
-  list(
-    rhat = stats::setNames(rep(NA_real_, length(var_names)), var_names),
-    converged = NA,
-    error = conditionMessage(e)
-  )
+  rhat <- stats::setNames(rep(NA_real_, length(var_names)), var_names)
+  c(list(rhat = rhat, error = conditionMessage(e)),
+    rhat_summary(rhat, rhat_threshold))
 })
 
 posterior_df <- as.data.frame(as.matrix(output))
@@ -1094,6 +1169,9 @@ names(Z_probs) <- c("P_Z1", "P_Z2", "P_Z3")
 
 attr(posterior_df, "rhat") <- conv_diag$rhat
 attr(posterior_df, "converged") <- conv_diag$converged
+attr(posterior_df, "rhat_max") <- conv_diag$rhat_max
+attr(posterior_df, "n_nonfinite_rhat") <- conv_diag$n_nonfinite_rhat
+attr(posterior_df, "n_retained_total") <- nrow(posterior_df)
 attr(posterior_df, "convergence_error") <- conv_diag$error
 attr(posterior_df, "Z_probs") <- Z_probs
 
@@ -1115,7 +1193,9 @@ return(posterior_df)
 #'   }
 #' @param posterior_df A data frame of posterior samples with columns:
 #'   \code{lambda_c}, \code{delay_time} and \code{HR}, corresponding to the control hazard,
-#'   the delay (changepoint) time and the post-delay hazard ratio, respectively.
+#'   the delay (changepoint) time and the post-delay hazard ratio, respectively,
+#'   plus \code{gamma_c} (the Weibull shape) when
+#'   \code{control_distribution = "Weibull"}.
 #' @param control_distribution Distributional form assumed for the control arm:
 #'   either \code{"Exponential"} (default) or \code{"Weibull"}.
 #' @param n_c_planned Planned maximum number of patients in the control group.
@@ -1165,10 +1245,26 @@ return(posterior_df)
 #'   value. Retained only for backward compatibility with callers that do
 #'   not have access to a full group-sequential design object; new code
 #'   should always supply \code{future_boundaries}.
-#' @param n_sims Number of predictive simulations to run (default is 500).
-#'   The manuscript reports results based on \code{n_sims = 1000}; confirm
-#'   this argument is set explicitly by the caller rather than relying on
-#'   the default, and report the value used.
+#' @param n_sims Number of posterior-predictive draws (required, no
+#'   default).
+#'
+#' @details
+#' \strong{Model.} The control arm is Weibull with rate \code{lambda_c} and
+#' shape \code{gamma_c}; an exponential control arm
+#' (\code{control_distribution = "Exponential"}) is handled as the Weibull
+#' case with \code{gamma_c = 1}, using the same code path. The treatment arm
+#' follows the control hazard up to \code{delay_time} and the control hazard
+#' multiplied by \code{HR} afterwards. Each predictive draw samples one row
+#' of \code{posterior_df}, simulates event times for patients not yet
+#' recruited, and simulates residual event times for patients censored at
+#' the interim, conditional on their follow-up so far.
+#'
+#' \strong{Recruitment assumption.} Recruitment times for patients not yet
+#' recruited at the interim are drawn from
+#' \code{Uniform(df_cens_time, rec_time_planned)}. This is correct for
+#' uniform recruitment (the \code{"power"} recruitment model with
+#' \code{power = 1}) only; the simulation functions that call
+#' \code{PP_func()} stop if another recruitment model is supplied.
 #'
 #' @return A list with a single element \code{PP_df}, a data frame with
 #'   columns \code{success} (0/1, whether this predictive draw ultimately
@@ -1224,7 +1320,12 @@ PP_func <- function(data, posterior_df, control_distribution = "Exponential", n_
                      analysis_model,
                      censoring_model = NULL,
                      future_boundaries = NULL,
-                     n_sims = 500) {
+                     n_sims) {
+
+  if (missing(n_sims) || is.null(n_sims)) {
+    stop("PP_func: 'n_sims' (the number of posterior-predictive draws) must be ",
+         "supplied explicitly; there is no default.")
+  }
 
   if (is.null(future_boundaries) && is.null(censoring_model)) {
     stop("PP_func: supply either 'future_boundaries' (recommended -- a chain ",
@@ -1243,12 +1344,24 @@ PP_func <- function(data, posterior_df, control_distribution = "Exponential", n_
   delay_time_samples <- posterior_df$delay_time
   post_delay_HR_samples <- posterior_df$HR
 
-  if (control_distribution == "Weibull"){
-    gamma_c_samples <- posterior_df$gamma_c
+  if (!control_distribution %in% c("Exponential", "Weibull")) {
+    stop("PP_func: control_distribution must be \"Exponential\" or \"Weibull\".")
+  }
+
+  # An exponential control arm is a Weibull with shape 1, so a single
+  # (Weibull) code path is used for both distributions.
+  gamma_c_samples <- if (control_distribution == "Weibull") {
+    posterior_df$gamma_c
+  } else {
+    rep(1, nrow(posterior_df))
   }
 
   PP_df <- data.frame(success = numeric(n_sims),
                        Z_val = numeric(n_sims))
+
+  # Patients censored at the interim, by group (fixed across draws)
+  censored_df <- data[data$status == 0, ]
+  n_censored_control <- sum(censored_df$group == "Control")
 
   for (j in 1:n_sims){
 
@@ -1260,49 +1373,25 @@ PP_func <- function(data, posterior_df, control_distribution = "Exponential", n_
     sampled_lambda_c      <- lambda_c_samples[idx]
     sampled_delay_time    <- delay_time_samples[idx]
     sampled_post_delay_HR <- post_delay_HR_samples[idx]
+    sampled_gamma_c       <- gamma_c_samples[idx]
 
-    if (control_distribution == "Exponential"){
-      sampled_lambda_e <- sampled_lambda_c*sampled_post_delay_HR
+    # Unenrolled control patients: Weibull(lambda_c, gamma_c)
+    u <- stats::runif(n_unenrolled_control)
+    unenrolled_control_times <- (-log(u))^(1 / sampled_gamma_c) / sampled_lambda_c
 
-      #For the unenrolled data, we can sample the remaining data according to the updated (sampled) parameters
-      #First we do the control group
-      unenrolled_control_times <- stats::rexp(n_unenrolled_control, sampled_lambda_c)
+    # Unenrolled treated patients: control hazard up to the delay, then
+    # hazard ratio sampled_post_delay_HR
+    CP <- exp(-(sampled_lambda_c*sampled_delay_time)^sampled_gamma_c)
+    u <- stats::runif(n_unenrolled_treatment)
 
-      #Now we do the treatment group
-      CP <- exp(-(sampled_lambda_c*sampled_delay_time))
-      u <- stats::runif(n_unenrolled_treatment)
-      unenrolled_treatment_times <- ifelse(u > CP,
-                                           (-log(u))/sampled_lambda_c,
-                                           (1/sampled_lambda_e)*(sampled_delay_time*sampled_lambda_e-log(u)-sampled_delay_time*sampled_lambda_c))
-
-    }
-
-    if (control_distribution == "Weibull") {
-
-      sampled_gamma_c <- gamma_c_samples[idx]
-
-      u <- stats::runif(n_unenrolled_control)
-      unenrolled_control_times <- (-log(u))^(1 / sampled_gamma_c) / sampled_lambda_c
-
-      CP <- exp(-(sampled_lambda_c*sampled_delay_time)^sampled_gamma_c)
-      u <- stats::runif(n_unenrolled_treatment)
-
-
-      unenrolled_treatment_times <- ifelse(
-        u > CP,
-        (-log(u))^(1 / sampled_gamma_c) / sampled_lambda_c,
-        (
-          (-log(u) - (1 - sampled_post_delay_HR) * (sampled_lambda_c * sampled_delay_time)^sampled_gamma_c) /
-            sampled_post_delay_HR
-        )^(1 / sampled_gamma_c) / sampled_lambda_c
-      )
-
-
-
-    }
-
-
-
+    unenrolled_treatment_times <- ifelse(
+      u > CP,
+      (-log(u))^(1 / sampled_gamma_c) / sampled_lambda_c,
+      (
+        (-log(u) - (1 - sampled_post_delay_HR) * (sampled_lambda_c * sampled_delay_time)^sampled_gamma_c) /
+          sampled_post_delay_HR
+      )^(1 / sampled_gamma_c) / sampled_lambda_c
+    )
 
     #Now combine them together
     unenrolled_df <- data.frame(time = c(unenrolled_control_times, unenrolled_treatment_times),
@@ -1311,36 +1400,16 @@ PP_func <- function(data, posterior_df, control_distribution = "Exponential", n_
 
     unenrolled_df$pseudo_time <- unenrolled_df$time + unenrolled_df$rec_time
 
-
-
-    #Extracting the observations that were censored at the IA
-    censored_df <- data[data$status==0,]
-
-    #Number of censored observations in each group
-    n_censored_control <- sum(censored_df$group=="Control")
-    n_censored_treatment <- sum(censored_df$group=="Treatment")
-
     #Extracting the censored observations in the control group
     control_censored_df <- censored_df %>%
       dplyr::filter(.data$group=="Control")
 
+    # Censored control patients: conditional Weibull residual life
+    V  <- stats::runif(n_censored_control)
 
-    if (control_distribution == "Exponential"){
-      #Adding a exp(lambda_c) value to the censored value
-      control_censored_df$final_time <- control_censored_df$survival_time + stats::rexp(n_censored_control, rate = sampled_lambda_c)
-    }
-
-
-    if (control_distribution == "Weibull"){
-
-      V  <- stats::runif(n_censored_control)
-
-      control_censored_df$final_time <- (
-        ( (sampled_lambda_c * control_censored_df$survival_time)^sampled_gamma_c - log(V) )^(1 / sampled_gamma_c)
-      ) / sampled_lambda_c
-
-
-    }
+    control_censored_df$final_time <- (
+      ( (sampled_lambda_c * control_censored_df$survival_time)^sampled_gamma_c - log(V) )^(1 / sampled_gamma_c)
+    ) / sampled_lambda_c
 
     #Calculating the pseudo time
     control_censored_df$final_pseudo_time <- control_censored_df$rec_time + control_censored_df$final_time
@@ -1354,87 +1423,58 @@ PP_func <- function(data, posterior_df, control_distribution = "Exponential", n_
 
     if (n_before > 0) {
 
-      if (control_distribution == "Exponential") {
+      # Control cumulative hazards at t0 and tau
+      H_t0  <- (sampled_lambda_c * censored_treatment_before_delay$survival_time)^sampled_gamma_c
+      H_tau <- (sampled_lambda_c * sampled_delay_time)^sampled_gamma_c
 
-        # Conditional uniform U ~ Unif(0,1)
-        u <- stats::runif(n_before)
+      # Survival at t0 and tau
+      S_t0  <- exp(-H_t0)
+      S_tau <- exp(-H_tau)
 
-        # Correct conditional probability that event occurs before sampled_delay_time
-        p_before <- 1 - exp(-sampled_lambda_c * (sampled_delay_time - censored_treatment_before_delay$survival_time))
+      # Probability event occurs between t0 and tau, conditional on T > t0
+      # p_before = (S_t0 - S_tau) / S_t0 = 1 - exp(-(H_tau - H_t0))
+      p_before <- 1 - exp(-(H_tau - H_t0))
 
-        # Early event time (conditional truncated exponential)
-        t_event_before <- censored_treatment_before_delay$survival_time + (-log(1 - u * p_before)) / sampled_lambda_c
+      # Branch draw: which patients have event before vs after tau
+      u_branch <- stats::runif(n_before)
 
-        # Late event time (conditional on surviving to sampled_delay_time)
-        t_event_after <- sampled_delay_time +
-          (-log(u) - sampled_lambda_c * (sampled_delay_time - censored_treatment_before_delay$survival_time)) / sampled_lambda_e
+      early_idx <- u_branch <= p_before
+      late_idx  <- !early_idx
 
-        # Branch: before vs after sampled_delay_time
-        resid_times <- ifelse(
-          u <= p_before,
-          t_event_before - censored_treatment_before_delay$survival_time,   # residual time
-          t_event_after - censored_treatment_before_delay$survival_time     # residual time
-        )
+      resid_times <- numeric(n_before)
 
-      } else if (control_distribution == "Weibull") {
+      ## --- EARLY BRANCH: t0 < T <= tau (truncated Weibull) ---
+      if (any(early_idx)) {
+        k <- sum(early_idx)
 
-        # Control cumulative hazards at t0 and tau
-        H_t0  <- (sampled_lambda_c * censored_treatment_before_delay$survival_time)^sampled_gamma_c
-        H_tau <- (sampled_lambda_c * sampled_delay_time)^sampled_gamma_c
+        v_early <- stats::runif(k)               # conditional position within [t0, tau]
+        S_t0_e  <- S_t0[early_idx]
 
-        # Survival at t0 and tau
-        S_t0  <- exp(-H_t0)
-        S_tau <- exp(-H_tau)
+        S_t_e <- S_t0_e - v_early * (S_t0_e - S_tau)
 
-        # Probability event occurs between t0 and tau, conditional on T > t0
-        # p_before = (S_t0 - S_tau) / S_t0 = 1 - exp(-(H_tau - H_t0))
-        p_before <- 1 - exp(-(H_tau - H_t0))
+        H_t_e <- -log(S_t_e)
+        t_early <- (H_t_e)^(1 / sampled_gamma_c) / sampled_lambda_c
 
-        # Branch draw: which patients have event before vs after tau
-        u_branch <- stats::runif(n_before)
-
-        early_idx <- u_branch <= p_before
-        late_idx  <- !early_idx
-
-        resid_times <- numeric(n_before)
-
-        ## --- EARLY BRANCH: t0 < T <= tau (truncated Weibull) ---
-        if (any(early_idx)) {
-          k <- sum(early_idx)
-
-          v_early <- stats::runif(k)               # conditional position within [t0, tau]
-          S_t0_e  <- S_t0[early_idx]
-
-          S_t_e <- S_t0_e - v_early * (S_t0_e - S_tau)
-
-          H_t_e <- -log(S_t_e)
-          t_early <- (H_t_e)^(1 / sampled_gamma_c) / sampled_lambda_c
-
-          resid_times[early_idx] <- t_early - censored_treatment_before_delay$survival_time[early_idx]
-        }
-
-        ## --- LATE BRANCH: T > tau ---
-        if (any(late_idx)) {
-          k <- sum(late_idx)
-
-
-          v_late <- stats::runif(k)
-
-          H_C_t <- H_tau - (log(v_late)) / sampled_post_delay_HR
-          t_late <- (H_C_t)^(1 / sampled_gamma_c) / sampled_lambda_c
-
-          resid_times[late_idx] <- t_late - censored_treatment_before_delay$survival_time[late_idx]
-        }
+        resid_times[early_idx] <- t_early - censored_treatment_before_delay$survival_time[early_idx]
       }
 
-      # Store final times (common to both distributions)
+      ## --- LATE BRANCH: T > tau ---
+      if (any(late_idx)) {
+        k <- sum(late_idx)
+
+        v_late <- stats::runif(k)
+
+        H_C_t <- H_tau - (log(v_late)) / sampled_post_delay_HR
+        t_late <- (H_C_t)^(1 / sampled_gamma_c) / sampled_lambda_c
+
+        resid_times[late_idx] <- t_late - censored_treatment_before_delay$survival_time[late_idx]
+      }
+
       censored_treatment_before_delay$final_time <- censored_treatment_before_delay$survival_time + resid_times
       censored_treatment_before_delay$final_pseudo_time <-
         censored_treatment_before_delay$rec_time +
         censored_treatment_before_delay$final_time
     }
-
-
 
     # Extract censored treatment observations with t0 > tau
     censored_treatment_after_delay <- censored_df %>%
@@ -1445,41 +1485,27 @@ PP_func <- function(data, posterior_df, control_distribution = "Exponential", n_
 
     if (n_after > 0) {
 
+      # effective Weibull scale after delay
+      sampled_lambda_e <- sampled_lambda_c * sampled_post_delay_HR^(1 / sampled_gamma_c)
 
-      if (control_distribution == "Exponential") {
+      # conditional Weibull residual life
+      V <- stats::runif(n_after)
 
-        # existing exponential logic (unchanged)
-        censored_treatment_after_delay$final_time <-
-          censored_treatment_after_delay$survival_time + stats::rexp(n_after, rate = sampled_lambda_e)
+      H_t0 <- (sampled_lambda_e * censored_treatment_after_delay$survival_time)^sampled_gamma_c
 
-      } else if (control_distribution == "Weibull") {
+      T_after <- (H_t0 - log(V))^(1 / sampled_gamma_c) / sampled_lambda_e
 
-
-        # effective Weibull scale after delay
-        sampled_lambda_e <- sampled_lambda_c * sampled_post_delay_HR^(1 / sampled_gamma_c)
-
-        # conditional Weibull residual life
-        V <- stats::runif(n_after)
-
-
-        H_t0 <- (sampled_lambda_e * censored_treatment_after_delay$survival_time)^sampled_gamma_c
-
-        T_after <- (H_t0 - log(V))^(1 / sampled_gamma_c) / sampled_lambda_e
-
-        censored_treatment_after_delay$final_time <- T_after
-      }
+      censored_treatment_after_delay$final_time <- T_after
 
       censored_treatment_after_delay$final_pseudo_time <-
         censored_treatment_after_delay$rec_time +
         censored_treatment_after_delay$final_time
     }
 
-
-
     non_censored_df <- data %>%
       dplyr::filter(.data$status == 1)
 
-    final_non_censored_df <- non_censored_df[,1:4]
+    final_non_censored_df <- non_censored_df[, c("time", "group", "rec_time", "pseudo_time")]
 
     final_unenrolled_df <-
       if (nrow(unenrolled_df) > 0) {
@@ -1562,7 +1588,8 @@ PP_func <- function(data, posterior_df, control_distribution = "Exponential", n_
                                 rho = analysis_model$rho,
                                 gamma = analysis_model$gamma,
                                 t_star = analysis_model$t_star,
-                                s_star = analysis_model$s_star)
+                                s_star = analysis_model$s_star,
+                                return_HR = FALSE)
 
         Z_current <- test_k$Z
 
@@ -1602,7 +1629,8 @@ PP_func <- function(data, posterior_df, control_distribution = "Exponential", n_
                                    rho = analysis_model$rho,
                                    gamma = analysis_model$gamma,
                                    t_star = analysis_model$t_star,
-                                   s_star = analysis_model$s_star)
+                                   s_star = analysis_model$s_star,
+                                   return_HR = FALSE)
 
       PP_df[j,] <- c(test_result$Signif, test_result$Z)
     }
@@ -1771,7 +1799,7 @@ calibrate_PP_threshold <- function(n_c,
                                  rec_duration = recruitment_model$duration)
 
     censored_data <- cens_data(data, cens_method = "Events",
-                               cens_events = IA_model$events * IA_model$IF)
+                               cens_events = n_events_at(IA_model$events, IA_model$IF))
     data <- censored_data$data
 
     posterior_samples <- update_priors(data,

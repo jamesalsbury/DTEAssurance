@@ -16,7 +16,10 @@ select_kappa_star(
 each as returned by \code{\link{summarize_grid_by_kappa}} over the same
 \code{kappa_grid}.}
 
-\item{power_floor}{Minimum acceptable lower confidence bound on power.}
+\item{power_floor}{Minimum acceptable lower confidence bound on power:
+a scalar applied to every alternative scenario, or a named numeric
+vector with one entry per alternative scenario (e.g. from
+\code{\link{compute_relative_floors}}).}
 
 \item{null_scenario}{Name of the null scenario in \code{summary_by_scenario}.}
 
@@ -25,13 +28,19 @@ each as returned by \code{\link{summarize_grid_by_kappa}} over the same
 \value{
 A list with \code{kappa_star} (the selected threshold, or
 \code{NA} with a warning if none is feasible) and
-\code{feasibility_table}.
+\code{feasibility_table} (\code{kappa}, \code{null_ESS},
+\code{feasible} and, per alternative scenario, \code{power_<s>},
+\code{power_LCB_<s>} and \code{floor_<s>}).
 }
 \description{
-Among candidate thresholds for which the lower confidence bound on power
-is at least \code{power_floor} under every alternative scenario, selects
-the one with the smallest expected sample size under the null scenario.
+Among candidate thresholds for which the one-sided 95\\% exact lower
+confidence bound on power (\code{power_LCB} from
+\code{\link{summarize_grid_by_kappa}}) is at least the floor under every
+alternative scenario, selects the one with the smallest expected sample
+size under the null scenario. A threshold with an \code{NA} lower bound in
+any alternative scenario is infeasible. Ties in null expected sample size
+(within 1e-8) are broken in favour of the \emph{larger} kappa.
 }
 \seealso{
-\code{\link{run_calibration_grid}}, \code{\link{summarize_grid_by_kappa}}
+\code{\link{summarize_grid_by_kappa}}, \code{\link{compute_relative_floors}}
 }

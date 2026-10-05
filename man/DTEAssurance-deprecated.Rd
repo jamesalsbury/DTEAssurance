@@ -23,7 +23,9 @@ select_lambda_star(...)
 \item{...}{Arguments passed to the replacement function.}
 
 \item{raw, lambda_grid, conf_level}{See \code{\link{summarize_grid_by_kappa}}
-(\code{lambda_grid} is passed as \code{kappa_grid}).}
+(\code{lambda_grid} is passed as \code{kappa_grid}; the two-sided
+\code{conf_level} is converted to the equivalent one-sided
+\code{lcb_level}).}
 }
 \value{
 The return value of the replacement function.

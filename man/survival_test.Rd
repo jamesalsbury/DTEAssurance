@@ -12,7 +12,8 @@ survival_test(
   rho = 0,
   gamma = 0,
   t_star = NULL,
-  s_star = NULL
+  s_star = NULL,
+  return_HR = TRUE
 )
 }
 \arguments{
@@ -31,12 +32,19 @@ survival_test(
 \item{t_star}{Parameter \eqn{t^*} used in the modestly weighted test.}
 
 \item{s_star}{Parameter \eqn{s^*} used in the modestly weighted test.}
+
+\item{return_HR}{If \code{TRUE} (default), fit a Cox model and return the
+estimated hazard ratio as \code{observed_HR}. If \code{FALSE}, the Cox
+fit is skipped (it does not affect \code{Signif} or \code{Z}) and
+\code{observed_HR} is \code{NA}. The group-sequential and predictive
+probability code uses \code{FALSE}.}
 }
 \value{
 A list containing:
 \describe{
 \item{Signif}{Logical indicator of statistical significance based on the chosen test and alpha level.}
-\item{observed_HR}{Estimated hazard ratio from a Cox proportional hazards model.}
+\item{observed_HR}{Estimated hazard ratio from a Cox proportional hazards
+model, or \code{NA} if \code{return_HR = FALSE}.}
 \item{Z}{Signed test statistic, oriented so that positive values favour
 the arm coded as "Treatment" (or the second factor level of
 \code{group}, alphabetically, if levels are unlabelled) -- i.e.

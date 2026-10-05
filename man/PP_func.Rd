@@ -15,7 +15,7 @@ PP_func(
   analysis_model,
   censoring_model = NULL,
   future_boundaries = NULL,
-  n_sims = 500
+  n_sims
 )
 }
 \arguments{
@@ -31,7 +31,9 @@ PP_func(
 
 \item{posterior_df}{A data frame of posterior samples with columns:
 \code{lambda_c}, \code{delay_time} and \code{HR}, corresponding to the control hazard,
-the delay (changepoint) time and the post-delay hazard ratio, respectively.}
+the delay (changepoint) time and the post-delay hazard ratio, respectively,
+plus \code{gamma_c} (the Weibull shape) when
+\code{control_distribution = "Weibull"}.}
 
 \item{control_distribution}{Distributional form assumed for the control arm:
 either \code{"Exponential"} (default) or \code{"Weibull"}.}
@@ -90,10 +92,8 @@ Bayesian-predictive-probability futility look is not supported here, as
 it would require nested posterior-predictive simulation at each look;
 see the package/manuscript Limitations.}
 
-\item{n_sims}{Number of predictive simulations to run (default is 500).
-The manuscript reports results based on \code{n_sims = 1000}; confirm
-this argument is set explicitly by the caller rather than relying on
-the default, and report the value used.}
+\item{n_sims}{Number of posterior-predictive draws (required, no
+default).}
 }
 \value{
 A list with a single element \code{PP_df}, a data frame with
@@ -104,6 +104,24 @@ decided). The predictive probability is \code{mean(PP_df$success)}.
 }
 \description{
 Calculate the predictive probability (PP) given interim data and posterior samples
+}
+\details{
+\strong{Model.} The control arm is Weibull with rate \code{lambda_c} and
+shape \code{gamma_c}; an exponential control arm
+(\code{control_distribution = "Exponential"}) is handled as the Weibull
+case with \code{gamma_c = 1}, using the same code path. The treatment arm
+follows the control hazard up to \code{delay_time} and the control hazard
+multiplied by \code{HR} afterwards. Each predictive draw samples one row
+of \code{posterior_df}, simulates event times for patients not yet
+recruited, and simulates residual event times for patients censored at
+the interim, conditional on their follow-up so far.
+
+\strong{Recruitment assumption.} Recruitment times for patients not yet
+recruited at the interim are drawn from
+\code{Uniform(df_cens_time, rec_time_planned)}. This is correct for
+uniform recruitment (the \code{"power"} recruitment model with
+\code{power = 1}) only; the simulation functions that call
+\code{PP_func()} stop if another recruitment model is supplied.
 }
 \examples{
 set.seed(123)
