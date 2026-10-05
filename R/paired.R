@@ -142,17 +142,7 @@ single_paired_rep <- function(i, seed,
 
     # --- 2. Simulate the trial ---
     if (!is.null(truth)) {
-      dist <- if (is.null(truth$gamma_c)) "Exponential" else "Weibull"
-      trial_data <- sim_dte(n_c, n_t, truth$lambda_c,
-                            delay_time = truth$delay_time,
-                            post_delay_HR = truth$post_delay_HR,
-                            dist = dist, gamma_c = truth$gamma_c)
-      trial_data <- add_recruitment_time(trial_data,
-                                         rec_method   = recruitment_model$method,
-                                         rec_period   = recruitment_model$period,
-                                         rec_power    = recruitment_model$power,
-                                         rec_rate     = recruitment_model$rate,
-                                         rec_duration = recruitment_model$duration)
+      trial_data <- simulate_trial_from_truth(truth, n_c, n_t, recruitment_model)
       state <- if (!is.null(truth$state)) {
         truth$state
       } else if (truth$post_delay_HR == 1) {
@@ -174,17 +164,11 @@ single_paired_rep <- function(i, seed,
       tr <- attr(trial_data, "truth")
     }
 
-    stat_LRT <- function(d) {
-      survival_test(d, analysis_method = "LRT",
-                    alternative = analysis_model_LRT$alternative_hypothesis,
-                    alpha = analysis_model_LRT$alpha, return_HR = FALSE)$Z
-    }
+    stat_LRT <- function(d) run_test(d, analysis_model_LRT)$Z
     stat_MW <- function(d, prefix) {
       z <- vapply(mw_t_stars, function(t) {
-        survival_test(d, analysis_method = "MW",
-                      alternative = analysis_model_LRT$alternative_hypothesis,
-                      alpha = analysis_model_LRT$alpha,
-                      t_star = t, return_HR = FALSE)$Z
+        run_test(d, utils::modifyList(analysis_model_LRT,
+                                      list(method = "MW", t_star = t)))$Z
       }, numeric(1))
       stats::setNames(as.list(z), paste0(prefix, "_MW_t", mw_t_stars))
     }

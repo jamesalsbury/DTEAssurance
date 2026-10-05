@@ -25,7 +25,6 @@ Imports:
     SHELF,
     stats,
     survival,
-    nleqslv,
     nph,
     nphRCT,
     dplyr,
@@ -35,6 +34,7 @@ Imports:
     future.apply
 Suggests:
     testthat (>= 3.0.0),
+    nleqslv,
     rjags,
     coda,
     shiny,

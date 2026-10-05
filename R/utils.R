@@ -27,16 +27,7 @@ simulate_one_trial <- function(i, j,
   }
 
   # --- Run statistical test ---
-  test_result <- survival_test(
-    censored$data,
-    analysis_method = analysis_model$method,
-    alpha = analysis_model$alpha,
-    alternative = analysis_model$alternative_hypothesis,
-    rho = analysis_model$rho,
-    gamma = analysis_model$gamma,
-    t_star = analysis_model$t_star,
-    s_star = analysis_model$s_star
-  )
+  test_result <- run_test(censored$data, analysis_model, return_HR = TRUE)
 
   # --- Output ---
   list(
@@ -93,28 +84,18 @@ simulate_trial_with_recruitment <- function(n_c, n_t,
         lambda_c_i <- control_model$lambda
         gamma_c_i <- control_model$gamma
       } else if (control_model$fixed_type == "Landmark") {
-        WeibFunc <- function(params) {
-          lambda <- params[1]
-          k <- params[2]
-          c(exp(-(control_model$t1 * lambda)^k) - control_model$surv_t1,
-            exp(-(control_model$t2 * lambda)^k) - control_model$surv_t2)
-        }
-        solution <- nleqslv::nleqslv(c(1, 1), fn = WeibFunc)
-        lambda_c_i <- solution$x[1]
-        gamma_c_i <- solution$x[2]
+        wb <- weibull_from_landmarks(control_model$surv_t1, control_model$surv_t2,
+                                     control_model$t1, control_model$t2)
+        lambda_c_i <- wb$lambda
+        gamma_c_i <- wb$gamma
       }
     } else if (control_model$parameter_mode == "Distribution") {
       sampledS1 <- stats::rbeta(1, control_model$t1_Beta_a, control_model$t1_Beta_b)
       sampledDelta <- stats::rbeta(1, control_model$diff_Beta_a, control_model$diff_Beta_b)
-      sampledS2 <- sampledS1 - sampledDelta
-      solution <- nleqslv::nleqslv(c(10, 1), function(params) {
-        lambda <- params[1]
-        k <- params[2]
-        c(exp(-(control_model$t1 / lambda)^k) - sampledS1,
-          exp(-(control_model$t2 / lambda)^k) - sampledS2)
-      })
-      lambda_c_i <- 1 / solution$x[1]
-      gamma_c_i <- solution$x[2]
+      wb <- weibull_from_landmarks(sampledS1, sampledS1 - sampledDelta,
+                                   control_model$t1, control_model$t2)
+      lambda_c_i <- wb$lambda
+      gamma_c_i <- wb$gamma
     }
   }
 
@@ -193,17 +174,7 @@ apply_GSD_to_trial <- function(n_c,
     check_uniform_recruitment(recruitment_model, "apply_GSD_to_trial")
   }
 
-  compute_Z <- function(eligible_df) {
-    survival_test(eligible_df,
-                  analysis_method = analysis_model$method,
-                  alpha           = analysis_model$alpha,
-                  alternative     = analysis_model$alternative_hypothesis,
-                  rho             = analysis_model$rho,
-                  gamma           = analysis_model$gamma,
-                  t_star          = analysis_model$t_star,
-                  s_star          = analysis_model$s_star,
-                  return_HR       = FALSE)$Z
-  }
+  compute_Z <- function(eligible_df) run_test(eligible_df, analysis_model)$Z
 
   if (GSD_model$futility_type %in% c("Beta", "none")) {
     info_rates <- round(design$informationRates, 6)
@@ -643,27 +614,8 @@ single_grid_rep <- function(i,
   if (!is.null(seed)) set.seed(seed * 10000 + i)
 
   # --- Simulate the true underlying trial ---
-  if (is.null(data_generating_model$gamma_c)) {
-    trial_data <- sim_dte(n_c, n_t,
-                          data_generating_model$lambda_c,
-                          delay_time = data_generating_model$delay_time,
-                          post_delay_HR = data_generating_model$post_delay_HR,
-                          dist = "Exponential")
-  } else {
-    trial_data <- sim_dte(n_c, n_t,
-                          data_generating_model$lambda_c,
-                          delay_time = data_generating_model$delay_time,
-                          post_delay_HR = data_generating_model$post_delay_HR,
-                          dist = "Weibull",
-                          gamma_c = data_generating_model$gamma_c)
-  }
-
-  trial_data <- add_recruitment_time(trial_data,
-                                     rec_method   = recruitment_model$method,
-                                     rec_period   = recruitment_model$period,
-                                     rec_power    = recruitment_model$power,
-                                     rec_rate     = recruitment_model$rate,
-                                     rec_duration = recruitment_model$duration)
+  trial_data <- simulate_trial_from_truth(data_generating_model, n_c, n_t,
+                                          recruitment_model)
 
   # --- Interim look: compute PP (independent of any kappa) ---
   cut <- cens_data(trial_data, cens_method = "Events",
@@ -709,15 +661,7 @@ single_grid_rep <- function(i,
     is_last <- (k == length(future_boundaries))
 
     censored_k <- cens_data(trial_data, cens_method = "Events", cens_events = fb$events)
-    test_k <- survival_test(censored_k$data,
-                            analysis_method = analysis_model$method,
-                            alpha = analysis_model$alpha,
-                            alternative = analysis_model$alternative_hypothesis,
-                            rho = analysis_model$rho,
-                            gamma = analysis_model$gamma,
-                            t_star = analysis_model$t_star,
-                            s_star = analysis_model$s_star,
-                            return_HR = FALSE)
+    test_k <- run_test(censored_k$data, analysis_model)
 
     if (!is.na(test_k$Z) && test_k$Z > fb$crit) {
       continuation_success <- 1
@@ -1060,37 +1004,13 @@ single_matched_futility_rep <- function(i, n_c, n_t, data_generating_model,
 
   if (!is.null(seed)) set.seed(seed * 10000 + i)
 
-  if (is.null(data_generating_model$gamma_c)) {
-    trial_data <- sim_dte(n_c, n_t, data_generating_model$lambda_c,
-                          delay_time = data_generating_model$delay_time,
-                          post_delay_HR = data_generating_model$post_delay_HR,
-                          dist = "Exponential")
-  } else {
-    trial_data <- sim_dte(n_c, n_t, data_generating_model$lambda_c,
-                          delay_time = data_generating_model$delay_time,
-                          post_delay_HR = data_generating_model$post_delay_HR,
-                          dist = "Weibull", gamma_c = data_generating_model$gamma_c)
-  }
-
-  trial_data <- add_recruitment_time(trial_data,
-                                     rec_method   = recruitment_model$method,
-                                     rec_period   = recruitment_model$period,
-                                     rec_power    = recruitment_model$power,
-                                     rec_rate     = recruitment_model$rate,
-                                     rec_duration = recruitment_model$duration)
+  trial_data <- simulate_trial_from_truth(data_generating_model, n_c, n_t,
+                                          recruitment_model)
 
   censored <- cens_data(trial_data, cens_method = "Events",
                         cens_events = n_events_at(total_events, futility_IF))
 
-  Z <- survival_test(censored$data,
-                     analysis_method = analysis_model$method,
-                     alpha           = analysis_model$alpha,
-                     alternative     = analysis_model$alternative_hypothesis,
-                     rho             = analysis_model$rho,
-                     gamma           = analysis_model$gamma,
-                     t_star          = analysis_model$t_star,
-                     s_star          = analysis_model$s_star,
-                     return_HR       = FALSE)$Z
+  Z <- run_test(censored$data, analysis_model)$Z
 
   data.frame(Z = Z)
 }

@@ -355,15 +355,16 @@ calc_dte_assurance <- function(n_c,
 #'
 #' Performs a survival analysis using the standard log-rank test (LRT), a
 #' weighted log-rank test in the Fleming-Harrington family (WLRT), or the
-#' modestly-weighted log-rank test of Magirr and Burman (MW). The function
-#' estimates the hazard ratio and determines whether the result is
-#' statistically significant based on the specified alpha level and
-#' alternative hypothesis.
+#' modestly-weighted log-rank test of Magirr and Burman (MW), and determines
+#' whether the result is statistically significant at the specified alpha
+#' level and alternative hypothesis.
 #'
 #' @param data A dataframe containing survival data. Must include columns for survival time, event status, and treatment group.
 #' @param analysis_method Method of analysis: \code{"LRT"} (default) for standard log-rank test, \code{"WLRT"} for a Fleming-Harrington-family weighted log-rank test, or \code{"MW"} for the modestly-weighted log-rank test.
-#' @param alpha Type I error threshold for significance testing.
-#' @param alternative String specifying the alternative hypothesis. Must be one of \code{"one.sided"} or \code{"two.sided"} (default).
+#' @param alternative String specifying the alternative hypothesis: \code{"one.sided"} (default) or \code{"two.sided"}.
+#' @param alpha Type I error level for the significance test (required, no
+#'   default). Pass \code{NULL} if only \code{Z} is needed; \code{Signif} is
+#'   then \code{NA}.
 #' @param rho Rho parameter for the Fleming-Harrington weighted log-rank test.
 #' @param gamma Gamma parameter for the Fleming-Harrington weighted log-rank test.
 #' @param t_star Parameter \eqn{t^*} used in the modestly weighted test.
@@ -376,34 +377,14 @@ calc_dte_assurance <- function(n_c,
 #'
 #' @return A list containing:
 #' \describe{
-#'   \item{Signif}{Logical indicator of statistical significance based on the chosen test and alpha level.}
+#'   \item{Signif}{Logical: whether the test is significant at level
+#'     \code{alpha}. \code{FALSE} if \code{Z} is \code{NA}; \code{NA} if
+#'     \code{alpha} is \code{NULL}.}
 #'   \item{observed_HR}{Estimated hazard ratio from a Cox proportional hazards
 #'     model, or \code{NA} if \code{return_HR = FALSE}.}
-#'   \item{Z}{Signed test statistic, oriented so that positive values favour
-#'     the arm coded as "Treatment" (or the second factor level of
-#'     \code{group}, alphabetically, if levels are unlabelled) -- i.e.
-#'     positive Z corresponds to a hazard ratio below 1 (benefit). This
-#'     convention is consistent across all three methods (verified by
-#'     diagnostic: see notes below) and is what group-sequential boundary
-#'     comparisons in \code{apply_GSD_to_trial}/\code{PP_func} rely on.}
-#' }
-#'
-#' @section Sign convention notes (verified by diagnostic, 2026):
-#' \itemize{
-#'   \item \strong{LRT}: uses \code{survival::survdiff()}'s own
-#'     \code{(exp[2] - obs[2])} construction, correctly signed by
-#'     construction (positive = benefit).
-#'   \item \strong{WLRT}: uses \code{nph::logrank.test()}'s native
-#'     \code{$test$z} directly. Confirmed correctly signed against LRT on
-#'     an unambiguous large-benefit case (HR = 0.21: LRT Z = 13.20,
-#'     WLRT(rho=0,gamma=1) Z = 13.96 -- same sign, comparable magnitude).
-#'   \item \strong{MW}: \code{nphRCT::wlrt()}'s \code{$z} uses the
-#'     OPPOSITE sign convention to \code{survdiff()} (confirmed by
-#'     diagnostic: on the same unambiguous large-benefit case, HR = 0.245,
-#'     LRT gave Z = +12.27 while raw \code{wlrt()$z} gave -12.30 -- same
-#'     magnitude, flipped sign). The sign is therefore negated below
-#'     (\code{Z <- -test$z}) so that positive Z consistently means benefit
-#'     across all three methods.
+#'   \item{Z}{Signed test statistic. For all three methods, positive values
+#'     favour the arm coded as "Treatment" (the second factor level of
+#'     \code{group}), i.e. positive Z corresponds to a hazard ratio below 1.}
 #' }
 #'
 #' @examples
@@ -418,8 +399,12 @@ calc_dte_assurance <- function(n_c,
 #'
 #' @export
 survival_test <- function(data, analysis_method = "LRT", alternative = "one.sided",
-                          alpha = 0.05, rho = 0, gamma = 0,
+                          alpha, rho = 0, gamma = 0,
                           t_star = NULL, s_star = NULL, return_HR = TRUE){
+
+  if (missing(alpha)) {
+    stop("survival_test: 'alpha' must be supplied (use alpha = NULL if only Z is needed).")
+  }
 
   observed_HR <- NA_real_
   if (return_HR) {
@@ -427,56 +412,36 @@ survival_test <- function(data, analysis_method = "LRT", alternative = "one.side
     observed_HR <- as.numeric(exp(stats::coef(coxmodel)))
   }
 
-  Signif <- 0
   Z <- NA_real_
 
   if (analysis_method == "LRT") {
     test_result <- survival::survdiff(Surv(survival_time, status) ~ group, data = data)
     Z <- (test_result$exp[2] - test_result$obs[2]) / sqrt(test_result$var[2, 2])
-
-    if (alternative == "one.sided") {
-      Signif <- Z > stats::qnorm(1 - alpha)
-    } else {
-      Signif <- abs(Z) > stats::qnorm(1 - alpha/2)
-    }
-
   } else if (analysis_method == "WLRT") {
     test <- nph::logrank.test(data$survival_time, data$status, data$group,
                               rho = rho, gamma = gamma)
-    # FIX: use nph's own native signed statistic directly. Diagnostic
-    # confirmed this is correctly signed and consistent with LRT's
-    # convention on an unambiguous case, so no sign correction is needed
-    # here (unlike MW below). This replaces an earlier, more fragile
-    # construction (sign(-log(observed_HR)) * sqrt(Chisq)) that discarded
-    # and reconstructed sign information the package already provides.
+    # nph::logrank.test()'s z already has positive Z = benefit.
     Z <- test$test$z
-
-    if (alternative == "one.sided") {
-      Signif <- Z > stats::qnorm(1 - alpha)
-    } else {
-      Signif <- abs(Z) > stats::qnorm(1 - alpha/2)
-    }
-
   } else if (analysis_method == "MW") {
     test <- nphRCT::wlrt(Surv(survival_time, status) ~ group,
                          data = data, method = "mw",
                          t_star = t_star, s_star = s_star)
-    # FIX: nphRCT::wlrt()'s $z uses the OPPOSITE sign convention to
-    # survdiff() -- confirmed by diagnostic (unambiguous HR=0.245 benefit
-    # case gave LRT Z=+12.27 but raw wlrt() z=-12.30). Negate to restore
-    # the "positive Z = benefit" convention used consistently by the LRT
-    # and WLRT branches above and relied on throughout the rest of the
-    # package (group-sequential boundary comparisons, PP_func, etc.).
+    # nphRCT::wlrt() has the opposite sign convention; negate so positive Z = benefit.
     Z <- -test$z
+  }
+  Z <- unname(Z)
 
-    if (alternative == "one.sided") {
-      Signif <- Z > stats::qnorm(1 - alpha)
-    } else {
-      Signif <- abs(Z) > stats::qnorm(1 - alpha/2)
-    }
+  Signif <- if (is.null(alpha)) {
+    NA
+  } else if (is.na(Z)) {
+    FALSE
+  } else if (alternative == "one.sided") {
+    Z > stats::qnorm(1 - alpha)
+  } else {
+    abs(Z) > stats::qnorm(1 - alpha/2)
   }
 
-  return(list(Signif = Signif, observed_HR = observed_HR, Z = Z))
+  return(list(Signif = as.logical(Signif), observed_HR = observed_HR, Z = Z))
 }
 
 #' Add recruitment time to a survival dataset
@@ -1581,15 +1546,7 @@ PP_func <- function(data, posterior_df, control_distribution = "Exponential", n_
 
         censored_k <- cens_data(final_df, cens_method = "Events", cens_events = fb$events)
 
-        test_k <- survival_test(censored_k$data,
-                                analysis_method = analysis_model$method,
-                                alpha = analysis_model$alpha,
-                                alternative = analysis_model$alternative_hypothesis,
-                                rho = analysis_model$rho,
-                                gamma = analysis_model$gamma,
-                                t_star = analysis_model$t_star,
-                                s_star = analysis_model$s_star,
-                                return_HR = FALSE)
+        test_k <- run_test(censored_k$data, analysis_model)
 
         Z_current <- test_k$Z
 
@@ -1622,15 +1579,7 @@ PP_func <- function(data, posterior_df, control_distribution = "Exponential", n_
         censored <- cens_data(final_df, cens_method = "IF", cens_IF = censoring_model$IF)
       }
 
-      test_result <- survival_test(censored$data,
-                                   analysis_method = analysis_model$method,
-                                   alpha = analysis_model$alpha,
-                                   alternative = analysis_model$alternative_hypothesis,
-                                   rho = analysis_model$rho,
-                                   gamma = analysis_model$gamma,
-                                   t_star = analysis_model$t_star,
-                                   s_star = analysis_model$s_star,
-                                   return_HR = FALSE)
+      test_result <- run_test(censored$data, analysis_model)
 
       PP_df[j,] <- c(test_result$Signif, test_result$Z)
     }
@@ -1776,27 +1725,8 @@ calibrate_PP_threshold <- function(n_c,
   run_one <- function(i) {
     if (!is.null(seed)) set.seed(seed * 10000 + i)
 
-    if (is.null(data_generating_model$gamma_c)) {
-      data <- sim_dte(n_c, n_t,
-                      data_generating_model$lambda_c,
-                      delay_time = data_generating_model$delay_time,
-                      post_delay_HR = data_generating_model$post_delay_HR,
-                      dist = "Exponential")
-    } else {
-      data <- sim_dte(n_c, n_t,
-                      data_generating_model$lambda_c,
-                      delay_time = data_generating_model$delay_time,
-                      post_delay_HR = data_generating_model$post_delay_HR,
-                      dist = "Weibull",
-                      gamma_c = data_generating_model$gamma_c)
-    }
-
-    data <- add_recruitment_time(data,
-                                 rec_method   = recruitment_model$method,
-                                 rec_period   = recruitment_model$period,
-                                 rec_power    = recruitment_model$power,
-                                 rec_rate     = recruitment_model$rate,
-                                 rec_duration = recruitment_model$duration)
+    data <- simulate_trial_from_truth(data_generating_model, n_c, n_t,
+                                      recruitment_model)
 
     censored_data <- cens_data(data, cens_method = "Events",
                                cens_events = n_events_at(IA_model$events, IA_model$IF))
