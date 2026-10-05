@@ -1,4 +1,4 @@
-test_that("calibrate_BPP_timing returns correct structure with mocked single_calibration_rep", {
+test_that("calibrate_PP_timing returns correct structure with mocked single_calibration_rep", {
 
   # ---- Correctly mocked function (first argument = iter index) ----
   fake_single_rep <- function(iter_index,
@@ -11,13 +11,13 @@ test_that("calibrate_BPP_timing returns correct structure with mocked single_cal
                               analysis_model,
                               ...) {
 
-    BPP_df <- data.frame(
+    PP_df <- data.frame(
       success = rep(IF > 0.5, 3), # deterministic
       Z_val   = c(2, 2, 2)
     )
 
     list(
-      BPP_outcome = list(BPP_df = BPP_df),
+      PP_outcome = list(PP_df = PP_df),
       cens_time   = IF * 100
     )
   }
@@ -41,7 +41,7 @@ test_that("calibrate_BPP_timing returns correct structure with mocked single_cal
   out <- testthat::with_mocked_bindings(
     single_calibration_rep = fake_single_rep,
     {
-      calibrate_BPP_timing(
+      calibrate_PP_timing(
         n_c = n_c, n_t = n_t,
         control_model = control_model,
         effect_model = effect_model,
@@ -60,17 +60,17 @@ test_that("calibrate_BPP_timing returns correct structure with mocked single_cal
   outcome_list <- out$outcome_list
   expect_equal(length(outcome_list), 2)
 
-  expect_true(all(c("BPP_values", "cens_time") %in% names(outcome_list[[1]])))
-  expect_true(all(c("BPP_values", "cens_time") %in% names(outcome_list[[2]])))
+  expect_true(all(c("PP_values", "cens_time") %in% names(outcome_list[[1]])))
+  expect_true(all(c("PP_values", "cens_time") %in% names(outcome_list[[2]])))
 
-  expect_equal(length(outcome_list[[1]]$BPP_values), 5)
-  expect_equal(length(outcome_list[[2]]$BPP_values), 5)
+  expect_equal(length(outcome_list[[1]]$PP_values), 5)
+  expect_equal(length(outcome_list[[2]]$PP_values), 5)
 
   # IF = 0.3 → success = FALSE
-  expect_true(all(outcome_list[[1]]$BPP_values == 0))
+  expect_true(all(outcome_list[[1]]$PP_values == 0))
   expect_true(all(outcome_list[[1]]$cens_time == 30))
 
   # IF = 0.6 → success = TRUE
-  expect_true(all(outcome_list[[2]]$BPP_values == 1))
+  expect_true(all(outcome_list[[2]]$PP_values == 1))
   expect_true(all(outcome_list[[2]]$cens_time == 60))
 })

@@ -368,7 +368,7 @@ calc_dte_assurance <- function(n_c,
 #'     positive Z corresponds to a hazard ratio below 1 (benefit). This
 #'     convention is consistent across all three methods (verified by
 #'     diagnostic: see notes below) and is what group-sequential boundary
-#'     comparisons in \code{apply_GSD_to_trial}/\code{BPP_func} rely on.}
+#'     comparisons in \code{apply_GSD_to_trial}/\code{PP_func} rely on.}
 #' }
 #'
 #' @section Sign convention notes (verified by diagnostic, 2026):
@@ -446,7 +446,7 @@ survival_test <- function(data, analysis_method = "LRT", alternative = "one.side
     # case gave LRT Z=+12.27 but raw wlrt() z=-12.30). Negate to restore
     # the "positive Z = benefit" convention used consistently by the LRT
     # and WLRT branches above and relied on throughout the rest of the
-    # package (group-sequential boundary comparisons, BPP_func, etc.).
+    # package (group-sequential boundary comparisons, PP_func, etc.).
     Z <- -test$z
 
     if (alternative == "one.sided") {
@@ -592,16 +592,16 @@ add_recruitment_time <- function(data, rec_method,
 #'     \item \code{alpha_spending}: Cumulative alpha spending vector
 #'     \item \code{alpha_IF}: Information Fraction(s) at which we look for efficacy
 #'     \item \code{futility_type}: One of \code{"none"}, \code{"Beta"}
-#'       (pre-specified beta-spending, via \code{rpact}), \code{"BPP"}
-#'       (Bayesian Predictive Probability futility, D3-style), or
+#'       (pre-specified beta-spending, via \code{rpact}), \code{"PP"}
+#'       (predictive probability futility, D3-style), or
 #'       \code{"MatchedZ"} (a fixed, externally-calibrated Z-statistic
 #'       cutoff, non-binding -- D4/D5-style; see
 #'       \code{\link{calibrate_matched_futility_boundary}} for how to
 #'       obtain \code{futility_boundary_Z}).
 #'     \item \code{futility_IF}: Information Fraction at which we look for futility
-#'       (required for \code{"BPP"} and \code{"MatchedZ"}).
+#'       (required for \code{"PP"} and \code{"MatchedZ"}).
 #'     \item \code{beta_spending}: Cumulative beta spending vector (\code{"Beta"} only).
-#'     \item \code{BPP_threshold}: BPP value below which we stop for futility (\code{"BPP"} only).
+#'     \item \code{kappa}: PP value below which we stop for futility (\code{"PP"} only).
 #'     \item \code{futility_boundary_Z}: Z-statistic value below which we
 #'       stop for futility (\code{"MatchedZ"} only).
 #'   }
@@ -614,11 +614,11 @@ add_recruitment_time <- function(data, rec_method,
 #'   }
 #' @param update_priors_sims Number of posterior samples per interim
 #'   dataset, passed to \code{\link{update_priors}} (default 1000). Only
-#'   used when \code{GSD_model$futility_type == "BPP"}; harmless (ignored)
+#'   used when \code{GSD_model$futility_type == "PP"}; harmless (ignored)
 #'   otherwise.
-#' @param n_BPP_sims Number of predictive simulations per interim dataset,
-#'   passed to \code{\link{BPP_func}} (default 1000). Only used when
-#'   \code{GSD_model$futility_type == "BPP"}; harmless (ignored) otherwise.
+#' @param PP_sims Number of predictive simulations per interim dataset,
+#'   passed to \code{\link{PP_func}} (default 1000). Only used when
+#'   \code{GSD_model$futility_type == "PP"}; harmless (ignored) otherwise.
 #' @param n_sims Number of simulations to run (default = 1000)
 #'
 #' @return A data frame with one row per simulated trial and the following columns:
@@ -635,7 +635,7 @@ add_recruitment_time <- function(data, rec_method,
 #'     \code{TRUE} if \code{Decision \%in\% c("Stop for efficacy",
 #'     "Successful at final")}, \code{FALSE} otherwise. Derived directly
 #'     and only from \code{Decision} -- see "Bug fix" below.}
-#'   \item{Converged}{For \code{"BPP"} designs, whether the interim MCMC
+#'   \item{Converged}{For \code{"PP"} designs, whether the interim MCMC
 #'     fit converged (see \code{\link{update_priors}}); \code{NA} for
 #'     other futility types, which involve no MCMC step.}
 #' }
@@ -689,18 +689,20 @@ calc_dte_assurance_adaptive <- function(n_c, n_t,
                                         GSD_model,
                                         analysis_model = NULL,
                                         update_priors_sims = 1000,
-                                        n_BPP_sims = 1000,
+                                        PP_sims = 1000,
                                         n_sims = 1000) {
 
+  GSD_model <- normalise_futility_spec(GSD_model)
+
   if (is.null(GSD_model$futility_type) ||
-      !GSD_model$futility_type %in% c("none", "Beta", "BPP", "MatchedZ")) {
-    stop("GSD_model$futility_type must be one of 'none', 'Beta', 'BPP', or 'MatchedZ'.")
+      !GSD_model$futility_type %in% c("none", "Beta", "PP", "MatchedZ")) {
+    stop("GSD_model$futility_type must be one of 'none', 'Beta', 'PP', or 'MatchedZ'.")
   }
 
-  if (GSD_model$futility_type == "BPP" &&
+  if (GSD_model$futility_type == "PP" &&
       !identical(control_model$parameter_mode, "Distribution")) {
     stop(
-      "Invalid specification: when `GSD_model$futility_type` is \"BPP\", ",
+      "Invalid specification: when `GSD_model$futility_type` is \"PP\", ",
       "`control_model$parameter_mode` must be \"Distribution\"."
     )
   }
@@ -732,10 +734,10 @@ calc_dte_assurance_adaptive <- function(n_c, n_t,
     # --- FIX: single, unified call to apply_GSD_to_trial() for every
     # futility_type. apply_GSD_to_trial() already dispatches correctly on
     # GSD_model$futility_type internally (none/Beta -> boundary-only;
-    # BPP -> posterior-predictive futility; MatchedZ -> fixed calibrated
+    # PP -> posterior-predictive futility; MatchedZ -> fixed calibrated
     # Z-cutoff futility), so no branching is needed here. control_model/
-    # effect_model/recruitment_model/update_priors_sims/n_BPP_sims are
-    # only actually used inside apply_GSD_to_trial()'s BPP branch; passing
+    # effect_model/recruitment_model/update_priors_sims/PP_sims are
+    # only actually used inside apply_GSD_to_trial()'s PP branch; passing
     # them unconditionally is harmless for other futility types. ---
     outcome <- apply_GSD_to_trial(
       n_c = n_c, n_t = n_t,
@@ -748,7 +750,7 @@ calc_dte_assurance_adaptive <- function(n_c, n_t,
       recruitment_model   = recruitment_model,
       analysis_model      = analysis_model,
       update_priors_sims  = update_priors_sims,
-      n_BPP_sims          = n_BPP_sims
+      PP_sims             = PP_sims
     )
 
     # --- FIX: Success is now derived ONLY from outcome$decision (the
@@ -932,8 +934,8 @@ model {
   for (i in (n+1):m){
     zeros[i] ~ dpois(zeros.mean[i])
     zeros.mean[i] <-  -l[i] + C
-    l[i] <- ifelse(data_event[i]==1, ifelse(data_time[i]<delay_time, log(lambda_c)-(lambda_c*data_time[i]), log(lambda_t)-lambda_t*(data_time[i]-delay_time)-(delay_time*lambda_c)),
-      ifelse(data_time[i]<delay_time, -(lambda_c*data_time[i]), -(lambda_c*delay_time)-lambda_t*(data_time[i]-delay_time)))
+    l[i] <- ifelse(data_event[i]==1, ifelse(data_time[i]<delay_time, log(lambda_c)-(lambda_c*data_time[i]), log(lambda_e)-lambda_e*(data_time[i]-delay_time)-(delay_time*lambda_c)),
+      ifelse(data_time[i]<delay_time, -(lambda_c*data_time[i]), -(lambda_c*delay_time)-lambda_e*(data_time[i]-delay_time)))
   }
 
 
@@ -947,7 +949,7 @@ model {
 
   delay_time <- equals(Z, 3) * delay_slab
   ", control_jags, "
-  lambda_t <- lambda_c * HR
+  lambda_e <- lambda_c * HR
 
     }
 "
@@ -976,8 +978,8 @@ model {
   for (i in (n+1):m){
     zeros[i] ~ dpois(zeros.mean[i])
     zeros.mean[i] <-  -l[i] + C
-    l[i] <- ifelse(data_event[i]==1, ifelse(data_time[i]<delay_time, log(gamma_c)+gamma_c*log(lambda_c*data_time[i])-(lambda_c*data_time[i])^gamma_c-log(data_time[i]), log(gamma_c)+gamma_c*log(lambda_t)+(gamma_c-1)*log(data_time[i])-lambda_t^gamma_c*(data_time[i]^gamma_c-delay_time^gamma_c)-(delay_time*lambda_c)^gamma_c),
-      ifelse(data_time[i]<delay_time, -(lambda_c*data_time[i])^gamma_c, -(lambda_c*delay_time)^gamma_c-lambda_t^gamma_c*(data_time[i]^gamma_c-delay_time^gamma_c)))
+    l[i] <- ifelse(data_event[i]==1, ifelse(data_time[i]<delay_time, log(gamma_c)+gamma_c*log(lambda_c*data_time[i])-(lambda_c*data_time[i])^gamma_c-log(data_time[i]), log(gamma_c)+gamma_c*log(lambda_e)+(gamma_c-1)*log(data_time[i])-lambda_e^gamma_c*(data_time[i]^gamma_c-delay_time^gamma_c)-(delay_time*lambda_c)^gamma_c),
+      ifelse(data_time[i]<delay_time, -(lambda_c*data_time[i])^gamma_c, -(lambda_c*delay_time)^gamma_c-lambda_e^gamma_c*(data_time[i]^gamma_c-delay_time^gamma_c)))
   }
 
 
@@ -994,7 +996,7 @@ model {
   delay_time <- equals(Z, 3) * delay_slab
 
   ", control_jags, "
-  lambda_t <- lambda_c*pow(HR, 1/gamma_c)
+  lambda_e <- lambda_c*pow(HR, 1/gamma_c)
 
     }
 "
@@ -1100,7 +1102,7 @@ return(posterior_df)
 }
 
 
-#' Calculate Bayesian Predictive Probability given interim data and posterior samples
+#' Calculate the predictive probability (PP) given interim data and posterior samples
 #'
 #' @param data A data frame containing interim survival data, censored at \code{df_cens_time}, with columns:
 #'   \itemize{
@@ -1168,11 +1170,11 @@ return(posterior_df)
 #'   this argument is set explicitly by the caller rather than relying on
 #'   the default, and report the value used.
 #'
-#' @return A list with a single element \code{BPP_df}, a data frame with
+#' @return A list with a single element \code{PP_df}, a data frame with
 #'   columns \code{success} (0/1, whether this predictive draw ultimately
 #'   rejects \eqn{H_0}, accounting for any future fixed efficacy boundaries)
 #'   and \code{Z_val} (the test statistic at the analysis where the draw was
-#'   decided). The predictive probability is \code{mean(BPP_df$success)}.
+#'   decided). The predictive probability is \code{mean(PP_df$success)}.
 #'
 #' @export
 #'
@@ -1209,7 +1211,7 @@ return(posterior_df)
 #'   list(events = 28, crit = 2.00)
 #' )
 #'
-#' BPP_outcome <- BPP_func(df, posterior_df,
+#' PP_outcome <- PP_func(df, posterior_df,
 #'            control_distribution = "Exponential",
 #'            n_c_planned = n/2, n_t_planned = n/2,
 #'            rec_time_planned = 12, df_cens_time = 15,
@@ -1217,7 +1219,7 @@ return(posterior_df)
 #'            future_boundaries = future_boundaries,
 #'            n_sims = 10)
 #'
-BPP_func <- function(data, posterior_df, control_distribution = "Exponential", n_c_planned, n_t_planned,
+PP_func <- function(data, posterior_df, control_distribution = "Exponential", n_c_planned, n_t_planned,
                      rec_time_planned, df_cens_time,
                      analysis_model,
                      censoring_model = NULL,
@@ -1225,7 +1227,7 @@ BPP_func <- function(data, posterior_df, control_distribution = "Exponential", n
                      n_sims = 500) {
 
   if (is.null(future_boundaries) && is.null(censoring_model)) {
-    stop("BPP_func: supply either 'future_boundaries' (recommended -- a chain ",
+    stop("PP_func: supply either 'future_boundaries' (recommended -- a chain ",
          "of fixed future efficacy/final decision points matching the trial's ",
          "group-sequential design) or 'censoring_model' (legacy single-stage ",
          "fallback, uses a flat alpha rather than design-specific critical ",
@@ -1245,7 +1247,7 @@ BPP_func <- function(data, posterior_df, control_distribution = "Exponential", n
     gamma_c_samples <- posterior_df$gamma_c
   }
 
-  BPP_df <- data.frame(success = numeric(n_sims),
+  PP_df <- data.frame(success = numeric(n_sims),
                        Z_val = numeric(n_sims))
 
   for (j in 1:n_sims){
@@ -1260,7 +1262,7 @@ BPP_func <- function(data, posterior_df, control_distribution = "Exponential", n
     sampled_post_delay_HR <- post_delay_HR_samples[idx]
 
     if (control_distribution == "Exponential"){
-      sampled_lambda_t <- sampled_lambda_c*sampled_post_delay_HR
+      sampled_lambda_e <- sampled_lambda_c*sampled_post_delay_HR
 
       #For the unenrolled data, we can sample the remaining data according to the updated (sampled) parameters
       #First we do the control group
@@ -1271,7 +1273,7 @@ BPP_func <- function(data, posterior_df, control_distribution = "Exponential", n
       u <- stats::runif(n_unenrolled_treatment)
       unenrolled_treatment_times <- ifelse(u > CP,
                                            (-log(u))/sampled_lambda_c,
-                                           (1/sampled_lambda_t)*(sampled_delay_time*sampled_lambda_t-log(u)-sampled_delay_time*sampled_lambda_c))
+                                           (1/sampled_lambda_e)*(sampled_delay_time*sampled_lambda_e-log(u)-sampled_delay_time*sampled_lambda_c))
 
     }
 
@@ -1365,7 +1367,7 @@ BPP_func <- function(data, posterior_df, control_distribution = "Exponential", n
 
         # Late event time (conditional on surviving to sampled_delay_time)
         t_event_after <- sampled_delay_time +
-          (-log(u) - sampled_lambda_c * (sampled_delay_time - censored_treatment_before_delay$survival_time)) / sampled_lambda_t
+          (-log(u) - sampled_lambda_c * (sampled_delay_time - censored_treatment_before_delay$survival_time)) / sampled_lambda_e
 
         # Branch: before vs after sampled_delay_time
         resid_times <- ifelse(
@@ -1448,21 +1450,21 @@ BPP_func <- function(data, posterior_df, control_distribution = "Exponential", n
 
         # existing exponential logic (unchanged)
         censored_treatment_after_delay$final_time <-
-          censored_treatment_after_delay$survival_time + stats::rexp(n_after, rate = sampled_lambda_t)
+          censored_treatment_after_delay$survival_time + stats::rexp(n_after, rate = sampled_lambda_e)
 
       } else if (control_distribution == "Weibull") {
 
 
         # effective Weibull scale after delay
-        sampled_lambda_t <- sampled_lambda_c * sampled_post_delay_HR^(1 / sampled_gamma_c)
+        sampled_lambda_e <- sampled_lambda_c * sampled_post_delay_HR^(1 / sampled_gamma_c)
 
         # conditional Weibull residual life
         V <- stats::runif(n_after)
 
 
-        H_t0 <- (sampled_lambda_t * censored_treatment_after_delay$survival_time)^sampled_gamma_c
+        H_t0 <- (sampled_lambda_e * censored_treatment_after_delay$survival_time)^sampled_gamma_c
 
-        T_after <- (H_t0 - log(V))^(1 / sampled_gamma_c) / sampled_lambda_t
+        T_after <- (H_t0 - log(V))^(1 / sampled_gamma_c) / sampled_lambda_e
 
         censored_treatment_after_delay$final_time <- T_after
       }
@@ -1580,7 +1582,7 @@ BPP_func <- function(data, posterior_df, control_distribution = "Exponential", n
         # future boundary in the chain (mirrors the real trial continuing).
       }
 
-      BPP_df[j,] <- c(success, Z_current)
+      PP_df[j,] <- c(success, Z_current)
 
     } else {
 
@@ -1602,17 +1604,17 @@ BPP_func <- function(data, posterior_df, control_distribution = "Exponential", n
                                    t_star = analysis_model$t_star,
                                    s_star = analysis_model$s_star)
 
-      BPP_df[j,] <- c(test_result$Signif, test_result$Z)
+      PP_df[j,] <- c(test_result$Signif, test_result$Z)
     }
 
   }
 
-  return(list(BPP_df = BPP_df))
+  return(list(PP_df = PP_df))
 
 }
 
 
-#' Function to calculate the 'optimal' BPP threshold value
+#' Function to calculate the 'optimal' PP threshold value
 #'
 #' @param n_c Number of control patients
 #' @param n_t Number of treatment patients
@@ -1626,10 +1628,10 @@ BPP_func <- function(data, posterior_df, control_distribution = "Exponential", n
 #'   \itemize{
 #'     \item \code{events}: total planned event count (100% information fraction).
 #'     \item \code{IF}: the information fraction at which the interim futility
-#'       look occurs (i.e. where the data are censored to compute BPP).
+#'       look occurs (i.e. where the data are censored to compute PP).
 #'   }
 #' @param analysis_model A named list specifying the analysis method
-#'   (see \code{\link{BPP_func}} for details).
+#'   (see \code{\link{PP_func}} for details).
 #' @param data_generating_model A named list specifying the true data-generating
 #'   parameters used to simulate trials for calibration:
 #'   \itemize{
@@ -1641,9 +1643,9 @@ BPP_func <- function(data, posterior_df, control_distribution = "Exponential", n
 #' @param future_boundaries \strong{Recommended.} A list of future, pre-specified,
 #'   fixed decision points (efficacy look(s) and the final analysis) to check on
 #'   each posterior-predictive draw, matching the true group-sequential design
-#'   under which this BPP threshold will actually be used -- see
-#'   \code{\link{BPP_func}} for the exact structure. If \code{NULL} (not
-#'   recommended, kept only for backward compatibility), BPP is computed via
+#'   under which this PP threshold will actually be used -- see
+#'   \code{\link{PP_func}} for the exact structure. If \code{NULL} (not
+#'   recommended, kept only for backward compatibility), PP is computed via
 #'   the legacy single-stage fallback: censoring directly to \code{IA_model$events}
 #'   and testing at a flat \code{analysis_model$alpha}, which does NOT account
 #'   for any future efficacy boundary the real design may have. A message is
@@ -1654,8 +1656,8 @@ BPP_func <- function(data, posterior_df, control_distribution = "Exponential", n
 #'   errors alongside the result.
 #' @param update_priors_sims Number of posterior samples to generate per
 #'   interim dataset via \code{\link{update_priors}} (default is 1000).
-#' @param PP_sims Number of predictive simulations used to estimate BPP for
-#'   each interim dataset, passed to \code{\link{BPP_func}} (default is 2000).
+#' @param PP_sims Number of predictive simulations used to estimate PP for
+#'   each interim dataset, passed to \code{\link{PP_func}} (default is 2000).
 #' @param n_cores Number of cores to parallelise over via
 #'   \code{parallel::mclapply} (default is 1, i.e. sequential
 #'   \code{lapply}; not supported on Windows for \code{n_cores > 1}, per
@@ -1667,11 +1669,11 @@ BPP_func <- function(data, posterior_df, control_distribution = "Exponential", n
 #'
 #' @return A list with:
 #'   \describe{
-#'     \item{BPP_vec}{A numeric vector of length \code{n_df_sims}, the
-#'       estimated BPP for each simulated interim dataset.}
+#'     \item{PP_vec}{A numeric vector of length \code{n_df_sims}, the
+#'       estimated PP for each simulated interim dataset.}
 #'     \item{settings}{A list recording the exact settings used (all
 #'       arguments above, plus the installed \code{DTEAssurance} package
-#'       version), for provenance -- save this alongside \code{BPP_vec}
+#'       version), for provenance -- save this alongside \code{PP_vec}
 #'       so it is always possible to confirm what generated a given result.}
 #'   }
 #'
@@ -1707,7 +1709,7 @@ BPP_func <- function(data, posterior_df, control_distribution = "Exponential", n
 #'   list(events = 40, crit = 2.00)
 #' )
 #'
-#' threshold <- calibrate_BPP_threshold(n_c = 25, n_t = 25,
+#' threshold <- calibrate_PP_threshold(n_c = 25, n_t = 25,
 #'                      control_model = control_model,
 #'                      effect_model = effect_model,
 #'                      recruitment_model = recruitment_model,
@@ -1717,7 +1719,7 @@ BPP_func <- function(data, posterior_df, control_distribution = "Exponential", n
 #'                      future_boundaries = future_boundaries,
 #'                      n_df_sims = 2)
 #'
-calibrate_BPP_threshold <- function(n_c,
+calibrate_PP_threshold <- function(n_c,
                                     n_t,
                                     control_model,
                                     effect_model,
@@ -1733,8 +1735,8 @@ calibrate_BPP_threshold <- function(n_c,
                                     seed = NULL) {
 
   if (is.null(future_boundaries)) {
-    message("calibrate_BPP_threshold: no 'future_boundaries' supplied -- ",
-            "falling back to the legacy single-stage BPP calculation ",
+    message("calibrate_PP_threshold: no 'future_boundaries' supplied -- ",
+            "falling back to the legacy single-stage PP calculation ",
             "(censoring directly to IA_model$events, testing at a flat ",
             "analysis_model$alpha). This does NOT account for any future ",
             "efficacy boundary the real design may have, and will not match ",
@@ -1777,7 +1779,7 @@ calibrate_BPP_threshold <- function(n_c,
                                        effect_model  = effect_model,
                                        n_samples     = update_priors_sims)
 
-    BPP_outcome <- BPP_func(
+    PP_outcome <- PP_func(
       data,
       posterior_samples,
       control_distribution = control_model$dist,
@@ -1795,15 +1797,15 @@ calibrate_BPP_threshold <- function(n_c,
       n_sims               = PP_sims
     )
 
-    mean(BPP_outcome$BPP_df$success)
+    mean(PP_outcome$PP_df$success)
   }
 
   if (n_cores > 1) {
-    BPP_vec <- parallel::mclapply(seq_len(n_df_sims), run_one, mc.cores = n_cores)
+    PP_vec <- parallel::mclapply(seq_len(n_df_sims), run_one, mc.cores = n_cores)
   } else {
-    BPP_vec <- lapply(seq_len(n_df_sims), run_one)
+    PP_vec <- lapply(seq_len(n_df_sims), run_one)
   }
-  BPP_vec <- unlist(BPP_vec)
+  PP_vec <- unlist(PP_vec)
 
   settings <- list(
     n_df_sims          = n_df_sims,
@@ -1820,12 +1822,12 @@ calibrate_BPP_threshold <- function(n_c,
     timestamp          = as.character(Sys.time())
   )
 
-  return(list(BPP_vec = BPP_vec, settings = settings))
+  return(list(PP_vec = PP_vec, settings = settings))
 }
 
 
 
-#' Function to calculate the 'optimal' information fraction to calculate BPP
+#' Function to calculate the 'optimal' information fraction to calculate PP
 #'
 #' @param n_c Number of control patients
 #' @param n_t Number of treatment patients
@@ -1846,10 +1848,10 @@ calibrate_BPP_threshold <- function(n_c,
 #'       is not a well-posed question about that design.
 #'   }
 #' @param analysis_model A named list specifying the final analysis and decision rule
-#'   (see \code{\link{BPP_func}} for details).
+#'   (see \code{\link{PP_func}} for details).
 #' @param future_boundaries \strong{Recommended.} The chain of fixed future
 #'   decision points (efficacy look(s) and final analysis) of the true
-#'   group-sequential design under consideration -- see \code{\link{BPP_func}}.
+#'   group-sequential design under consideration -- see \code{\link{PP_func}}.
 #'   The same chain is used for every candidate in \code{IA_model$IF} (each
 #'   candidate is checked to ensure it genuinely precedes every boundary in
 #'   the chain; see \code{single_calibration_rep()}). If \code{NULL}
@@ -1873,8 +1875,8 @@ calibrate_BPP_threshold <- function(n_c,
 #' @return A list with:
 #'   \describe{
 #'     \item{outcome_list}{A list, one element per candidate information
-#'       fraction, each containing \code{BPP_values} (a vector of estimated
-#'       BPP, one per simulated interim dataset) and \code{cens_time} (the
+#'       fraction, each containing \code{PP_values} (a vector of estimated
+#'       PP, one per simulated interim dataset) and \code{cens_time} (the
 #'       corresponding calendar times).}
 #'     \item{settings}{A list recording the exact settings used, plus the
 #'       installed \code{DTEAssurance} package version, for provenance.}
@@ -1909,7 +1911,7 @@ calibrate_BPP_threshold <- function(n_c,
 #'   list(events = 40, crit = 2.00)    # final analysis
 #' )
 #'
-#' timing <- calibrate_BPP_timing(n_c = 25, n_t = 25,
+#' timing <- calibrate_PP_timing(n_c = 25, n_t = 25,
 #'                      control_model = control_model,
 #'                      effect_model = effect_model,
 #'                      recruitment_model = recruitment_model,
@@ -1918,7 +1920,7 @@ calibrate_BPP_threshold <- function(n_c,
 #'                      future_boundaries = future_boundaries,
 #'                      n_sims = 2)
 #'
-calibrate_BPP_timing <- function(n_c, n_t,
+calibrate_PP_timing <- function(n_c, n_t,
                                  control_model,
                                  effect_model,
                                  recruitment_model,
@@ -1932,8 +1934,8 @@ calibrate_BPP_timing <- function(n_c, n_t,
                                  seed = NULL) {
 
   if (is.null(future_boundaries)) {
-    message("calibrate_BPP_timing: no 'future_boundaries' supplied -- falling ",
-            "back to the legacy single-stage BPP calculation, which does NOT ",
+    message("calibrate_PP_timing: no 'future_boundaries' supplied -- falling ",
+            "back to the legacy single-stage PP calculation, which does NOT ",
             "account for any future efficacy boundary the real design may ",
             "have. Supply 'future_boundaries' matching the true design ",
             "whenever one exists.")
@@ -1978,9 +1980,9 @@ calibrate_BPP_timing <- function(n_c, n_t,
       )
     }
 
-    BPP_values <- vapply(
+    PP_values <- vapply(
       result,
-      FUN = function(x) mean(x$BPP_outcome$BPP_df$success),
+      FUN = function(x) mean(x$PP_outcome$PP_df$success),
       FUN.VALUE = numeric(1)
     )
 
@@ -1989,7 +1991,7 @@ calibrate_BPP_timing <- function(n_c, n_t,
                         FUN.VALUE = numeric(1)
     )
 
-    outcome_list[[i]]$BPP_values <- BPP_values
+    outcome_list[[i]]$PP_values <- PP_values
     outcome_list[[i]]$cens_time  <- cens_time
     outcome_list[[i]]$IF         <- IA_model$IF[i]
   }

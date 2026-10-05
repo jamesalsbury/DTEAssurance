@@ -2,7 +2,7 @@
 % Please edit documentation in R/utils.R
 \name{run_calibration_grid}
 \alias{run_calibration_grid}
-\title{Simulate BPP values and true trial outcomes for BPP-threshold calibration}
+\title{Simulate PP values and true trial outcomes for PP-threshold calibration}
 \usage{
 run_calibration_grid(
   n_c,
@@ -38,12 +38,12 @@ simulate data: \code{lambda_c}, \code{delay_time}, \code{post_delay_HR},
 and optionally \code{gamma_c} (Weibull control arm if supplied,
 exponential otherwise).}
 
-\item{futility_IF}{Information fraction of the BPP futility look.}
+\item{futility_IF}{Information fraction of the PP futility look.}
 
 \item{total_events}{Maximum planned number of events.}
 
 \item{future_boundaries}{List of future fixed decision points, each a list
-with \code{events} and \code{crit} (see \code{\link{BPP_func}}).}
+with \code{events} and \code{crit} (see \code{\link{PP_func}}).}
 
 \item{analysis_model}{Analysis specification (see \code{\link{survival_test}}).}
 
@@ -62,7 +62,7 @@ with \code{events} and \code{crit} (see \code{\link{BPP_func}}).}
 A list with elements
 \describe{
 \item{\code{raw}}{A data frame with one row per simulated trial and
-columns \code{BPP_val}, \code{t_interim}, \code{sample_size_interim},
+columns \code{PP_val}, \code{t_interim}, \code{sample_size_interim},
 \code{continuation_success}, \code{continuation_stop_time},
 \code{continuation_sample_size}, \code{converged}, \code{P_Z1},
 \code{P_Z2}, \code{P_Z3}.}
@@ -71,14 +71,14 @@ columns \code{BPP_val}, \code{t_interim}, \code{sample_size_interim},
 }
 \description{
 For a single fixed data-generating scenario, simulates \code{n_sims}
-trials, computes the Bayesian predictive probability (BPP) at the
+trials, computes the predictive probability (PP) at the
 futility look, and records what actually happens to each trial if it is
 allowed to continue through the remaining fixed decision points in
-\code{future_boundaries}. Because the BPP value does not depend on the
-futility threshold \eqn{\lambda}, the output can be summarised over a
-whole grid of thresholds afterwards via \code{\link{summarize_grid_by_lambda}}
+\code{future_boundaries}. Because the PP value does not depend on the
+futility threshold \eqn{\kappa}, the output can be summarised over a
+whole grid of thresholds afterwards via \code{\link{summarize_grid_by_kappa}}
 without re-simulating.
 }
 \seealso{
-\code{\link{summarize_grid_by_lambda}}, \code{\link{select_lambda_star}}
+\code{\link{summarize_grid_by_kappa}}, \code{\link{select_kappa_star}}
 }

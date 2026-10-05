@@ -1,4 +1,4 @@
-test_that("BPP_func runs with Exponential control and returns correct structure", {
+test_that("PP_func runs with Exponential control and returns correct structure", {
 
   # ---- Minimal interim dataset ----
   df_interim <- data.frame(
@@ -30,7 +30,7 @@ test_that("BPP_func runs with Exponential control and returns correct structure"
 
     {
 
-      out <- BPP_func(
+      out <- PP_func(
         data = df_interim,
         posterior_df = posterior_expon,
         control_distribution = "Exponential",
@@ -49,18 +49,18 @@ test_that("BPP_func runs with Exponential control and returns correct structure"
 
       # ---- Structural expectations ----
       expect_true(is.list(out))
-      expect_true(is.data.frame(out$BPP_df))
-      expect_equal(nrow(out$BPP_df), 10)
-      expect_true(all(c("success", "Z_val") %in% names(out$BPP_df)))
+      expect_true(is.data.frame(out$PP_df))
+      expect_equal(nrow(out$PP_df), 10)
+      expect_true(all(c("success", "Z_val") %in% names(out$PP_df)))
 
       # Mock outputs
-      expect_true(all(out$BPP_df$success == 1))
-      expect_true(all(out$BPP_df$Z_val == 2.0))
+      expect_true(all(out$PP_df$success == 1))
+      expect_true(all(out$PP_df$Z_val == 2.0))
     }
   )
 })
 
-test_that("BPP_func runs end-to-end under Weibull control model", {
+test_that("PP_func runs end-to-end under Weibull control model", {
 
   set.seed(123)
 
@@ -92,7 +92,7 @@ test_that("BPP_func runs end-to-end under Weibull control model", {
     alternative = "one.sided"
   )
 
-  out <- BPP_func(
+  out <- PP_func(
     data = df,
     posterior_df = posterior_df,
     control_distribution = "Weibull",
@@ -105,12 +105,12 @@ test_that("BPP_func runs end-to-end under Weibull control model", {
   )
 
   expect_type(out, "list")
-  expect_true("BPP_df" %in% names(out))
-  expect_equal(nrow(out$BPP_df), 2)
-  expect_false(any(is.na(out$BPP_df$success)))
+  expect_true("PP_df" %in% names(out))
+  expect_equal(nrow(out$PP_df), 2)
+  expect_false(any(is.na(out$PP_df$success)))
 })
 
-test_that("BPP_func hits Weibull branch with n_before > 0", {
+test_that("PP_func hits Weibull branch with n_before > 0", {
   skip_if_not_installed("survival")
 
   set.seed(123)
@@ -149,7 +149,7 @@ test_that("BPP_func hits Weibull branch with n_before > 0", {
     t_star = NULL, s_star = NULL
   )
 
-  result <- BPP_func(
+  result <- PP_func(
     data = data,
     posterior_df = posterior_df,
     control_distribution = "Weibull",
@@ -164,10 +164,10 @@ test_that("BPP_func hits Weibull branch with n_before > 0", {
 
   # structure checks
   expect_type(result, "list")
-  expect_true("BPP_df" %in% names(result))
-  expect_equal(nrow(result$BPP_df), 3)
+  expect_true("PP_df" %in% names(result))
+  expect_equal(nrow(result$PP_df), 3)
 
-  expect_true(all(c("success", "Z_val") %in% names(result$BPP_df)))
-  expect_true(all(is.finite(result$BPP_df$Z_val)))
+  expect_true(all(c("success", "Z_val") %in% names(result$PP_df)))
+  expect_true(all(is.finite(result$PP_df$Z_val)))
 })
 

@@ -43,7 +43,7 @@ the arm coded as "Treatment" (or the second factor level of
 positive Z corresponds to a hazard ratio below 1 (benefit). This
 convention is consistent across all three methods (verified by
 diagnostic: see notes below) and is what group-sequential boundary
-comparisons in \code{apply_GSD_to_trial}/\code{BPP_func} rely on.}
+comparisons in \code{apply_GSD_to_trial}/\code{PP_func} rely on.}
 }
 }
 \description{

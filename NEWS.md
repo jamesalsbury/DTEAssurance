@@ -1,3 +1,37 @@
+# DTEAssurance (development version)
+
+## Renamed to match the manuscript notation (no behaviour change)
+
+* The predictive probability is now called PP and its futility threshold
+  kappa, as in the manuscript:
+  * `BPP_func()` -> `PP_func()`; its return element `BPP_df` -> `PP_df`.
+  * `calibrate_BPP_threshold()` -> `calibrate_PP_threshold()` (returns
+    `PP_vec`) and `calibrate_BPP_timing()` -> `calibrate_PP_timing()`
+    (returns `PP_values`).
+  * `summarize_grid_by_lambda()` -> `summarize_grid_by_kappa()` (argument
+    `kappa_grid`, column `kappa`) and `select_lambda_star()` ->
+    `select_kappa_star()` (returns `kappa_star`).
+  * `GSD_model$futility_type = "BPP"` -> `"PP"` and
+    `GSD_model$BPP_threshold` -> `GSD_model$kappa`.
+  * `n_BPP_sims` -> `PP_sims` in `calc_dte_assurance_adaptive()`, so the
+    argument has the same name everywhere.
+  * The `BPP_val` column of the calibration output is now `PP_val`.
+* Internally, the treatment-arm post-delay rate is now named `lambda_e`
+  (in `PP_func()` and in the `update_priors()` JAGS models); the models are
+  otherwise unchanged.
+* A "Notation" section in the README maps manuscript symbols to package
+  identifiers.
+
+## Deprecated (to be removed in the next release)
+
+* `BPP_func()`, `calibrate_BPP_threshold()`, `calibrate_BPP_timing()`,
+  `summarize_grid_by_lambda()` and `select_lambda_star()` still work but warn
+  and forward to their replacements. Returned element and column names are
+  not translated back to the old names.
+* `futility_type = "BPP"` and `GSD_model$BPP_threshold` are accepted by
+  `calc_dte_assurance_adaptive()` with a warning and mapped to `"PP"` and
+  `GSD_model$kappa`.
+
 # DTEAssurance 1.2.0
 
 ## Breaking changes

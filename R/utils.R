@@ -145,7 +145,7 @@ apply_GSD_to_trial <- function(n_c,
                                recruitment_model = NULL,
                                analysis_model = NULL,
                                update_priors_sims = 1000,
-                               n_BPP_sims = 1000) {
+                               PP_sims = 1000) {
 
   if (is.null(analysis_model)) {
     analysis_model <- list(method = "LRT", alpha = 0.025,
@@ -167,7 +167,7 @@ apply_GSD_to_trial <- function(n_c,
 
   if (GSD_model$futility_type %in% c("Beta", "none")) {
     info_rates <- design$informationRates
-  } else if (GSD_model$futility_type %in% c("BPP", "MatchedZ")) {
+  } else if (GSD_model$futility_type %in% c("PP", "MatchedZ")) {
     info_rates <- sort(unique(c(GSD_model$alpha_IF, GSD_model$futility_IF)))
   }
 
@@ -175,7 +175,7 @@ apply_GSD_to_trial <- function(n_c,
   n_interims        <- length(info_rates)
   decision          <- "Continue"
   stop_time         <- NA
-  BPP_val           <- NA
+  PP_val            <- NA
   converged         <- NA
   Z_probs           <- rep(NA_real_, 3)
   names(Z_probs)    <- c("P_Z1", "P_Z2", "P_Z3")
@@ -231,14 +231,14 @@ apply_GSD_to_trial <- function(n_c,
       }
     }
 
-    # 3b) BPP futility (D3)
+    # 3b) PP futility (D3)
     if (!is.null(GSD_model) &&
-        GSD_model$futility_type == "BPP" &&
+        GSD_model$futility_type == "PP" &&
         IF_here %in% GSD_model$futility_IF) {
 
       remaining_futility_IFs <- GSD_model$futility_IF[GSD_model$futility_IF > IF_here]
       if (length(remaining_futility_IFs) > 0) {
-        stop("apply_GSD_to_trial: multiple sequential BPP futility looks are ",
+        stop("apply_GSD_to_trial: multiple sequential PP futility looks are ",
              "not supported by this implementation (would require nested ",
              "posterior-predictive simulation at each look). See manuscript ",
              "Limitations (Section 6.3).")
@@ -264,7 +264,7 @@ apply_GSD_to_trial <- function(n_c,
       Z_probs_attr <- attr(posterior_samples, "Z_probs")
       if (!is.null(Z_probs_attr)) Z_probs <- Z_probs_attr
 
-      BPP_out <- DTEAssurance::BPP_func(
+      PP_out <- DTEAssurance::PP_func(
         eligible_df, posterior_samples,
         control_distribution = control_model$dist,
         n_c_planned       = n_c,
@@ -273,12 +273,12 @@ apply_GSD_to_trial <- function(n_c,
         df_cens_time      = t_interim,
         analysis_model    = analysis_model,
         future_boundaries = future_boundaries,
-        n_sims            = n_BPP_sims
+        n_sims            = PP_sims
       )
 
-      BPP_val <- mean(BPP_out$BPP_df$success)
+      PP_val <- mean(PP_out$PP_df$success)
 
-      if (BPP_val < GSD_model$BPP_threshold) {
+      if (PP_val < GSD_model$kappa) {
         decision  <- "Stop for futility"
         stop_time <- t_interim
         break
@@ -314,7 +314,7 @@ apply_GSD_to_trial <- function(n_c,
     decision    = decision,
     stop_time   = stop_time,
     sample_size = sample_size,
-    BPP_val     = BPP_val,
+    PP_val      = PP_val,
     converged   = converged,
     Z_probs     = Z_probs
   ))
@@ -429,7 +429,7 @@ single_calibration_rep <- function(i,
                                      effect_model  = effect_model,
                                      n_samples     = update_priors_sims)
 
-  BPP_outcome <- BPP_func(
+  PP_outcome <- PP_func(
     data,
     posterior_samples,
     control_distribution = control_model$dist,
@@ -447,26 +447,45 @@ single_calibration_rep <- function(i,
     n_sims               = PP_sims
   )
 
-  return(list(BPP_outcome = BPP_outcome, cens_time = censored_data$cens_time))
+  return(list(PP_outcome = PP_outcome, cens_time = censored_data$cens_time))
 }
 
 
 
+# Map the deprecated futility_type = "BPP" / GSD_model$BPP_threshold
+# spellings onto "PP" / GSD_model$kappa, with a warning. To be removed in
+# the next release.
+normalise_futility_spec <- function(GSD_model) {
+  if (identical(GSD_model$futility_type, "BPP")) {
+    warning("'BPP' is deprecated; use 'PP'", call. = FALSE)
+    GSD_model$futility_type <- "PP"
+  }
+  if (!is.null(GSD_model$BPP_threshold)) {
+    warning("GSD_model$BPP_threshold is deprecated; use GSD_model$kappa",
+            call. = FALSE)
+    if (is.null(GSD_model$kappa)) GSD_model$kappa <- GSD_model$BPP_threshold
+    GSD_model$BPP_threshold <- NULL
+  }
+  GSD_model
+}
+
+
 make_rpact_design_from_GSD_model <- function(GSD_model) {
 
+  GSD_model      <- normalise_futility_spec(GSD_model)
   alpha_IF       <- GSD_model$alpha_IF
   alpha_spending <- GSD_model$alpha_spending
   fut_type       <- GSD_model$futility_type
 
   # FIX: "MatchedZ" (D4/D5) needs futility_IF included in the information-
-  # rate grid, with zero alpha spent there, exactly like "BPP" (D3) already
+  # rate grid, with zero alpha spent there, exactly like "PP" (D3) already
   # does -- this is what lets the futility look sit as a pure monitoring
   # point without affecting the efficacy boundaries (confirmed empirically
   # earlier: design objects built with vs. without this extra point give
-  # identical criticalValues). Previously only "Beta" and "BPP" were
+  # identical criticalValues). Previously only "Beta" and "PP" were
   # recognized here; "MatchedZ" fell through to the "Unknown futility type"
   # error below.
-  if (fut_type %in% c("Beta", "BPP", "MatchedZ")) {
+  if (fut_type %in% c("Beta", "PP", "MatchedZ")) {
     fut_IF <- GSD_model$futility_IF
     IF_all <- sort(unique(c(alpha_IF, fut_IF)))
   } else if (fut_type == "none") {
@@ -519,7 +538,7 @@ make_rpact_design_from_GSD_model <- function(GSD_model) {
     }
 
   } else {
-    # For "none" and "BPP", no frequentist futility spending in rpact
+    # For "none" and "PP", no frequentist futility spending in rpact
     beta_spending_full <- rep(0, K)
   }
 
@@ -536,7 +555,7 @@ make_rpact_design_from_GSD_model <- function(GSD_model) {
       userBetaSpending  = beta_spending_full
     )
 
-  } else {  # fut_type == "none" or "BPP"
+  } else {  # fut_type == "none" or "PP"
 
     design <- rpact::getDesignGroupSequential(
       typeOfDesign      = "asUser",
@@ -595,7 +614,7 @@ single_grid_rep <- function(i,
 
   trial_data <- trial_data[order(trial_data$pseudo_time), ]
 
-  # --- Interim look: compute BPP (independent of any lambda) ---
+  # --- Interim look: compute PP (independent of any kappa) ---
   n_events_interim <- ceiling(futility_IF * total_events)
   t_interim <- trial_data$pseudo_time[n_events_interim]
 
@@ -617,7 +636,7 @@ single_grid_rep <- function(i,
   Zp <- attr(posterior_samples, "Z_probs")
   if (is.null(Zp)) Zp <- c(P_Z1 = NA_real_, P_Z2 = NA_real_, P_Z3 = NA_real_)
 
-  BPP_out <- BPP_func(
+  PP_out <- PP_func(
     eligible_df, posterior_samples,
     control_distribution = control_model$dist,
     n_c_planned       = n_c,
@@ -628,7 +647,7 @@ single_grid_rep <- function(i,
     future_boundaries = future_boundaries,
     n_sims            = PP_sims
   )
-  BPP_val <- mean(BPP_out$BPP_df$success)
+  PP_val <- mean(PP_out$PP_df$success)
 
   # --- True continuation: what ACTUALLY happens to this real trial if it
   #     is never stopped for futility here. Applies the same
@@ -667,7 +686,7 @@ single_grid_rep <- function(i,
   }
 
   data.frame(
-    BPP_val = BPP_val,
+    PP_val = PP_val,
     t_interim = t_interim,
     sample_size_interim = sample_size_interim,
     continuation_success = continuation_success,
@@ -681,15 +700,15 @@ single_grid_rep <- function(i,
 }
 
 
-#' Simulate BPP values and true trial outcomes for BPP-threshold calibration
+#' Simulate PP values and true trial outcomes for PP-threshold calibration
 #'
 #' For a single fixed data-generating scenario, simulates \code{n_sims}
-#' trials, computes the Bayesian predictive probability (BPP) at the
+#' trials, computes the predictive probability (PP) at the
 #' futility look, and records what actually happens to each trial if it is
 #' allowed to continue through the remaining fixed decision points in
-#' \code{future_boundaries}. Because the BPP value does not depend on the
-#' futility threshold \eqn{\lambda}, the output can be summarised over a
-#' whole grid of thresholds afterwards via \code{\link{summarize_grid_by_lambda}}
+#' \code{future_boundaries}. Because the PP value does not depend on the
+#' futility threshold \eqn{\kappa}, the output can be summarised over a
+#' whole grid of thresholds afterwards via \code{\link{summarize_grid_by_kappa}}
 #' without re-simulating.
 #'
 #' @param n_c,n_t Planned number of patients in the control / treatment group.
@@ -703,10 +722,10 @@ single_grid_rep <- function(i,
 #'   simulate data: \code{lambda_c}, \code{delay_time}, \code{post_delay_HR},
 #'   and optionally \code{gamma_c} (Weibull control arm if supplied,
 #'   exponential otherwise).
-#' @param futility_IF Information fraction of the BPP futility look.
+#' @param futility_IF Information fraction of the PP futility look.
 #' @param total_events Maximum planned number of events.
 #' @param future_boundaries List of future fixed decision points, each a list
-#'   with \code{events} and \code{crit} (see \code{\link{BPP_func}}).
+#'   with \code{events} and \code{crit} (see \code{\link{PP_func}}).
 #' @param analysis_model Analysis specification (see \code{\link{survival_test}}).
 #' @param update_priors_sims Number of posterior samples per interim dataset.
 #' @param PP_sims Number of posterior-predictive simulations per interim dataset.
@@ -718,14 +737,14 @@ single_grid_rep <- function(i,
 #' @return A list with elements
 #'   \describe{
 #'     \item{\code{raw}}{A data frame with one row per simulated trial and
-#'       columns \code{BPP_val}, \code{t_interim}, \code{sample_size_interim},
+#'       columns \code{PP_val}, \code{t_interim}, \code{sample_size_interim},
 #'       \code{continuation_success}, \code{continuation_stop_time},
 #'       \code{continuation_sample_size}, \code{converged}, \code{P_Z1},
 #'       \code{P_Z2}, \code{P_Z3}.}
 #'     \item{\code{settings}}{The settings used, package version and a timestamp.}
 #'   }
 #'
-#' @seealso \code{\link{summarize_grid_by_lambda}}, \code{\link{select_lambda_star}}
+#' @seealso \code{\link{summarize_grid_by_kappa}}, \code{\link{select_kappa_star}}
 #' @export
 run_calibration_grid <- function(n_c, n_t,
                                  control_model,
@@ -798,31 +817,31 @@ run_calibration_grid <- function(n_c, n_t,
 }
 
 
-#' Summarise calibration-grid output over a grid of BPP futility thresholds
+#' Summarise calibration-grid output over a grid of PP futility thresholds
 #'
-#' Applies each candidate BPP futility threshold \eqn{\lambda} to the raw
+#' Applies each candidate PP futility threshold \eqn{\kappa} to the raw
 #' output of \code{\link{run_calibration_grid}}: a trial stops for futility
-#' if its interim BPP is below \eqn{\lambda}, otherwise it takes its
+#' if its interim PP is below \eqn{\kappa}, otherwise it takes its
 #' simulated continuation outcome.
 #'
 #' @param raw The \code{raw} element returned by \code{\link{run_calibration_grid}}.
-#' @param lambda_grid Numeric vector of candidate BPP thresholds.
+#' @param kappa_grid Numeric vector of candidate PP thresholds.
 #' @param conf_level Confidence level for the one-sided lower confidence
 #'   bound on power (Clopper-Pearson; default 0.90).
 #'
-#' @return A data frame with one row per \eqn{\lambda} and columns
-#'   \code{lambda}, \code{P_early_fut}, \code{power_or_typeI},
+#' @return A data frame with one row per \eqn{\kappa} and columns
+#'   \code{kappa}, \code{P_early_fut}, \code{power_or_typeI},
 #'   \code{power_LCB}, \code{ESS} (expected sample size) and
 #'   \code{duration} (expected trial duration).
 #'
-#' @seealso \code{\link{run_calibration_grid}}, \code{\link{select_lambda_star}}
+#' @seealso \code{\link{run_calibration_grid}}, \code{\link{select_kappa_star}}
 #' @export
-summarize_grid_by_lambda <- function(raw, lambda_grid, conf_level = 0.90) {
+summarize_grid_by_kappa <- function(raw, kappa_grid, conf_level = 0.90) {
 
   n <- nrow(raw)
 
-  out <- lapply(lambda_grid, function(lam) {
-    stop_for_fut <- raw$BPP_val < lam
+  out <- lapply(kappa_grid, function(kap) {
+    stop_for_fut <- raw$PP_val < kap
 
     success  <- ifelse(stop_for_fut, 0, raw$continuation_success)
     sample_n <- ifelse(stop_for_fut, raw$sample_size_interim, raw$continuation_sample_size)
@@ -833,7 +852,7 @@ summarize_grid_by_lambda <- function(raw, lambda_grid, conf_level = 0.90) {
     lcb <- stats::binom.test(n_success, n, conf.level = conf_level)$conf.int[1]
 
     data.frame(
-      lambda = lam,
+      kappa = kap,
       P_early_fut = mean(stop_for_fut),
       power_or_typeI = phat,
       power_LCB = lcb,
@@ -846,39 +865,39 @@ summarize_grid_by_lambda <- function(raw, lambda_grid, conf_level = 0.90) {
 }
 
 
-#' Select the BPP futility threshold minimising null expected sample size
+#' Select the PP futility threshold minimising null expected sample size
 #'
 #' Among candidate thresholds for which the lower confidence bound on power
 #' is at least \code{power_floor} under every alternative scenario, selects
 #' the one with the smallest expected sample size under the null scenario.
 #'
 #' @param summary_by_scenario A named list of data frames, one per scenario,
-#'   each as returned by \code{\link{summarize_grid_by_lambda}} over the same
-#'   \code{lambda_grid}.
+#'   each as returned by \code{\link{summarize_grid_by_kappa}} over the same
+#'   \code{kappa_grid}.
 #' @param power_floor Minimum acceptable lower confidence bound on power.
 #' @param null_scenario Name of the null scenario in \code{summary_by_scenario}.
 #' @param alt_scenarios Character vector of alternative scenario names.
 #'
-#' @return A list with \code{lambda_star} (the selected threshold, or
+#' @return A list with \code{kappa_star} (the selected threshold, or
 #'   \code{NA} with a warning if none is feasible) and
 #'   \code{feasibility_table}.
 #'
-#' @seealso \code{\link{run_calibration_grid}}, \code{\link{summarize_grid_by_lambda}}
+#' @seealso \code{\link{run_calibration_grid}}, \code{\link{summarize_grid_by_kappa}}
 #' @export
-select_lambda_star <- function(summary_by_scenario, power_floor, null_scenario, alt_scenarios) {
+select_kappa_star <- function(summary_by_scenario, power_floor, null_scenario, alt_scenarios) {
 
-  lambda_grid <- summary_by_scenario[[null_scenario]]$lambda
+  kappa_grid <- summary_by_scenario[[null_scenario]]$kappa
 
-  feasible <- rep(TRUE, length(lambda_grid))
+  feasible <- rep(TRUE, length(kappa_grid))
   for (s in alt_scenarios) {
-    stopifnot(identical(summary_by_scenario[[s]]$lambda, lambda_grid))
+    stopifnot(identical(summary_by_scenario[[s]]$kappa, kappa_grid))
     feasible <- feasible & (summary_by_scenario[[s]]$power_LCB >= power_floor)
   }
 
   null_ESS <- summary_by_scenario[[null_scenario]]$ESS
 
   feasibility_table <- data.frame(
-    lambda = lambda_grid,
+    kappa = kappa_grid,
     null_ESS = null_ESS,
     feasible = feasible
   )
@@ -887,17 +906,17 @@ select_lambda_star <- function(summary_by_scenario, power_floor, null_scenario, 
   }
 
   if (!any(feasible)) {
-    warning("select_lambda_star: no candidate lambda satisfies power_LCB >= ",
+    warning("select_kappa_star: no candidate kappa satisfies power_LCB >= ",
             power_floor, " under all of: ", paste(alt_scenarios, collapse = ", "),
-            ". Returning lambda_star = NA; widen the lambda grid, lower the ",
+            ". Returning kappa_star = NA; widen the kappa grid, lower the ",
             "power floor, or increase n_sims (the LCB may be overly ",
             "conservative with too few replicates).")
-    return(list(lambda_star = NA_real_, feasibility_table = feasibility_table))
+    return(list(kappa_star = NA_real_, feasibility_table = feasibility_table))
   }
 
-  lambda_star <- lambda_grid[feasible][which.min(null_ESS[feasible])]
+  kappa_star <- kappa_grid[feasible][which.min(null_ESS[feasible])]
 
-  list(lambda_star = lambda_star, feasibility_table = feasibility_table)
+  list(kappa_star = kappa_star, feasibility_table = feasibility_table)
 }
 
 

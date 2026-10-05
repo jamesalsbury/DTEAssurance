@@ -200,3 +200,29 @@ design_summary
 #>   Assurance Pr(Early Fut.) Pr(Early Eff.) Average Duration Average Sample Size
 #> 1       0.7              0          0.516            22.47                 600
 ```
+
+## Notation
+
+The package identifiers map onto the notation of the adaptive-design
+manuscript (Salsbury et al., <doi:10.48550/arXiv.2509.07602>) as follows.
+
+| Manuscript | Package |
+|---|---|
+| PP, $\hat{PP}$ (predictive probability) | `PP_val`, `PP_func()` |
+| $\kappa$ (futility threshold) | `kappa`, `GSD_model$kappa`, `kappa_grid`, `kappa_star` |
+| $\kappa^*$ | `select_kappa_star()` |
+| $\lambda_c$, $\gamma_c$ (Weibull rate, shape) | `lambda_c`, `gamma_c` |
+| $HR^*$ | `post_delay_HR` (truth), `HR` (posterior column) |
+| $T$ (delay) | `delay_time` |
+| $Z$ (latent state) | `Z`, `P_Z1`, `P_Z2`, `P_Z3` |
+| $P_S$, $P_{DTE}$ | `P_S`, `P_DTE` |
+| $M$ (posterior-predictive draws) | `PP_sims` |
+| retained MCMC draws | `update_priors_sims` (per chain; total = `n.chains` x this) |
+| IF (information fraction) | `futility_IF`, `alpha_IF` |
+| D1, ..., D5 | built post hoc from `run_paired_scenario()` output |
+
+The PP futility rule is selected with `GSD_model$futility_type = "PP"` and
+`GSD_model$kappa`. The names `BPP_func()`, `calibrate_BPP_threshold()`,
+`calibrate_BPP_timing()`, `summarize_grid_by_lambda()`, `select_lambda_star()`,
+`futility_type = "BPP"` and `GSD_model$BPP_threshold` are deprecated and will
+be removed in the next release.

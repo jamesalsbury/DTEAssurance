@@ -43,14 +43,14 @@ test_that("make_rpact_design_from_GSD_model works for futility = 'Beta'", {
   expect_equal(out$beta_spending_full, c(0.05, 0.05, 0.15))
 })
 
-test_that("make_rpact_design_from_GSD_model works for futility = 'BPP'", {
+test_that("make_rpact_design_from_GSD_model works for futility = 'PP'", {
 
   GSD_model <- list(
     alpha_IF        = c(0.4, 1.0),
     alpha_spending  = c(0.012, 0.025),
-    futility_type   = "BPP",
+    futility_type   = "PP",
     futility_IF     = 0.5,
-    BPP_threshold = 0.2
+    kappa = 0.2
   )
 
   out <- make_rpact_design_from_GSD_model(GSD_model)
@@ -58,7 +58,7 @@ test_that("make_rpact_design_from_GSD_model works for futility = 'BPP'", {
   expect_true(is.list(out))
   expect_true(inherits(out$design, "TrialDesignGroupSequential"))
 
-  # For BPP: fut_IF included, but beta spending all zero
+  # For PP: fut_IF included, but beta spending all zero
   expect_equal(out$IF_all, c(0.4, 0.5, 1.0))
 
   expect_equal(out$alpha_spending_full, c(0.012, 0.012, 0.025))
