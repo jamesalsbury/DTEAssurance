@@ -66,7 +66,9 @@ columns \code{PP_val}, \code{t_interim}, \code{sample_size_interim},
 \code{continuation_success}, \code{continuation_stop_time},
 \code{continuation_sample_size}, \code{converged}, \code{P_Z1},
 \code{P_Z2}, \code{P_Z3}.}
-\item{\code{settings}}{The settings used, package version and a timestamp.}
+\item{\code{settings}}{All arguments, plus the package, R, rjags and
+JAGS versions, the git commit of the working directory, the
+hostname and a timestamp.}
 }
 }
 \description{

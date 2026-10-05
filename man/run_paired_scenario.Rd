@@ -28,8 +28,9 @@ run_paired_scenario(
 }
 \value{
 A list with \code{raw} (one row per replicate, ordered by
-\code{rep_id}) and \code{settings} (all arguments, package version, R
-version, git commit if available, timestamp and \code{n_failed}). The
+\code{rep_id}) and \code{settings} (all arguments, the package, R,
+rjags and JAGS versions, the git commit of the working directory, the
+hostname, a timestamp and \code{n_failed}). The
 number of failed replicates is reported with a message, and a warning
 is given if more than 1\\% failed.
 }

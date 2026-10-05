@@ -46,30 +46,20 @@ rhat_summary <- function(rhat, threshold) {
   )
 }
 
-# Git commit of the DTEAssurance source, if it can be determined.
-package_git_commit <- function() {
-  sha <- tryCatch(utils::packageDescription("DTEAssurance")$RemoteSha,
-                  error = function(e) NULL)
-  if (!is.null(sha) && nzchar(sha)) return(sha)
-  path <- tryCatch(find.package("DTEAssurance"), error = function(e) "")
-  if (nzchar(path) && file.exists(file.path(path, ".git"))) {
-    sha <- tryCatch(suppressWarnings(system2("git", c("-C", shQuote(path), "rev-parse", "HEAD"),
-                                             stdout = TRUE, stderr = FALSE)),
-                    error = function(e) character(0))
-    if (length(sha) == 1 && nzchar(sha)) return(sha)
-  }
-  NA_character_
-}
-
-# Provenance fields recorded alongside simulation output.
-run_provenance <- function() {
-  list(
-    package_version = tryCatch(as.character(utils::packageVersion("DTEAssurance")),
-                               error = function(e) NA_character_),
-    R_version = R.version.string,
-    git_commit = package_git_commit(),
-    timestamp = as.character(Sys.time())
-  )
+# Settings recorded alongside simulation output: the arguments passed in
+# ..., plus package, R, rjags and JAGS versions, the git commit of the
+# working directory (the analysis repository, when run from its scripts),
+# hostname and timestamp.
+make_settings <- function(...) {
+  c(list(...),
+    list(package_version = tryCatch(as.character(utils::packageVersion("DTEAssurance")), error = function(e) NA_character_),
+         r_version  = R.version.string,
+         rjags_version = tryCatch(as.character(utils::packageVersion("rjags")), error = function(e) NA_character_),
+         jags_version  = tryCatch(rjags::jags.version(), error = function(e) NA_character_),
+         git_commit = tryCatch(system("git rev-parse HEAD", intern = TRUE, ignore.stderr = TRUE),
+                               error = function(e) NA_character_, warning = function(w) NA_character_),
+         hostname = Sys.info()[["nodename"]],
+         timestamp = as.character(Sys.time())))
 }
 
 # Run the test specified by an analysis_model list (method, alpha,

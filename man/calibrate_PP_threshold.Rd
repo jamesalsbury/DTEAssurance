@@ -91,15 +91,21 @@ A list with:
 \describe{
 \item{PP_vec}{A numeric vector of length \code{n_df_sims}, the
 estimated PP for each simulated interim dataset.}
-\item{settings}{A list recording the exact settings used (all
-arguments above, plus the installed \code{DTEAssurance} package
-version), for provenance -- save this alongside \code{PP_vec}
-so it is always possible to confirm what generated a given result.}
+\item{settings}{A list of all arguments, plus the package, R, rjags
+and JAGS versions, the git commit of the working directory, the
+hostname and a timestamp.}
 }
 }
 \description{
 Function to calculate the 'optimal' PP threshold value
 }
+\section{Deprecated}{
+
+\code{calibrate_PP_threshold()} is deprecated and will be removed in a
+future release. Use \code{\link{run_paired_scenario}} with
+\code{\link{summarize_grid_by_kappa}} and \code{\link{select_kappa_star}}.
+}
+
 \examples{
 set.seed(123)
 control_model <- list(dist = "Exponential", parameter_mode = "Distribution",

@@ -230,7 +230,8 @@ manuscript (Salsbury et al., <doi:10.48550/arXiv.2509.07602>) as follows.
 
 ### Designs D1-D5 from paired replicates
 
-`run_paired_scenario()` simulates each trial once, computes the PP at the
+`run_paired_scenario()` is the single entry point for the simulation tables
+in the manuscript. It simulates each trial once, computes the PP at the
 futility look once, and records the test statistics at the interim
 (`Z_int_*`), the efficacy look (`Z_eff_*`) and the final analysis
 (`Z_fin_*`) without stopping the trial. Every design is then a summary of the
@@ -246,6 +247,17 @@ group-sequential design at the efficacy look and the final analysis:
   `select_kappa_star()` picks kappa*.
 - **D4, D5** (D2 plus Z futility): stop for futility if an interim
   statistic (`Z_int_LRT` or `Z_int_MW_t*`) is below a cutoff.
+
+`apply_design_rule(raw, rule)` returns the decision, success, early
+stopping, sample size and duration of each replicate under one of these
+rules, using the critical values from `make_gsd_design()`.
+
+### Computing environment
+
+The manuscript simulations were run on an HPC cluster with the module
+`rjags/4-13-foss-2022a-R-4.2.1`. The `settings` element returned by the
+simulation functions records the package, R, rjags and JAGS versions, the
+git commit, the hostname and a timestamp for each run.
 
 The PP futility rule is selected with `GSD_model$futility_type = "PP"` and
 `GSD_model$kappa`. The names `BPP_func()`, `calibrate_BPP_threshold()`,

@@ -357,6 +357,7 @@ apply_GSD_to_trial <- function(n_c,
 }
 
 
+# Deprecated (to be removed in a future release).
 summarize_gsd_results <- function(gsd_outcomes) {
   n <- length(gsd_outcomes)
 
@@ -421,6 +422,8 @@ make_prior_name_jags <- function(fit, dist) {
 
 
 
+# Deprecated with calibrate_PP_threshold() (to be removed in a future release);
+# still used by calibrate_PP_timing().
 single_calibration_rep <- function(i,
                                    n_c, n_t,
                                    control_model,
@@ -554,14 +557,8 @@ make_gsd_design <- function(GSD_model) {
   alpha_spending <- GSD_model$alpha_spending
   fut_type       <- GSD_model$futility_type
 
-  # FIX: "MatchedZ" (D4/D5) needs futility_IF included in the information-
-  # rate grid, with zero alpha spent there, exactly like "PP" (D3) already
-  # does -- this is what lets the futility look sit as a pure monitoring
-  # point without affecting the efficacy boundaries (confirmed empirically
-  # earlier: design objects built with vs. without this extra point give
-  # identical criticalValues). Previously only "Beta" and "PP" were
-  # recognized here; "MatchedZ" fell through to the "Unknown futility type"
-  # error below.
+  # Futility looks join the information-rate grid (with zero alpha spent
+  # for "PP" and "MatchedZ").
   if (fut_type %in% c("Beta", "PP", "MatchedZ")) {
     fut_IF <- round(GSD_model$futility_IF, 6)
     IF_all <- sort(unique(c(alpha_IF, fut_IF)))
@@ -572,14 +569,6 @@ make_gsd_design <- function(GSD_model) {
   }
 
   K <- length(IF_all)
-
-  # ... rest of the function is UNCHANGED -- the later beta_spending_full
-  # and design-building logic already fall through correctly to the
-  # generic "no beta spending, typeBetaSpending='none'" path for any
-  # fut_type other than "Beta", so MatchedZ needs no further changes there.
-
-  # [unchanged: steps 4-6 exactly as before]
-
 
   #==================================================
   # 4. Expand alpha spending to the full IF grid
@@ -709,8 +698,6 @@ single_grid_rep <- function(i,
                                      effect_model  = effect_model,
                                      n_samples     = update_priors_sims)
 
-  # FIX: capture the convergence / latent-state diagnostics update_priors()
-  # now computes, instead of discarding posterior_samples' attributes.
   converged <- attr(posterior_samples, "converged")
   Zp <- attr(posterior_samples, "Z_probs")
   if (is.null(Zp)) Zp <- c(P_Z1 = NA_real_, P_Z2 = NA_real_, P_Z3 = NA_real_)
@@ -764,10 +751,10 @@ single_grid_rep <- function(i,
     continuation_success = continuation_success,
     continuation_stop_time = continuation_stop_time,
     continuation_sample_size = continuation_sample_size,
-    converged = converged,          # NEW
-    P_Z1 = unname(Zp["P_Z1"]),      # NEW
-    P_Z2 = unname(Zp["P_Z2"]),      # NEW
-    P_Z3 = unname(Zp["P_Z3"])       # NEW
+    converged = converged,
+    P_Z1 = unname(Zp["P_Z1"]),
+    P_Z2 = unname(Zp["P_Z2"]),
+    P_Z3 = unname(Zp["P_Z3"])
   )
 }
 
@@ -813,7 +800,9 @@ single_grid_rep <- function(i,
 #'       \code{continuation_success}, \code{continuation_stop_time},
 #'       \code{continuation_sample_size}, \code{converged}, \code{P_Z1},
 #'       \code{P_Z2}, \code{P_Z3}.}
-#'     \item{\code{settings}}{The settings used, package version and a timestamp.}
+#'     \item{\code{settings}}{All arguments, plus the package, R, rjags and
+#'       JAGS versions, the git commit of the working directory, the
+#'       hostname and a timestamp.}
 #'   }
 #'
 #' @seealso \code{\link{summarize_grid_by_kappa}}, \code{\link{select_kappa_star}}
@@ -870,19 +859,14 @@ run_calibration_grid <- function(n_c, n_t,
 
   raw <- do.call(rbind, result)
 
-  settings <- list(
+  settings <- make_settings(
+    n_c = n_c, n_t = n_t, control_model = control_model,
+    effect_model = effect_model, recruitment_model = recruitment_model,
     data_generating_model = data_generating_model,
-    futility_IF = futility_IF,
-    total_events = total_events,
-    future_boundaries = future_boundaries,
-    update_priors_sims = update_priors_sims,
-    PP_sims = PP_sims,
-    n_sims = n_sims,
-    n_cores = n_cores,
-    seed = seed,
-    package_version = tryCatch(as.character(utils::packageVersion("DTEAssurance")),
-                               error = function(e) NA_character_),
-    timestamp = as.character(Sys.time())
+    futility_IF = futility_IF, total_events = total_events,
+    future_boundaries = future_boundaries, analysis_model = analysis_model,
+    update_priors_sims = update_priors_sims, PP_sims = PP_sims,
+    n_sims = n_sims, n_cores = n_cores, seed = seed
   )
 
   list(raw = raw, settings = settings)
@@ -1027,6 +1011,7 @@ select_kappa_star <- function(summary_by_scenario, power_floor, null_scenario, a
 }
 
 
+# Deprecated (to be removed in a future release).
 summarize_convergence <- function(posterior_list) {
 
   converged_vec <- vapply(posterior_list, function(x) {
@@ -1123,7 +1108,9 @@ single_matched_futility_rep <- function(i, n_c, n_t, data_generating_model,
 #' @param seed Optional integer seed.
 #'
 #' @return A list with \code{boundary}, \code{scenario_futility_rates},
-#'   \code{raw_Z_by_scenario} and \code{settings}.
+#'   \code{raw_Z_by_scenario} and \code{settings} (all arguments, plus the
+#'   package, R, rjags and JAGS versions, the git commit of the working
+#'   directory, the hostname and a timestamp).
 #'
 #' @examples
 #' scenarios <- list(
@@ -1190,17 +1177,12 @@ calibrate_matched_futility_boundary <- function(n_c, n_t,
     mean(Z < boundary, na.rm = TRUE)
   }, numeric(1))
 
-  settings <- list(
-    futility_IF = futility_IF,
-    total_events = total_events,
+  settings <- make_settings(
+    n_c = n_c, n_t = n_t, recruitment_model = recruitment_model,
+    futility_IF = futility_IF, total_events = total_events,
     analysis_model = analysis_model,
     target_null_futility_rate = target_null_futility_rate,
-    n_sims = n_sims,
-    n_cores = n_cores,
-    seed = seed,
-    package_version = tryCatch(as.character(utils::packageVersion("DTEAssurance")),
-                               error = function(e) NA_character_),
-    timestamp = as.character(Sys.time())
+    scenarios = scenarios, n_sims = n_sims, n_cores = n_cores, seed = seed
   )
 
   list(boundary = boundary,

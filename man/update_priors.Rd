@@ -67,11 +67,8 @@ A data frame containing Monte Carlo samples from the updated
 (posterior) distribution of the model parameters, with columns
 \code{lambda_c}, \code{delay_time}, \code{HR}, \code{gamma_c} (Weibull
 only), and \code{Z} (the latent scenario indicator: 1 = no separation,
-2 = immediate separation, 3 = delayed separation). Column access
-(\code{posterior_df$lambda_c}, etc.) is unchanged from previous
-versions of this function -- existing calling code does not need to be
-modified. In addition, three attributes are attached to the returned
-data frame for diagnostic purposes:
+2 = immediate separation, 3 = delayed separation). The following
+attributes are attached for diagnostic purposes:
 \describe{
 \item{\code{rhat}}{A named numeric vector of per-parameter
 Gelman-Rubin point estimates (accessed via
@@ -103,6 +100,13 @@ parametric prior distributions) using interim survival data under a
 delayed-effect, piecewise-exponential model for the treatment arm and an
 exponential or Weibull model for the control arm.
 }
+\section{Deprecated}{
+
+The exponential control arm (\code{control_model$dist = "Exponential"})
+is deprecated and will be removed in a future release; use
+\code{"Weibull"}.
+}
+
 \examples{
 set.seed(123)
 interim_data = data.frame(survival_time = runif(10, min = 0, max = 10),

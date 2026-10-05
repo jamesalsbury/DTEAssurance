@@ -23,7 +23,8 @@ test_that("run_paired_scenario: columns, no NAs, reproducible, resumable (spec t
   expect_equal(raw$rep_id, 1:20)
   expect_equal(raw$seed_used, 7 * 1e5 + 1:20)
   expect_equal(res$settings$n_failed, 0)
-  expect_true(all(c("package_version", "R_version", "git_commit", "timestamp") %in%
+  expect_true(all(c("package_version", "r_version", "rjags_version", "jags_version",
+                    "git_commit", "hostname", "timestamp") %in%
                     names(res$settings)))
 
   # the interim cut has floor(0.5 * 80) = 40 events, efficacy 60, final 80

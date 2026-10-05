@@ -105,8 +105,7 @@ directly rather than deriving success/failure independently.}
 \item{SampleSize}{Total sample size at the time of decision}
 \item{Success}{Logical recode of \code{Decision} for convenience:
 \code{TRUE} if \code{Decision \%in\% c("Stop for efficacy",
-    "Successful at final")}, \code{FALSE} otherwise. Derived directly
-and only from \code{Decision} -- see "Bug fix" below.}
+    "Successful at final")}, \code{FALSE} otherwise.}
 \item{Converged}{For \code{"PP"} designs, whether the interim MCMC
 fit converged (see \code{\link{update_priors}}); \code{NA} for
 other futility types, which involve no MCMC step.}
@@ -117,33 +116,13 @@ efficacy before the futility look).}
 probabilities of the three latent states at the futility look;
 \code{NA} otherwise.}
 }
-Class: \code{data.frame}, with attribute \code{settings}: a list of all
-arguments, the package version, R version, git commit (if available) and
-a timestamp.
+Class: \code{data.frame}, with attribute \code{settings}: a list of
+all arguments, plus the package, R, rjags and JAGS versions, the git
+commit of the working directory, the hostname and a timestamp.
 }
 \description{
 Simulates assurance and operating characteristics for a group sequential trial under prior uncertainty about a delayed treatment effect. The function integrates beliefs about control survival, treatment delay, post-delay hazard ratio, recruitment, and group sequential design (GSD) parameters.
 }
-\section{Bug fix (this version)}{
- previous versions of this function
-independently recomputed a separate \code{Final_Decision} field from
-a hardcoded Cox proportional-hazards Wald statistic at a flat
-\code{qnorm(0.975)} threshold, regardless of \code{analysis_model$method}
-or the design's actual group-sequential boundaries. This was a
-second, separate copy of the same bug fixed in
-\code{apply_GSD_to_trial()} (see its documentation), and could
-silently disagree with the trial's own \code{Decision}. This version
-removes that duplicate computation entirely: \code{Success} is now
-derived only from \code{Decision}, which is itself computed once,
-correctly, inside \code{apply_GSD_to_trial()}, via
-\code{analysis_model$method} and the design's real boundaries. This
-also collapses what were previously three near-duplicate branches
-(one per futility type) into a single call path, since
-\code{apply_GSD_to_trial()} already dispatches correctly on
-\code{GSD_model$futility_type} -- removing the code duplication that
-allowed the two copies of the bug to drift apart in the first place.
-}
-
 \examples{
 set.seed(123)
 control_model <- list(dist = "Exponential", parameter_mode = "Fixed",

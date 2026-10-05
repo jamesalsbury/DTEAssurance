@@ -55,6 +55,61 @@ Results from 1.2.0 are not reproduced exactly: the event-cut convention
 * `inst/benchmark/time_one_rep.R` (in the source repository only) times one
   paired replicate at the manuscript settings.
 
+* `make_gsd_design()` (exported; previously the internal
+  `make_rpact_design_from_GSD_model()`, kept as an alias for one release)
+  and `apply_GSD_to_trial()` are now exported and documented.
+* `apply_design_rule()`: D1-D5 decisions post hoc from
+  `run_paired_scenario()` output, using the same decision labels as
+  `apply_GSD_to_trial()`. A test checks that both give identical decisions,
+  stop times and sample sizes on the same simulated trials.
+* `run_paired_scenario()` is the single entry point for the paper's
+  simulation tables.
+* `settings` returned by the simulation functions now record all arguments
+  plus the package, R, rjags and JAGS versions, the git commit of the working
+  directory, the hostname and a timestamp.
+
+## Internal tidy-up (no change in results unless stated)
+
+* One test wrapper (`run_test()`) and one truth simulator
+  (`simulate_trial_from_truth()`) replace repeated code; outputs are
+  identical under a fixed seed.
+* Weibull control parameters from two landmark survival probabilities are
+  computed in closed form (as in the `update_priors()` prior) instead of
+  with `nleqslv`, which could fail silently. Results agree to about 1e-8
+  relative; invalid landmarks (S(t2) <= 0 or S(t2) >= S(t1)) now give an
+  informative error. `nleqslv` moves from Imports to Suggests. The
+  assurance Shiny app uses the same closed form.
+* `survival_test()`: `alpha` has no default (it previously defaulted to 0.05;
+  `alpha = NULL` returns `Signif = NA` when only `Z` is needed), the
+  documented default `alternative` is now the actual default
+  (`"one.sided"`), and `Signif` is always logical (`FALSE` if `Z` is `NA`).
+
+## History of earlier fixes (now removed from the code comments)
+
+* The PP calculation evaluates the full group-sequential success event
+  (crossing any remaining efficacy boundary, or success at the final
+  analysis), not a single final test at a flat alpha.
+* The trial evaluation in `apply_GSD_to_trial()` and
+  `calc_dte_assurance_adaptive()` uses the specified test statistic
+  (`analysis_model$method`) and the design's boundaries, replacing a
+  hard-coded Cox Wald statistic at a flat `qnorm(0.975)`; `Success` is
+  derived only from `Decision`.
+* `"MatchedZ"` futility looks are included in the design's information-rate
+  grid with zero alpha spent.
+* `update_priors()` monitors the latent state `Z` and returns R-hat and
+  state-probability diagnostics; calibration output records them.
+* The MW statistic from `nphRCT::wlrt()` is negated so that positive `Z`
+  means benefit for all three methods.
+* `calibrate_PP_timing()` defaults for `update_priors_sims` and `PP_sims`
+  are 1000 and 2000 (previously hard-coded to 100 and 50).
+
+## Deprecated (kept, to be removed in a future release)
+
+* The exponential control arm in `PP_func()` and `update_priors()`, the
+  legacy `censoring_model` fallback of `PP_func()`,
+  `calibrate_PP_threshold()` (and its internal `single_calibration_rep()`),
+  and the internal `summarize_gsd_results()` and `summarize_convergence()`.
+
 ## Stricter inputs
 
 * `PP_func()`: `n_sims` is required.

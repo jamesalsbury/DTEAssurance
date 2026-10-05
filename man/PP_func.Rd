@@ -55,15 +55,14 @@ fallback path, see \code{censoring_model} below).
 \item \code{rho}, \code{gamma}, \code{t_star}, \code{s_star}: additional parameters for WLRT or MW (if applicable).
 }}
 
-\item{censoring_model}{\strong{Legacy fallback, deprecated.} Used only if
+\item{censoring_model}{\strong{Legacy fallback, deprecated} (see the
+Deprecated section). Used only if
 \code{future_boundaries} is \code{NULL}. A named list specifying a
 single censoring mechanism for the future data (\code{method}: one of
 \code{"Time"}, \code{"Events"}, or \code{"IF"}; plus the corresponding
 \code{time}/\code{events}/\code{IF} parameter), with success determined
 by \code{analysis_model$alpha} rather than a design-specific critical
-value. Retained only for backward compatibility with callers that do
-not have access to a full group-sequential design object; new code
-should always supply \code{future_boundaries}.}
+value.}
 
 \item{future_boundaries}{\strong{Recommended.} A list of future, pre-specified,
 fixed decision points to evaluate on each posterior-predictive draw, in
@@ -81,10 +80,9 @@ On each predictive draw, boundaries are checked in order: if \code{Z}
 crosses a boundary, the draw is recorded as successful and evaluation
 stops (mirroring the group-sequential design's own early-stopping
 logic); if the final boundary in the chain is reached without crossing,
-the draw is recorded as unsuccessful. This correctly evaluates the
-adaptive trial-success event (crossing any future efficacy boundary, or
-rejecting \eqn{H_0} at the final analysis), rather than only checking a
-single final test.
+the draw is recorded as unsuccessful. This evaluates the trial-success
+event: crossing any future efficacy boundary, or rejecting \eqn{H_0} at
+the final analysis.
 
 \strong{Scope:} \code{future_boundaries} must contain only fixed
 (non-Bayesian) decision points. A design with more than one future
@@ -123,6 +121,15 @@ uniform recruitment (the \code{"power"} recruitment model with
 \code{power = 1}) only; the simulation functions that call
 \code{PP_func()} stop if another recruitment model is supplied.
 }
+\section{Deprecated}{
+
+The exponential control arm (\code{control_distribution = "Exponential"})
+and the legacy single-stage \code{censoring_model} fallback are
+deprecated and will be removed in a future release. Use
+\code{control_distribution = "Weibull"} (an exponential control arm is
+the Weibull case with \code{gamma_c = 1}) and \code{future_boundaries}.
+}
+
 \examples{
 set.seed(123)
 n <- 30

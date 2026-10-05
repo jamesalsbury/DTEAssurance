@@ -58,10 +58,10 @@ the chain; see \code{single_calibration_rep()}). If \code{NULL}
 and a message is emitted.}
 
 \item{update_priors_sims}{Number of posterior samples per interim dataset
-(default 1000; was previously hardcoded to 100).}
+(default 1000).}
 
 \item{PP_sims}{Number of predictive simulations per interim dataset
-(default 2000; was previously hardcoded to 50).}
+(default 2000).}
 
 \item{n_sims}{Number of interim datasets to simulate per candidate timing
 (default is 100).}
@@ -83,8 +83,9 @@ A list with:
 fraction, each containing \code{PP_values} (a vector of estimated
 PP, one per simulated interim dataset) and \code{cens_time} (the
 corresponding calendar times).}
-\item{settings}{A list recording the exact settings used, plus the
-installed \code{DTEAssurance} package version, for provenance.}
+\item{settings}{A list of all arguments, plus the package, R, rjags
+and JAGS versions, the git commit of the working directory, the
+hostname and a timestamp.}
 }
 }
 \description{

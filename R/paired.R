@@ -277,8 +277,9 @@ single_paired_rep <- function(i, seed,
 #' @param chunk_size Number of replicates per chunk (default 100).
 #'
 #' @return A list with \code{raw} (one row per replicate, ordered by
-#'   \code{rep_id}) and \code{settings} (all arguments, package version, R
-#'   version, git commit if available, timestamp and \code{n_failed}). The
+#'   \code{rep_id}) and \code{settings} (all arguments, the package, R,
+#'   rjags and JAGS versions, the git commit of the working directory, the
+#'   hostname, a timestamp and \code{n_failed}). The
 #'   number of failed replicates is reported with a message, and a warning
 #'   is given if more than 1\% failed.
 #'
@@ -348,13 +349,12 @@ run_paired_scenario <- function(n_sims, seed, ..., n_cores = 1,
             " replicates (more than 1%) failed; see the 'error' column.")
   }
 
-  settings <- c(
+  settings <- do.call(make_settings, c(
     list(n_sims = n_sims, seed = seed, n_cores = n_cores,
          checkpoint_file = checkpoint_file, chunk_size = chunk_size),
     args,
-    run_provenance(),
     list(n_failed = n_failed)
-  )
+  ))
 
   list(raw = raw, settings = settings)
 }

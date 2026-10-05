@@ -89,3 +89,13 @@ test_that("PP code paths stop for non-uniform recruitment", {
                       update_priors_sims = 10, PP_sims = 5),
     "power = 1")
 })
+
+test_that("make_settings() records arguments and provenance (item 7)", {
+  st <- make_settings(a = 1, b = list(x = 2))
+  expect_equal(st$a, 1)
+  expect_equal(st$b, list(x = 2))
+  expect_true(all(c("package_version", "r_version", "rjags_version", "jags_version",
+                    "git_commit", "hostname", "timestamp") %in% names(st)))
+  expect_identical(st$r_version, R.version.string)
+  expect_type(st$git_commit, "character")
+})

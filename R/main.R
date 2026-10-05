@@ -623,8 +623,7 @@ add_recruitment_time <- function(data, rec_method,
 #'   \item{SampleSize}{Total sample size at the time of decision}
 #'   \item{Success}{Logical recode of \code{Decision} for convenience:
 #'     \code{TRUE} if \code{Decision \%in\% c("Stop for efficacy",
-#'     "Successful at final")}, \code{FALSE} otherwise. Derived directly
-#'     and only from \code{Decision} -- see "Bug fix" below.}
+#'     "Successful at final")}, \code{FALSE} otherwise.}
 #'   \item{Converged}{For \code{"PP"} designs, whether the interim MCMC
 #'     fit converged (see \code{\link{update_priors}}); \code{NA} for
 #'     other futility types, which involve no MCMC step.}
@@ -635,27 +634,9 @@ add_recruitment_time <- function(data, rec_method,
 #'     probabilities of the three latent states at the futility look;
 #'     \code{NA} otherwise.}
 #' }
-#' Class: \code{data.frame}, with attribute \code{settings}: a list of all
-#' arguments, the package version, R version, git commit (if available) and
-#' a timestamp.
-#'
-#' @section Bug fix (this version): previous versions of this function
-#'   independently recomputed a separate \code{Final_Decision} field from
-#'   a hardcoded Cox proportional-hazards Wald statistic at a flat
-#'   \code{qnorm(0.975)} threshold, regardless of \code{analysis_model$method}
-#'   or the design's actual group-sequential boundaries. This was a
-#'   second, separate copy of the same bug fixed in
-#'   \code{apply_GSD_to_trial()} (see its documentation), and could
-#'   silently disagree with the trial's own \code{Decision}. This version
-#'   removes that duplicate computation entirely: \code{Success} is now
-#'   derived only from \code{Decision}, which is itself computed once,
-#'   correctly, inside \code{apply_GSD_to_trial()}, via
-#'   \code{analysis_model$method} and the design's real boundaries. This
-#'   also collapses what were previously three near-duplicate branches
-#'   (one per futility type) into a single call path, since
-#'   \code{apply_GSD_to_trial()} already dispatches correctly on
-#'   \code{GSD_model$futility_type} -- removing the code duplication that
-#'   allowed the two copies of the bug to drift apart in the first place.
+#' Class: \code{data.frame}, with attribute \code{settings}: a list of
+#' all arguments, plus the package, R, rjags and JAGS versions, the git
+#' commit of the working directory, the hostname and a timestamp.
 #'
 #' @examples
 #' set.seed(123)
@@ -735,14 +716,8 @@ calc_dte_assurance_adaptive <- function(n_c, n_t,
       n_c, n_t, control_model, effect_model, recruitment_model
     )
 
-    # --- FIX: single, unified call to apply_GSD_to_trial() for every
-    # futility_type. apply_GSD_to_trial() already dispatches correctly on
-    # GSD_model$futility_type internally (none/Beta -> boundary-only;
-    # PP -> posterior-predictive futility; MatchedZ -> fixed calibrated
-    # Z-cutoff futility), so no branching is needed here. control_model/
-    # effect_model/recruitment_model/update_priors_sims/PP_sims are
-    # only actually used inside apply_GSD_to_trial()'s PP branch; passing
-    # them unconditionally is harmless for other futility types. ---
+    # apply_GSD_to_trial() dispatches on GSD_model$futility_type; the prior,
+    # recruitment model and simulation sizes are only used for PP futility.
     outcome <- apply_GSD_to_trial(
       n_c = n_c, n_t = n_t,
       trial_data          = trial,
@@ -757,15 +732,6 @@ calc_dte_assurance_adaptive <- function(n_c, n_t,
       PP_sims             = PP_sims
     )
 
-    # --- FIX: Success is now derived ONLY from outcome$decision (the
-    # single source of truth, computed once inside apply_GSD_to_trial()
-    # using analysis_model$method and the design's real boundaries). The
-    # previous, separate, independently-computed Final_Decision field
-    # (hardcoded Cox Wald statistic vs. a flat qnorm(0.975) threshold,
-    # ignoring analysis_model$method and the design's actual boundaries)
-    # has been removed entirely -- it was a second copy of the same bug
-    # fixed in apply_GSD_to_trial(), and could silently disagree with
-    # Decision. ---
     data.frame(
       Trial      = i,
       Decision   = outcome$decision,
@@ -782,14 +748,13 @@ calc_dte_assurance_adaptive <- function(n_c, n_t,
   }, future.seed = TRUE)
 
   out <- do.call(rbind, results)
-  attr(out, "settings") <- c(
-    list(n_c = n_c, n_t = n_t,
-         control_model = control_model, effect_model = effect_model,
-         recruitment_model = recruitment_model, GSD_model = GSD_model,
-         analysis_model = analysis_model,
-         update_priors_sims = update_priors_sims, PP_sims = PP_sims,
-         n_sims = n_sims),
-    run_provenance()
+  attr(out, "settings") <- make_settings(
+    n_c = n_c, n_t = n_t,
+    control_model = control_model, effect_model = effect_model,
+    recruitment_model = recruitment_model, GSD_model = GSD_model,
+    analysis_model = analysis_model,
+    update_priors_sims = update_priors_sims, PP_sims = PP_sims,
+    n_sims = n_sims
   )
   out
 }
@@ -847,11 +812,8 @@ calc_dte_assurance_adaptive <- function(n_c, n_t,
 #'   (posterior) distribution of the model parameters, with columns
 #'   \code{lambda_c}, \code{delay_time}, \code{HR}, \code{gamma_c} (Weibull
 #'   only), and \code{Z} (the latent scenario indicator: 1 = no separation,
-#'   2 = immediate separation, 3 = delayed separation). Column access
-#'   (\code{posterior_df$lambda_c}, etc.) is unchanged from previous
-#'   versions of this function -- existing calling code does not need to be
-#'   modified. In addition, three attributes are attached to the returned
-#'   data frame for diagnostic purposes:
+#'   2 = immediate separation, 3 = delayed separation). The following
+#'   attributes are attached for diagnostic purposes:
 #'   \describe{
 #'     \item{\code{rhat}}{A named numeric vector of per-parameter
 #'       Gelman-Rubin point estimates (accessed via
@@ -876,6 +838,11 @@ calc_dte_assurance_adaptive <- function(n_c, n_t,
 #' Priors for \code{lambda_c}, \code{T}, and \code{HR} are constructed from
 #' elicited distributions using the SHELF framework, then updated through
 #' sampling-based posterior inference.
+#'
+#' @section Deprecated:
+#' The exponential control arm (\code{control_model$dist = "Exponential"})
+#' is deprecated and will be removed in a future release; use
+#' \code{"Weibull"}.
 #'
 #' @export
 #'
@@ -1090,8 +1057,7 @@ model = rjags::jags.model(
   quiet = TRUE
 )
 
-# --- FIX: Z is now monitored alongside the continuous parameters, giving
-#     direct access to the posterior state probabilities P(Z=k | data). ---
+# Z is monitored to give the posterior state probabilities P(Z = k | data).
 var_names <- if (control_model$dist == "Exponential") {
   c("lambda_c", "HR", "delay_time", "Z")
 } else {
@@ -1106,12 +1072,8 @@ output <- rjags::coda.samples(
   n.iter = n_samples
 )
 
-# --- FIX: convergence diagnostic (per-parameter Gelman-Rubin Rhat),
-#     computed here so it can be aggregated across a large simulation
-#     study without needing to re-run anything. Wrapped in tryCatch since
-#     this will be called many thousands of times in a full simulation
-#     study, and an occasional numerical failure (e.g. a near-zero-variance
-#     fit) should not halt the study -- it is instead recorded as NA. ---
+# Per-parameter Gelman-Rubin R-hat. A numerical failure (e.g. a
+# near-zero-variance fit) is recorded rather than stopping a simulation study.
 conv_diag <- tryCatch({
   gd <- coda::gelman.diag(output, autoburnin = FALSE, multivariate = FALSE)
   psrf_vec <- gd$psrf[, "Point est."]
@@ -1126,8 +1088,7 @@ conv_diag <- tryCatch({
 
 posterior_df <- as.data.frame(as.matrix(output))
 
-# --- FIX: posterior state probabilities, directly from the monitored Z
-#     column (now present in posterior_df since Z is in var_names). ---
+# Posterior latent-state probabilities from the monitored Z
 Z_tab <- table(factor(posterior_df$Z, levels = c(1, 2, 3)))
 Z_probs <- as.numeric(Z_tab) / sum(Z_tab)
 names(Z_probs) <- c("P_Z1", "P_Z2", "P_Z3")
@@ -1191,25 +1152,23 @@ return(posterior_df)
 #'   crosses a boundary, the draw is recorded as successful and evaluation
 #'   stops (mirroring the group-sequential design's own early-stopping
 #'   logic); if the final boundary in the chain is reached without crossing,
-#'   the draw is recorded as unsuccessful. This correctly evaluates the
-#'   adaptive trial-success event (crossing any future efficacy boundary, or
-#'   rejecting \eqn{H_0} at the final analysis), rather than only checking a
-#'   single final test.
+#'   the draw is recorded as unsuccessful. This evaluates the trial-success
+#'   event: crossing any future efficacy boundary, or rejecting \eqn{H_0} at
+#'   the final analysis.
 #'
 #'   \strong{Scope:} \code{future_boundaries} must contain only fixed
 #'   (non-Bayesian) decision points. A design with more than one future
 #'   Bayesian-predictive-probability futility look is not supported here, as
 #'   it would require nested posterior-predictive simulation at each look;
 #'   see the package/manuscript Limitations.
-#' @param censoring_model \strong{Legacy fallback, deprecated.} Used only if
+#' @param censoring_model \strong{Legacy fallback, deprecated} (see the
+#'   Deprecated section). Used only if
 #'   \code{future_boundaries} is \code{NULL}. A named list specifying a
 #'   single censoring mechanism for the future data (\code{method}: one of
 #'   \code{"Time"}, \code{"Events"}, or \code{"IF"}; plus the corresponding
 #'   \code{time}/\code{events}/\code{IF} parameter), with success determined
 #'   by \code{analysis_model$alpha} rather than a design-specific critical
-#'   value. Retained only for backward compatibility with callers that do
-#'   not have access to a full group-sequential design object; new code
-#'   should always supply \code{future_boundaries}.
+#'   value.
 #' @param n_sims Number of posterior-predictive draws (required, no
 #'   default).
 #'
@@ -1236,6 +1195,13 @@ return(posterior_df)
 #'   rejects \eqn{H_0}, accounting for any future fixed efficacy boundaries)
 #'   and \code{Z_val} (the test statistic at the analysis where the draw was
 #'   decided). The predictive probability is \code{mean(PP_df$success)}.
+#'
+#' @section Deprecated:
+#' The exponential control arm (\code{control_distribution = "Exponential"})
+#' and the legacy single-stage \code{censoring_model} fallback are
+#' deprecated and will be removed in a future release. Use
+#' \code{control_distribution = "Weibull"} (an exponential control arm is
+#' the Weibull case with \code{gamma_c = 1}) and \code{future_boundaries}.
 #'
 #' @export
 #'
@@ -1527,12 +1493,8 @@ PP_func <- function(data, posterior_df, control_distribution = "Exponential", n_
 
     final_df <- rbind(final_non_censored_df, final_unenrolled_df, final_control_censored_df, final_censored_treatment_before_delay, final_censored_treatment_after_delay)
 
-    # =========================================================================
-    # FIX: evaluate the trial-success event W (Eq. 8) correctly -- check every
-    # future fixed decision point in order, stopping at the first crossed
-    # boundary, rather than testing only a single final analysis at a flat
-    # alpha. This replaces the previous single-stage censor-and-test block.
-    # =========================================================================
+    # Trial-success event W (Eq. 8): check each future decision point in
+    # order, stopping at the first boundary crossed.
 
     if (!is.null(future_boundaries)) {
 
@@ -1648,11 +1610,15 @@ PP_func <- function(data, posterior_df, control_distribution = "Exponential", n_
 #'   \describe{
 #'     \item{PP_vec}{A numeric vector of length \code{n_df_sims}, the
 #'       estimated PP for each simulated interim dataset.}
-#'     \item{settings}{A list recording the exact settings used (all
-#'       arguments above, plus the installed \code{DTEAssurance} package
-#'       version), for provenance -- save this alongside \code{PP_vec}
-#'       so it is always possible to confirm what generated a given result.}
+#'     \item{settings}{A list of all arguments, plus the package, R, rjags
+#'       and JAGS versions, the git commit of the working directory, the
+#'       hostname and a timestamp.}
 #'   }
+#'
+#' @section Deprecated:
+#' \code{calibrate_PP_threshold()} is deprecated and will be removed in a
+#' future release. Use \code{\link{run_paired_scenario}} with
+#' \code{\link{summarize_grid_by_kappa}} and \code{\link{select_kappa_star}}.
 #'
 #' @export
 #'
@@ -1765,19 +1731,14 @@ calibrate_PP_threshold <- function(n_c,
   }
   PP_vec <- unlist(PP_vec)
 
-  settings <- list(
-    n_df_sims          = n_df_sims,
-    update_priors_sims = update_priors_sims,
-    PP_sims            = PP_sims,
-    n_cores            = n_cores,
-    seed               = seed,
-    future_boundaries  = future_boundaries,
-    IA_model           = IA_model,
-    package_version    = tryCatch(
-      as.character(utils::packageVersion("DTEAssurance")),
-      error = function(e) NA_character_
-    ),
-    timestamp          = as.character(Sys.time())
+  settings <- make_settings(
+    n_c = n_c, n_t = n_t, control_model = control_model,
+    effect_model = effect_model, recruitment_model = recruitment_model,
+    IA_model = IA_model, analysis_model = analysis_model,
+    data_generating_model = data_generating_model,
+    future_boundaries = future_boundaries, n_df_sims = n_df_sims,
+    update_priors_sims = update_priors_sims, PP_sims = PP_sims,
+    n_cores = n_cores, seed = seed
   )
 
   return(list(PP_vec = PP_vec, settings = settings))
@@ -1816,9 +1777,9 @@ calibrate_PP_threshold <- function(n_c,
 #'   (not recommended), falls back to the legacy single-stage calculation,
 #'   and a message is emitted.
 #' @param update_priors_sims Number of posterior samples per interim dataset
-#'   (default 1000; was previously hardcoded to 100).
+#'   (default 1000).
 #' @param PP_sims Number of predictive simulations per interim dataset
-#'   (default 2000; was previously hardcoded to 50).
+#'   (default 2000).
 #' @param n_sims Number of interim datasets to simulate per candidate timing
 #'   (default is 100).
 #' @param n_cores Number of cores to parallelise over via
@@ -1836,8 +1797,9 @@ calibrate_PP_threshold <- function(n_c,
 #'       fraction, each containing \code{PP_values} (a vector of estimated
 #'       PP, one per simulated interim dataset) and \code{cens_time} (the
 #'       corresponding calendar times).}
-#'     \item{settings}{A list recording the exact settings used, plus the
-#'       installed \code{DTEAssurance} package version, for provenance.}
+#'     \item{settings}{A list of all arguments, plus the package, R, rjags
+#'       and JAGS versions, the git commit of the working directory, the
+#'       hostname and a timestamp.}
 #'   }
 #'
 #' @export
@@ -1954,19 +1916,13 @@ calibrate_PP_timing <- function(n_c, n_t,
     outcome_list[[i]]$IF         <- IA_model$IF[i]
   }
 
-  settings <- list(
-    IA_model           = IA_model,
-    update_priors_sims = update_priors_sims,
-    PP_sims            = PP_sims,
-    n_sims             = n_sims,
-    n_cores            = n_cores,
-    seed               = seed,
-    future_boundaries  = future_boundaries,
-    package_version    = tryCatch(
-      as.character(utils::packageVersion("DTEAssurance")),
-      error = function(e) NA_character_
-    ),
-    timestamp          = as.character(Sys.time())
+  settings <- make_settings(
+    n_c = n_c, n_t = n_t, control_model = control_model,
+    effect_model = effect_model, recruitment_model = recruitment_model,
+    IA_model = IA_model, analysis_model = analysis_model,
+    future_boundaries = future_boundaries,
+    update_priors_sims = update_priors_sims, PP_sims = PP_sims,
+    n_sims = n_sims, n_cores = n_cores, seed = seed
   )
 
   return(list(outcome_list = outcome_list, settings = settings))
