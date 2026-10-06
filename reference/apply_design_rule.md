@@ -48,7 +48,9 @@ or `"Unsuccessful at final"`), `success`, `early_fut`, `early_eff`,
 
 - D3:
 
-  D2 plus PP futility: `"Stop for futility"` if `PP_val < kappa`.
+  D2 plus PP futility: `"Stop for futility"` if `PP_val < kappa`. Stops
+  with an error if `PP_val` is `NA` for any replicate that did not fail
+  (e.g. output from `compute_PP = FALSE`).
 
 - D4:
 
@@ -58,6 +60,9 @@ or `"Unsuccessful at final"`), `success`, `early_fut`, `early_eff`,
 
   As D4 with the modestly weighted statistics `Z_int_MW_t<t>`,
   `Z_eff_MW_t<t>`, `Z_fin_MW_t<t>` for `t = mw_t_star`.
+
+D1, D2, D4 and D5 do not use `PP_val`, so they also work on output from
+`run_paired_scenario(compute_PP = FALSE)`.
 
 ## See also
 

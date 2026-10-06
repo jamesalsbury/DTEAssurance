@@ -378,7 +378,7 @@ str(result)
 #>   ..$ rjags_version     : chr "4.17"
 #>   ..$ jags_version      :Classes 'package_version', 'numeric_version'  hidden list of 1
 #>   .. ..$ : int [1:3] 4 3 2
-#>   ..$ git_commit        : chr "c6f664163295cd45631b96bcff1355f66501572d"
+#>   ..$ git_commit        : chr "42dd5de94dbcf9af12f471c0b32d66439c188b8c"
 #>   ..$ hostname          : chr "runnervm8df0l"
-#>   ..$ timestamp         : chr "2026-10-06 09:58:23.551781"
+#>   ..$ timestamp         : chr "2026-10-06 10:45:56.492943"
 ```

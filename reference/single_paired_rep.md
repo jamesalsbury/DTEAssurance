@@ -26,7 +26,8 @@ single_paired_rep(
   analysis_model_LRT,
   mw_t_stars = c(2, 6),
   update_priors_sims,
-  PP_sims
+  PP_sims,
+  compute_PP = TRUE
 )
 ```
 
@@ -103,11 +104,21 @@ single_paired_rep(
 
 - update_priors_sims:
 
-  Number of posterior samples per chain (required).
+  Number of posterior samples per chain (required when
+  `compute_PP = TRUE`).
 
 - PP_sims:
 
-  Number of posterior-predictive draws (required).
+  Number of posterior-predictive draws (required when
+  `compute_PP = TRUE`).
+
+- compute_PP:
+
+  If `FALSE`, skip the interim posterior update and the PP calculation:
+  `PP_val`, `converged`, `rhat_max`, `n_nonfinite_rhat`, `P_Z1`, `P_Z2`
+  and `P_Z3` are `NA`, and all other columns are identical to those from
+  `compute_PP = TRUE` with the same seed. Such output supports rules D1,
+  D2, D4 and D5 but not D3. Default `TRUE`.
 
 ## Value
 

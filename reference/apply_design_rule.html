@@ -87,7 +87,9 @@ and <code>duration</code>. Rows for failed replicates (non-missing
 
 <dt>D3</dt>
 <dd><p>D2 plus PP futility: <code>"Stop for futility"</code> if
-<code>PP_val &lt; kappa</code>.</p></dd>
+<code>PP_val &lt; kappa</code>. Stops with an error if <code>PP_val</code> is
+<code>NA</code> for any replicate that did not fail (e.g. output from
+<code>compute_PP = FALSE</code>).</p></dd>
 
 <dt>D4</dt>
 <dd><p>D2 plus Z futility: <code>"Stop for futility"</code> if
@@ -99,7 +101,9 @@ and <code>duration</code>. Rows for failed replicates (non-missing
 <code>t = mw_t_star</code>.</p></dd>
 
 
-</dl></div>
+</dl><p>D1, D2, D4 and D5 do not use <code>PP_val</code>, so they also work on output
+from <code>run_paired_scenario(compute_PP = FALSE)</code>.</p>
+    </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
     <div class="dont-index"><p><code><a href="run_paired_scenario.html">run_paired_scenario</a></code>, <code><a href="summarize_grid_by_kappa.html">summarize_grid_by_kappa</a></code></p></div>

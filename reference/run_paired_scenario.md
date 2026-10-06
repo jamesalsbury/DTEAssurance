@@ -16,6 +16,7 @@ run_paired_scenario(
   n_sims,
   seed,
   ...,
+  compute_PP = TRUE,
   n_cores = 1,
   checkpoint_file = NULL,
   chunk_size = 100
@@ -37,6 +38,14 @@ run_paired_scenario(
 
   Further arguments passed to
   [`single_paired_rep`](https://jamesalsbury.github.io/DTEAssurance/reference/single_paired_rep.md).
+
+- compute_PP:
+
+  Passed to
+  [`single_paired_rep`](https://jamesalsbury.github.io/DTEAssurance/reference/single_paired_rep.md):
+  if `FALSE`, the PP columns are `NA` and `update_priors_sims` and
+  `PP_sims` are not needed. A checkpoint is only resumed with the same
+  `compute_PP`. Default `TRUE`.
 
 - n_cores:
 

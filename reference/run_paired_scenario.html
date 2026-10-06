@@ -54,6 +54,7 @@ the start, the run resumes from the replicates already completed.</p>
 <span>  <span class="va">n_sims</span>,</span>
 <span>  <span class="va">seed</span>,</span>
 <span>  <span class="va">...</span>,</span>
+<span>  compute_PP <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  n_cores <span class="op">=</span> <span class="fl">1</span>,</span>
 <span>  checkpoint_file <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  chunk_size <span class="op">=</span> <span class="fl">100</span></span>
@@ -74,6 +75,13 @@ the start, the run resumes from the replicates already completed.</p>
 
 <dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
 <dd><p>Further arguments passed to <code><a href="single_paired_rep.html">single_paired_rep</a></code>.</p></dd>
+
+
+<dt id="arg-compute-pp">compute_PP<a class="anchor" aria-label="anchor" href="#arg-compute-pp"></a></dt>
+<dd><p>Passed to <code><a href="single_paired_rep.html">single_paired_rep</a></code>: if
+<code>FALSE</code>, the PP columns are <code>NA</code> and <code>update_priors_sims</code>
+and <code>PP_sims</code> are not needed. A checkpoint is only resumed with the
+same <code>compute_PP</code>. Default <code>TRUE</code>.</p></dd>
 
 
 <dt id="arg-n-cores">n_cores<a class="anchor" aria-label="anchor" href="#arg-n-cores"></a></dt>

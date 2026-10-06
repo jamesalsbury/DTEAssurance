@@ -67,7 +67,8 @@ of the <em>real</em> trial (which is never stopped here).</p>
 <span>  <span class="va">analysis_model_LRT</span>,</span>
 <span>  mw_t_stars <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">2</span>, <span class="fl">6</span><span class="op">)</span>,</span>
 <span>  <span class="va">update_priors_sims</span>,</span>
-<span>  <span class="va">PP_sims</span></span>
+<span>  <span class="va">PP_sims</span>,</span>
+<span>  compute_PP <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -148,11 +149,21 @@ log-rank statistics (default <code>c(2, 6)</code>).</p></dd>
 
 <dt id="arg-update-priors-sims">update_priors_sims<a class="anchor" aria-label="anchor" href="#arg-update-priors-sims"></a></dt>
 <dd><p>Number of posterior samples per chain
-(required).</p></dd>
+(required when <code>compute_PP = TRUE</code>).</p></dd>
 
 
 <dt id="arg-pp-sims">PP_sims<a class="anchor" aria-label="anchor" href="#arg-pp-sims"></a></dt>
-<dd><p>Number of posterior-predictive draws (required).</p></dd>
+<dd><p>Number of posterior-predictive draws (required when
+<code>compute_PP = TRUE</code>).</p></dd>
+
+
+<dt id="arg-compute-pp">compute_PP<a class="anchor" aria-label="anchor" href="#arg-compute-pp"></a></dt>
+<dd><p>If <code>FALSE</code>, skip the interim posterior update and
+the PP calculation: <code>PP_val</code>, <code>converged</code>, <code>rhat_max</code>,
+<code>n_nonfinite_rhat</code>, <code>P_Z1</code>, <code>P_Z2</code> and <code>P_Z3</code> are
+<code>NA</code>, and all other columns are identical to those from
+<code>compute_PP = TRUE</code> with the same seed. Such output supports
+rules D1, D2, D4 and D5 but not D3. Default <code>TRUE</code>.</p></dd>
 
 </dl></div>
     <div class="section level2">
