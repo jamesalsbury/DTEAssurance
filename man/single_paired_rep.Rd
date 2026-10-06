@@ -21,7 +21,8 @@ single_paired_rep(
   analysis_model_LRT,
   mw_t_stars = c(2, 6),
   update_priors_sims,
-  PP_sims
+  PP_sims,
+  compute_PP = TRUE
 )
 }
 \arguments{
@@ -71,9 +72,17 @@ used for the PP calculation and the \code{*_LRT} statistics.}
 log-rank statistics (default \code{c(2, 6)}).}
 
 \item{update_priors_sims}{Number of posterior samples per chain
-(required).}
+(required when \code{compute_PP = TRUE}).}
 
-\item{PP_sims}{Number of posterior-predictive draws (required).}
+\item{PP_sims}{Number of posterior-predictive draws (required when
+\code{compute_PP = TRUE}).}
+
+\item{compute_PP}{If \code{FALSE}, skip the interim posterior update and
+the PP calculation: \code{PP_val}, \code{converged}, \code{rhat_max},
+\code{n_nonfinite_rhat}, \code{P_Z1}, \code{P_Z2} and \code{P_Z3} are
+\code{NA}, and all other columns are identical to those from
+\code{compute_PP = TRUE} with the same seed. Such output supports
+rules D1, D2, D4 and D5 but not D3. Default \code{TRUE}.}
 }
 \value{
 A one-row data frame with columns: \code{rep_id},

@@ -83,8 +83,15 @@ paired_rep_na_row <- function(i, seed_used, mw_t_stars, error) {
 #' @param mw_t_stars Values of \eqn{t^*} for the modestly weighted
 #'   log-rank statistics (default \code{c(2, 6)}).
 #' @param update_priors_sims Number of posterior samples per chain
-#'   (required).
-#' @param PP_sims Number of posterior-predictive draws (required).
+#'   (required when \code{compute_PP = TRUE}).
+#' @param PP_sims Number of posterior-predictive draws (required when
+#'   \code{compute_PP = TRUE}).
+#' @param compute_PP If \code{FALSE}, skip the interim posterior update and
+#'   the PP calculation: \code{PP_val}, \code{converged}, \code{rhat_max},
+#'   \code{n_nonfinite_rhat}, \code{P_Z1}, \code{P_Z2} and \code{P_Z3} are
+#'   \code{NA}, and all other columns are identical to those from
+#'   \code{compute_PP = TRUE} with the same seed. Such output supports
+#'   rules D1, D2, D4 and D5 but not D3. Default \code{TRUE}.
 #'
 #' @return A one-row data frame with columns: \code{rep_id},
 #'   \code{seed_used}, \code{state}, \code{true_lambda_c}, \code{true_gamma_c}
@@ -119,9 +126,13 @@ single_paired_rep <- function(i, seed,
                               analysis_model_LRT,
                               mw_t_stars = c(2, 6),
                               update_priors_sims,
-                              PP_sims) {
+                              PP_sims,
+                              compute_PP = TRUE) {
 
-  if (missing(update_priors_sims) || missing(PP_sims)) {
+  if (!(isTRUE(compute_PP) || isFALSE(compute_PP))) {
+    stop("single_paired_rep: 'compute_PP' must be TRUE or FALSE.")
+  }
+  if (compute_PP && (missing(update_priors_sims) || missing(PP_sims))) {
     stop("single_paired_rep: 'update_priors_sims' and 'PP_sims' must be supplied.")
   }
   if (!identical(analysis_model_LRT$method, "LRT")) {
@@ -185,23 +196,37 @@ single_paired_rep <- function(i, seed,
     fu_trt <- t_int - d_int$rec_time[d_int$group == "Treatment"]
 
     # --- 4. Predictive probability ---
-    posterior <- update_priors(d_int,
-                               control_model = control_model,
-                               effect_model  = effect_model,
-                               n_samples     = update_priors_sims,
-                               jags_seed     = jags_seed)
-    Zp <- attr(posterior, "Z_probs")
+    # Nothing after this step draws from the R RNG, so skipping it leaves
+    # every other column unchanged.
+    pp_cols <- list(PP_val = NA_real_, converged = NA, rhat_max = NA_real_,
+                    n_nonfinite_rhat = NA_real_,
+                    P_Z1 = NA_real_, P_Z2 = NA_real_, P_Z3 = NA_real_)
+    if (compute_PP) {
+      posterior <- update_priors(d_int,
+                                 control_model = control_model,
+                                 effect_model  = effect_model,
+                                 n_samples     = update_priors_sims,
+                                 jags_seed     = jags_seed)
+      Zp <- attr(posterior, "Z_probs")
 
-    PP_out <- PP_func(d_int, posterior,
-                      control_distribution = control_model$dist,
-                      n_c_planned       = n_c,
-                      n_t_planned       = n_t,
-                      rec_time_planned  = recruitment_model$period,
-                      df_cens_time      = t_int,
-                      analysis_model    = analysis_model_LRT,
-                      future_boundaries = make_future_boundaries(design, total_events,
-                                                                 futility_IF),
-                      n_sims            = PP_sims)
+      PP_out <- PP_func(d_int, posterior,
+                        control_distribution = control_model$dist,
+                        n_c_planned       = n_c,
+                        n_t_planned       = n_t,
+                        rec_time_planned  = recruitment_model$period,
+                        df_cens_time      = t_int,
+                        analysis_model    = analysis_model_LRT,
+                        future_boundaries = make_future_boundaries(design, total_events,
+                                                                   futility_IF),
+                        n_sims            = PP_sims)
+
+      pp_cols <- list(PP_val = mean(PP_out$PP_df$success),
+                      converged = attr(posterior, "converged"),
+                      rhat_max = attr(posterior, "rhat_max"),
+                      n_nonfinite_rhat = attr(posterior, "n_nonfinite_rhat"),
+                      P_Z1 = unname(Zp["P_Z1"]), P_Z2 = unname(Zp["P_Z2"]),
+                      P_Z3 = unname(Zp["P_Z3"]))
+    }
 
     # --- 5. Continuation of the real trial (never stopped) ---
     cut_eff <- cut_at(efficacy_IF)
@@ -234,13 +259,8 @@ single_paired_rep <- function(i, seed,
            fu_gt3_int = mean(fu_trt > 3), fu_gt6_int = mean(fu_trt > 6),
            Z_int_LRT = stat_LRT(d_int)),
       stat_MW(d_int, "Z_int"),
-      list(PP_val = mean(PP_out$PP_df$success),
-           converged = attr(posterior, "converged"),
-           rhat_max = attr(posterior, "rhat_max"),
-           n_nonfinite_rhat = attr(posterior, "n_nonfinite_rhat"),
-           P_Z1 = unname(Zp["P_Z1"]), P_Z2 = unname(Zp["P_Z2"]),
-           P_Z3 = unname(Zp["P_Z3"]),
-           t_eff = cut_eff$cens_time, n_eff = cut_eff$sample_size,
+      pp_cols,
+      list(t_eff = cut_eff$cens_time, n_eff = cut_eff$sample_size,
            Z_eff_LRT = Z_eff),
       stat_MW(cut_eff$data, "Z_eff"),
       list(t_fin = cut_fin$cens_time, n_fin = cut_fin$sample_size,
@@ -272,6 +292,10 @@ single_paired_rep <- function(i, seed,
 #' @param n_sims Number of replicates.
 #' @param seed Base seed (see \code{\link{single_paired_rep}}).
 #' @param ... Further arguments passed to \code{\link{single_paired_rep}}.
+#' @param compute_PP Passed to \code{\link{single_paired_rep}}: if
+#'   \code{FALSE}, the PP columns are \code{NA} and \code{update_priors_sims}
+#'   and \code{PP_sims} are not needed. A checkpoint is only resumed with the
+#'   same \code{compute_PP}. Default \code{TRUE}.
 #' @param n_cores Number of cores (default 1).
 #' @param checkpoint_file Optional path of an RDS checkpoint file.
 #' @param chunk_size Number of replicates per chunk (default 100).
@@ -285,10 +309,10 @@ single_paired_rep <- function(i, seed,
 #'
 #' @seealso \code{\link{single_paired_rep}}, \code{\link{summarize_grid_by_kappa}}
 #' @export
-run_paired_scenario <- function(n_sims, seed, ..., n_cores = 1,
+run_paired_scenario <- function(n_sims, seed, ..., compute_PP = TRUE, n_cores = 1,
                                 checkpoint_file = NULL, chunk_size = 100) {
 
-  args <- list(...)
+  args <- c(list(...), list(compute_PP = compute_PP))
   mw_t_stars <- if (is.null(args$mw_t_stars)) c(2, 6) else args$mw_t_stars
 
   if (!(seed * 1e5 + n_sims < .Machine$integer.max)) {
@@ -301,6 +325,11 @@ run_paired_scenario <- function(n_sims, seed, ..., n_cores = 1,
     if (!identical(ck$seed, seed)) {
       stop("run_paired_scenario: checkpoint_file was written with seed = ",
            ck$seed, ", not ", seed, ". Use a different checkpoint_file.")
+    }
+    ck_compute_PP <- if (is.null(ck$compute_PP)) TRUE else ck$compute_PP
+    if (!identical(ck_compute_PP, compute_PP)) {
+      stop("run_paired_scenario: checkpoint_file was written with compute_PP = ",
+           ck_compute_PP, ", not ", compute_PP, ". Use a different checkpoint_file.")
     }
     done <- ck$raw
     message("run_paired_scenario: resuming from ", nrow(done),
@@ -333,7 +362,7 @@ run_paired_scenario <- function(n_sims, seed, ..., n_cores = 1,
 
     if (!is.null(checkpoint_file)) {
       tmp <- paste0(checkpoint_file, ".tmp")
-      saveRDS(list(raw = done, seed = seed), tmp)
+      saveRDS(list(raw = done, seed = seed, compute_PP = compute_PP), tmp)
       file.rename(tmp, checkpoint_file)
     }
   }
@@ -373,13 +402,18 @@ run_paired_scenario <- function(n_sims, seed, ..., n_cores = 1,
 #'     \code{Z_eff_LRT > crit_eff}, otherwise the final analysis with
 #'     \code{Z_fin_LRT > crit_fin}.}
 #'   \item{D3}{D2 plus PP futility: \code{"Stop for futility"} if
-#'     \code{PP_val < kappa}.}
+#'     \code{PP_val < kappa}. Stops with an error if \code{PP_val} is
+#'     \code{NA} for any replicate that did not fail (e.g. output from
+#'     \code{compute_PP = FALSE}).}
 #'   \item{D4}{D2 plus Z futility: \code{"Stop for futility"} if
 #'     \code{Z_int_LRT < z_fut}.}
 #'   \item{D5}{As D4 with the modestly weighted statistics
 #'     \code{Z_int_MW_t<t>}, \code{Z_eff_MW_t<t>}, \code{Z_fin_MW_t<t>} for
 #'     \code{t = mw_t_star}.}
 #' }
+#'
+#' D1, D2, D4 and D5 do not use \code{PP_val}, so they also work on output
+#' from \code{run_paired_scenario(compute_PP = FALSE)}.
 #'
 #' @param raw The \code{raw} element returned by \code{\link{run_paired_scenario}}.
 #' @param rule A list with \code{type} (\code{"D1"} to \code{"D5"}) and the
@@ -409,6 +443,14 @@ apply_design_rule <- function(raw, rule) {
   missing_par <- needed[!needed %in% names(rule)]
   if (length(missing_par) > 0) {
     stop("apply_design_rule: rule ", type, " needs ", paste(missing_par, collapse = ", "), ".")
+  }
+
+  if (type == "D3") {
+    n_na_pp <- sum(is.na(raw$error) & is.na(raw$PP_val))
+    if (n_na_pp > 0) {
+      stop("apply_design_rule: rule D3 needs PP_val, but it is NA for ", n_na_pp,
+           " replicate(s) that did not fail (was raw produced with compute_PP = FALSE?).")
+    }
   }
 
   stat <- if (type == "D5") paste0("MW_t", rule$mw_t_star) else "LRT"
