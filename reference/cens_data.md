@@ -60,6 +60,16 @@ A list containing:
 
   Number of patients remaining after censoring
 
+## Details
+
+This is the single routine used throughout the package to cut a trial at
+an analysis. The cut is made at calendar time `t`, the calendar time of
+the `k`-th event (`"Events"`); patients recruited before `t` are
+included, and a patient has an event if `pseudo_time <= t`. Cutting at
+`k` events therefore leaves exactly `k` events in the data (assuming no
+tied event times). `cens_events` is floored with a small tolerance, so a
+non-integer such as `840 * 0.3` is treated as 252.
+
 ## Examples
 
 ``` r

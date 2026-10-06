@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">DTEAssurance</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.2.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.3.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -32,6 +32,101 @@
     </div>
 
     <div class="section level2">
+<h2 class="pkg-version" data-toc-text="1.3.0" id="dteassurance-130">DTEAssurance 1.3.0<a class="anchor" aria-label="anchor" href="#dteassurance-130"></a></h2>
+<p>Results from 1.2.0 are not reproduced exactly: the event-cut convention (below) and the exponential predictive simulation changed.</p>
+<div class="section level3">
+<h3 id="changes-in-behaviour-1-3-0">Changes in behaviour<a class="anchor" aria-label="anchor" href="#changes-in-behaviour-1-3-0"></a></h3>
+<ul><li>One event-cut convention everywhere. <code>cens_data(cens_method = "Events", cens_events = k)</code> is now the only routine that cuts a trial at an analysis (used by <code><a href="../reference/apply_GSD_to_trial.html">apply_GSD_to_trial()</a></code>, <code>single_grid_rep()</code> and the new paired runner). Cutting at <code>k</code> events leaves exactly <code>k</code> events: previously the group-sequential code censored the <code>k</code>-th event. Event counts at an information fraction are <code>floor(IF * total_events)</code> (with a small tolerance), replacing <code><a href="https://rdrr.io/r/base/Round.html" class="external-link">ceiling()</a></code>; information fractions are rounded to 6 dp wherever they are compared.</li>
+<li>
+<code><a href="../reference/PP_func.html">PP_func()</a></code>: an exponential control arm now runs the Weibull code path with <code>gamma_c = 1</code>. This fixes the exponential branch for treated patients censored before the delay, where one uniform draw both chose the branch and placed the event time, so the late-branch time could fall below the delay. Weibull results are unchanged.</li>
+<li>
+<code><a href="../reference/make_gsd_design.html">make_rpact_design_from_GSD_model()</a></code>: for <code>"PP"</code> and <code>"MatchedZ"</code> futility, the efficacy critical values are taken from the efficacy-only design. A zero-alpha futility look cannot change them, but rpact’s numerical integration moved them by about 8e-5 when the futility look was close to an efficacy look (e.g. 0.7 and 0.75).</li>
+<li>
+<code><a href="../reference/update_priors.html">update_priors()</a></code>: <code>converged</code> is now computed over finite R-hat values only and is <code>NA</code> (not <code>TRUE</code>) when none are finite.</li>
+<li>
+<code><a href="../reference/summarize_grid_by_kappa.html">summarize_grid_by_kappa()</a></code> and <code><a href="../reference/select_kappa_star.html">select_kappa_star()</a></code> are replaced. <code>power_LCB</code> is now a one-sided 95% exact (Clopper-Pearson) lower bound (argument <code>lcb_level</code>, replacing <code>conf_level</code>); new columns <code>n</code>, <code>n_NA_dropped</code>, <code>power_SE</code>, <code>ESS_SE</code>; replicates with <code>NA</code> <code>PP_val</code> are dropped with a warning; <code>exclude_nonconverged</code> option. <code><a href="../reference/select_kappa_star.html">select_kappa_star()</a></code> accepts per-scenario floors, treats an <code>NA</code> lower bound as infeasible, breaks ties in null ESS towards the larger kappa, and reports power and floors in the feasibility table.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="new-features-1-3-0">New features<a class="anchor" aria-label="anchor" href="#new-features-1-3-0"></a></h3>
+<ul><li><p><code><a href="../reference/single_paired_rep.html">single_paired_rep()</a></code> and <code><a href="../reference/run_paired_scenario.html">run_paired_scenario()</a></code>: one simulated trial per replicate with one PP evaluation, recording interim, efficacy-look and final statistics (log-rank and modestly weighted log-rank) so that every design (D1-D5) and kappa is a post hoc summary. <code><a href="../reference/run_paired_scenario.html">run_paired_scenario()</a></code> runs in parallel chunks with an RDS checkpoint and resumes from it.</p></li>
+<li><p><code><a href="../reference/compute_relative_floors.html">compute_relative_floors()</a></code>: D2 power minus a margin, per alternative scenario, for use as <code>power_floor</code>.</p></li>
+<li><p><code>update_priors(jags_seed = )</code> makes the MCMC reproducible, and new attributes <code>rhat_max</code>, <code>n_nonfinite_rhat</code> and <code>n_retained_total</code>.</p></li>
+<li><p><code>survival_test(return_HR = )</code>: <code>FALSE</code> skips the Cox fit (used by the PP and group-sequential code, where the hazard ratio is not needed).</p></li>
+<li><p><code><a href="../reference/calc_dte_assurance_adaptive.html">calc_dte_assurance_adaptive()</a></code> returns <code>PP_val</code>, <code>P_Z1</code>, <code>P_Z2</code>, <code>P_Z3</code> per trial and a <code>settings</code> attribute (arguments, package and R versions, git commit if available, timestamp).</p></li>
+<li><p>Internal <code>simulate_trial_with_recruitment(force_state = )</code> fixes the latent state, and the simulated data carry a <code>truth</code> attribute.</p></li>
+<li><p><code>inst/benchmark/time_one_rep.R</code> (in the source repository only) times one paired replicate at the manuscript settings.</p></li>
+<li><p><code><a href="../reference/make_gsd_design.html">make_gsd_design()</a></code> (exported; previously the internal <code><a href="../reference/make_gsd_design.html">make_rpact_design_from_GSD_model()</a></code>, kept as an alias for one release) and <code><a href="../reference/apply_GSD_to_trial.html">apply_GSD_to_trial()</a></code> are now exported and documented.</p></li>
+<li><p><code><a href="../reference/apply_design_rule.html">apply_design_rule()</a></code>: D1-D5 decisions post hoc from <code><a href="../reference/run_paired_scenario.html">run_paired_scenario()</a></code> output, using the same decision labels as <code><a href="../reference/apply_GSD_to_trial.html">apply_GSD_to_trial()</a></code>. A test checks that both give identical decisions, stop times and sample sizes on the same simulated trials.</p></li>
+<li><p><code><a href="../reference/run_paired_scenario.html">run_paired_scenario()</a></code> is the single entry point for the paper’s simulation tables.</p></li>
+<li><p><code>settings</code> returned by the simulation functions now record all arguments plus the package, R, rjags and JAGS versions, the git commit of the working directory, the hostname and a timestamp.</p></li>
+</ul></div>
+<div class="section level3">
+<h3 id="internal-tidy-up-no-change-in-results-unless-stated-1-3-0">Internal tidy-up (no change in results unless stated)<a class="anchor" aria-label="anchor" href="#internal-tidy-up-no-change-in-results-unless-stated-1-3-0"></a></h3>
+<ul><li>One test wrapper (<code>run_test()</code>) and one truth simulator (<code>simulate_trial_from_truth()</code>) replace repeated code; outputs are identical under a fixed seed.</li>
+<li>Weibull control parameters from two landmark survival probabilities are computed in closed form (as in the <code><a href="../reference/update_priors.html">update_priors()</a></code> prior) instead of with <code>nleqslv</code>, which could fail silently. Results agree to about 1e-8 relative; invalid landmarks (S(t2) &lt;= 0 or S(t2) &gt;= S(t1)) now give an informative error. <code>nleqslv</code> moves from Imports to Suggests. The assurance Shiny app uses the same closed form.</li>
+<li>
+<code><a href="../reference/survival_test.html">survival_test()</a></code>: <code>alpha</code> has no default (it previously defaulted to 0.05; <code>alpha = NULL</code> returns <code>Signif = NA</code> when only <code>Z</code> is needed), the documented default <code>alternative</code> is now the actual default (<code>"one.sided"</code>), and <code>Signif</code> is always logical (<code>FALSE</code> if <code>Z</code> is <code>NA</code>).</li>
+</ul></div>
+<div class="section level3">
+<h3 id="history-of-earlier-fixes-now-removed-from-the-code-comments-1-3-0">History of earlier fixes (now removed from the code comments)<a class="anchor" aria-label="anchor" href="#history-of-earlier-fixes-now-removed-from-the-code-comments-1-3-0"></a></h3>
+<ul><li>The PP calculation evaluates the full group-sequential success event (crossing any remaining efficacy boundary, or success at the final analysis), not a single final test at a flat alpha.</li>
+<li>The trial evaluation in <code><a href="../reference/apply_GSD_to_trial.html">apply_GSD_to_trial()</a></code> and <code><a href="../reference/calc_dte_assurance_adaptive.html">calc_dte_assurance_adaptive()</a></code> uses the specified test statistic (<code>analysis_model$method</code>) and the design’s boundaries, replacing a hard-coded Cox Wald statistic at a flat <code>qnorm(0.975)</code>; <code>Success</code> is derived only from <code>Decision</code>.</li>
+<li>
+<code>"MatchedZ"</code> futility looks are included in the design’s information-rate grid with zero alpha spent.</li>
+<li>
+<code><a href="../reference/update_priors.html">update_priors()</a></code> monitors the latent state <code>Z</code> and returns R-hat and state-probability diagnostics; calibration output records them.</li>
+<li>The MW statistic from <code><a href="https://rdrr.io/pkg/nphRCT/man/wlrt.html" class="external-link">nphRCT::wlrt()</a></code> is negated so that positive <code>Z</code> means benefit for all three methods.</li>
+<li>
+<code><a href="../reference/calibrate_PP_timing.html">calibrate_PP_timing()</a></code> defaults for <code>update_priors_sims</code> and <code>PP_sims</code> are 1000 and 2000 (previously hard-coded to 100 and 50).</li>
+</ul></div>
+<div class="section level3">
+<h3 id="deprecated-kept-to-be-removed-in-a-future-release-1-3-0">Deprecated (kept, to be removed in a future release)<a class="anchor" aria-label="anchor" href="#deprecated-kept-to-be-removed-in-a-future-release-1-3-0"></a></h3>
+<ul><li>The exponential control arm in <code><a href="../reference/PP_func.html">PP_func()</a></code> and <code><a href="../reference/update_priors.html">update_priors()</a></code>, the legacy <code>censoring_model</code> fallback of <code><a href="../reference/PP_func.html">PP_func()</a></code>, <code><a href="../reference/calibrate_PP_threshold.html">calibrate_PP_threshold()</a></code> (and its internal <code>single_calibration_rep()</code>), and the internal <code>summarize_gsd_results()</code> and <code>summarize_convergence()</code>.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="stricter-inputs-1-3-0">Stricter inputs<a class="anchor" aria-label="anchor" href="#stricter-inputs-1-3-0"></a></h3>
+<ul><li>
+<code><a href="../reference/PP_func.html">PP_func()</a></code>: <code>n_sims</code> is required.</li>
+<li>
+<code><a href="../reference/calc_dte_assurance_adaptive.html">calc_dte_assurance_adaptive()</a></code>: <code>update_priors_sims</code> and <code>PP_sims</code> are required when <code>futility_type = "PP"</code>.</li>
+<li>The PP code paths stop unless recruitment is uniform (<code>recruitment_model$method = "power"</code>, <code>power = 1</code>), the assumption under which <code><a href="../reference/PP_func.html">PP_func()</a></code> draws future recruitment times.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="documentation-1-3-0">Documentation<a class="anchor" aria-label="anchor" href="#documentation-1-3-0"></a></h3>
+<ul><li>
+<code><a href="../reference/update_priors.html">update_priors()</a></code>: <code>n_samples</code> is per chain (total <code>n.chains * n_samples</code>).</li>
+<li>
+<code>"MatchedZ"</code> futility is applied as binding (the trial stops).</li>
+<li>
+<code>GSD_model$alpha_spending</code> is user-specified cumulative alpha (<code>typeOfDesign = "asUser"</code>).</li>
+</ul></div>
+<div class="section level3">
+<h3 id="renamed-to-match-the-manuscript-notation-no-behaviour-change-1-3-0">Renamed to match the manuscript notation (no behaviour change)<a class="anchor" aria-label="anchor" href="#renamed-to-match-the-manuscript-notation-no-behaviour-change-1-3-0"></a></h3>
+<ul><li>The predictive probability is now called PP and its futility threshold kappa, as in the manuscript:
+<ul><li>
+<code><a href="../reference/DTEAssurance-deprecated.html">BPP_func()</a></code> -&gt; <code><a href="../reference/PP_func.html">PP_func()</a></code>; its return element <code>BPP_df</code> -&gt; <code>PP_df</code>.</li>
+<li>
+<code><a href="../reference/DTEAssurance-deprecated.html">calibrate_BPP_threshold()</a></code> -&gt; <code><a href="../reference/calibrate_PP_threshold.html">calibrate_PP_threshold()</a></code> (returns <code>PP_vec</code>) and <code><a href="../reference/DTEAssurance-deprecated.html">calibrate_BPP_timing()</a></code> -&gt; <code><a href="../reference/calibrate_PP_timing.html">calibrate_PP_timing()</a></code> (returns <code>PP_values</code>).</li>
+<li>
+<code><a href="../reference/DTEAssurance-deprecated.html">summarize_grid_by_lambda()</a></code> -&gt; <code><a href="../reference/summarize_grid_by_kappa.html">summarize_grid_by_kappa()</a></code> (argument <code>kappa_grid</code>, column <code>kappa</code>) and <code><a href="../reference/DTEAssurance-deprecated.html">select_lambda_star()</a></code> -&gt; <code><a href="../reference/select_kappa_star.html">select_kappa_star()</a></code> (returns <code>kappa_star</code>).</li>
+<li>
+<code>GSD_model$futility_type = "BPP"</code> -&gt; <code>"PP"</code> and <code>GSD_model$BPP_threshold</code> -&gt; <code>GSD_model$kappa</code>.</li>
+<li>
+<code>n_BPP_sims</code> -&gt; <code>PP_sims</code> in <code><a href="../reference/calc_dte_assurance_adaptive.html">calc_dte_assurance_adaptive()</a></code>, so the argument has the same name everywhere.</li>
+<li>The <code>BPP_val</code> column of the calibration output is now <code>PP_val</code>.</li>
+</ul></li>
+<li>Internally, the treatment-arm post-delay rate is now named <code>lambda_e</code> (in <code><a href="../reference/PP_func.html">PP_func()</a></code> and in the <code><a href="../reference/update_priors.html">update_priors()</a></code> JAGS models); the models are otherwise unchanged.</li>
+<li>A “Notation” section in the README maps manuscript symbols to package identifiers.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="deprecated-to-be-removed-in-the-next-release-1-3-0">Deprecated (to be removed in the next release)<a class="anchor" aria-label="anchor" href="#deprecated-to-be-removed-in-the-next-release-1-3-0"></a></h3>
+<ul><li>
+<code><a href="../reference/DTEAssurance-deprecated.html">BPP_func()</a></code>, <code><a href="../reference/DTEAssurance-deprecated.html">calibrate_BPP_threshold()</a></code>, <code><a href="../reference/DTEAssurance-deprecated.html">calibrate_BPP_timing()</a></code>, <code><a href="../reference/DTEAssurance-deprecated.html">summarize_grid_by_lambda()</a></code> and <code><a href="../reference/DTEAssurance-deprecated.html">select_lambda_star()</a></code> still work but warn and forward to their replacements. Returned element and column names are not translated back to the old names.</li>
+<li>
+<code>futility_type = "BPP"</code> and <code>GSD_model$BPP_threshold</code> are accepted by <code><a href="../reference/calc_dte_assurance_adaptive.html">calc_dte_assurance_adaptive()</a></code> with a warning and mapped to <code>"PP"</code> and <code>GSD_model$kappa</code>.</li>
+</ul></div>
+</div>
+    <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.2.0" id="dteassurance-120">DTEAssurance 1.2.0<a class="anchor" aria-label="anchor" href="#dteassurance-120"></a></h2>
 <div class="section level3">
 <h3 id="breaking-changes-1-2-0">Breaking changes<a class="anchor" aria-label="anchor" href="#breaking-changes-1-2-0"></a></h3>
@@ -41,11 +136,11 @@
 <div class="section level3">
 <h3 id="new-features-1-2-0">New features<a class="anchor" aria-label="anchor" href="#new-features-1-2-0"></a></h3>
 <ul><li>New <code>"MatchedZ"</code> futility type: stop for futility at <code>futility_IF</code> if the interim Z-statistic falls below <code>GSD_model$futility_boundary_Z</code>.</li>
-<li>New exported functions: <code><a href="../reference/calibrate_matched_futility_boundary.html">calibrate_matched_futility_boundary()</a></code> and <code><a href="../reference/single_matched_futility_rep.html">single_matched_futility_rep()</a></code> (calibrate a MatchedZ boundary), and <code><a href="../reference/run_calibration_grid.html">run_calibration_grid()</a></code>, <code><a href="../reference/summarize_grid_by_lambda.html">summarize_grid_by_lambda()</a></code> and <code><a href="../reference/select_lambda_star.html">select_lambda_star()</a></code> (calibrate a BPP futility threshold over a grid).</li>
+<li>New exported functions: <code><a href="../reference/calibrate_matched_futility_boundary.html">calibrate_matched_futility_boundary()</a></code> and <code><a href="../reference/single_matched_futility_rep.html">single_matched_futility_rep()</a></code> (calibrate a MatchedZ boundary), and <code><a href="../reference/run_calibration_grid.html">run_calibration_grid()</a></code>, <code><a href="../reference/DTEAssurance-deprecated.html">summarize_grid_by_lambda()</a></code> and <code><a href="../reference/DTEAssurance-deprecated.html">select_lambda_star()</a></code> (calibrate a BPP futility threshold over a grid).</li>
 <li>
 <code><a href="../reference/update_priors.html">update_priors()</a></code> returns Gelman-Rubin diagnostics and posterior latent-state probabilities as attributes (<code>rhat</code>, <code>converged</code>, <code>Z_probs</code>).</li>
 <li>
-<code><a href="../reference/BPP_func.html">BPP_func()</a></code> accepts <code>future_boundaries</code>, evaluating each predictive draw against the design’s remaining efficacy boundaries rather than a single final test.</li>
+<code><a href="../reference/DTEAssurance-deprecated.html">BPP_func()</a></code> accepts <code>future_boundaries</code>, evaluating each predictive draw against the design’s remaining efficacy boundaries rather than a single final test.</li>
 </ul></div>
 <div class="section level3">
 <h3 id="bug-fixes-1-2-0">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-1-2-0"></a></h3>
@@ -54,17 +149,17 @@
 <li>
 <code><a href="../reference/survival_test.html">survival_test()</a></code> no longer fails with “could not find function Surv” when the survival package is not attached.</li>
 <li>
-<code>apply_GSD_to_trial()</code> computes interim and final statistics with <code>analysis_model$method</code> via <code><a href="../reference/survival_test.html">survival_test()</a></code> instead of a hard-coded Cox Wald statistic, and passes <code>update_priors_sims</code>/<code>n_BPP_sims</code> through.</li>
+<code><a href="../reference/apply_GSD_to_trial.html">apply_GSD_to_trial()</a></code> computes interim and final statistics with <code>analysis_model$method</code> via <code><a href="../reference/survival_test.html">survival_test()</a></code> instead of a hard-coded Cox Wald statistic, and passes <code>update_priors_sims</code>/<code>n_BPP_sims</code> through.</li>
 <li>
-<code><a href="../reference/calc_dte_assurance_adaptive.html">calc_dte_assurance_adaptive()</a></code> and <code>make_rpact_design_from_GSD_model()</code> recognise the <code>"MatchedZ"</code> futility type.</li>
+<code><a href="../reference/calc_dte_assurance_adaptive.html">calc_dte_assurance_adaptive()</a></code> and <code><a href="../reference/make_gsd_design.html">make_rpact_design_from_GSD_model()</a></code> recognise the <code>"MatchedZ"</code> futility type.</li>
 </ul></div>
 </div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.1.1" id="dteassurance-111">DTEAssurance 1.1.1<a class="anchor" aria-label="anchor" href="#dteassurance-111"></a></h2>
 <ul><li>Added <code><a href="../reference/update_priors.html">update_priors()</a></code> to update elicited prior distributions using interim data.</li>
-<li>Added <code><a href="../reference/BPP_func.html">BPP_func()</a></code> for computing the Bayesian predictive probability (BPP) from posterior samples.</li>
-<li>Added <code><a href="../reference/calibrate_BPP_timing.html">calibrate_BPP_timing()</a></code> to determine the optimal timing for BPP-based futility looks.</li>
-<li>Added <code><a href="../reference/calibrate_BPP_threshold.html">calibrate_BPP_threshold()</a></code> to calibrate the BPP threshold for futility decisions.</li>
+<li>Added <code><a href="../reference/DTEAssurance-deprecated.html">BPP_func()</a></code> for computing the Bayesian predictive probability (BPP) from posterior samples.</li>
+<li>Added <code><a href="../reference/DTEAssurance-deprecated.html">calibrate_BPP_timing()</a></code> to determine the optimal timing for BPP-based futility looks.</li>
+<li>Added <code><a href="../reference/DTEAssurance-deprecated.html">calibrate_BPP_threshold()</a></code> to calibrate the BPP threshold for futility decisions.</li>
 <li>Renamed <code>calc_dte_assurance_interim()</code> to <code><a href="../reference/calc_dte_assurance_adaptive.html">calc_dte_assurance_adaptive()</a></code> for consistency in adaptive design terminology.</li>
 <li>Renamed <code>assurance_interim_shiny_app()</code> to <code><a href="../reference/assurance_adaptive_shiny_app.html">assurance_adaptive_shiny_app()</a></code>.</li>
 <li>Expanded functionality and UI elements in <code><a href="../reference/assurance_adaptive_shiny_app.html">assurance_adaptive_shiny_app()</a></code>.</li>

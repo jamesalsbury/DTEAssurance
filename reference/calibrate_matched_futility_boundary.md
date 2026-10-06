@@ -78,7 +78,9 @@ calibrate_matched_futility_boundary(
 ## Value
 
 A list with `boundary`, `scenario_futility_rates`, `raw_Z_by_scenario`
-and `settings`.
+and `settings` (all arguments, plus the package, R, rjags and JAGS
+versions, the git commit of the working directory, the hostname and a
+timestamp).
 
 ## Examples
 

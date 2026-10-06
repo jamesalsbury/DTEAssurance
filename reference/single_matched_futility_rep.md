@@ -3,7 +3,7 @@
 Single replicate used by
 [`calibrate_matched_futility_boundary`](https://jamesalsbury.github.io/DTEAssurance/reference/calibrate_matched_futility_boundary.md):
 simulates one trial under a fixed data-generating scenario, censors it
-at `ceiling(futility_IF * total_events)` events, and returns the test
+at `floor(futility_IF * total_events)` events, and returns the test
 statistic from
 [`survival_test`](https://jamesalsbury.github.io/DTEAssurance/reference/survival_test.md)
 (positive Z favours treatment).

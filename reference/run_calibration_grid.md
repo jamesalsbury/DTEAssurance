@@ -1,13 +1,13 @@
-# Simulate BPP values and true trial outcomes for BPP-threshold calibration
+# Simulate PP values and true trial outcomes for PP-threshold calibration
 
 For a single fixed data-generating scenario, simulates `n_sims` trials,
-computes the Bayesian predictive probability (BPP) at the futility look,
-and records what actually happens to each trial if it is allowed to
-continue through the remaining fixed decision points in
-`future_boundaries`. Because the BPP value does not depend on the
-futility threshold \\\lambda\\, the output can be summarised over a
-whole grid of thresholds afterwards via
-[`summarize_grid_by_lambda`](https://jamesalsbury.github.io/DTEAssurance/reference/summarize_grid_by_lambda.md)
+computes the predictive probability (PP) at the futility look, and
+records what actually happens to each trial if it is allowed to continue
+through the remaining fixed decision points in `future_boundaries`.
+Because the PP value does not depend on the futility threshold
+\\\kappa\\, the output can be summarised over a whole grid of thresholds
+afterwards via
+[`summarize_grid_by_kappa`](https://jamesalsbury.github.io/DTEAssurance/reference/summarize_grid_by_kappa.md)
 without re-simulating.
 
 ## Usage
@@ -58,7 +58,7 @@ run_calibration_grid(
 
 - futility_IF:
 
-  Information fraction of the BPP futility look.
+  Information fraction of the PP futility look.
 
 - total_events:
 
@@ -68,7 +68,7 @@ run_calibration_grid(
 
   List of future fixed decision points, each a list with `events` and
   `crit` (see
-  [`BPP_func`](https://jamesalsbury.github.io/DTEAssurance/reference/BPP_func.md)).
+  [`PP_func`](https://jamesalsbury.github.io/DTEAssurance/reference/PP_func.md)).
 
 - analysis_model:
 
@@ -103,16 +103,17 @@ A list with elements
 
 - `raw`:
 
-  A data frame with one row per simulated trial and columns `BPP_val`,
+  A data frame with one row per simulated trial and columns `PP_val`,
   `t_interim`, `sample_size_interim`, `continuation_success`,
   `continuation_stop_time`, `continuation_sample_size`, `converged`,
   `P_Z1`, `P_Z2`, `P_Z3`.
 
 - `settings`:
 
-  The settings used, package version and a timestamp.
+  All arguments, plus the package, R, rjags and JAGS versions, the git
+  commit of the working directory, the hostname and a timestamp.
 
 ## See also
 
-[`summarize_grid_by_lambda`](https://jamesalsbury.github.io/DTEAssurance/reference/summarize_grid_by_lambda.md),
-[`select_lambda_star`](https://jamesalsbury.github.io/DTEAssurance/reference/select_lambda_star.md)
+[`summarize_grid_by_kappa`](https://jamesalsbury.github.io/DTEAssurance/reference/summarize_grid_by_kappa.md),
+[`select_kappa_star`](https://jamesalsbury.github.io/DTEAssurance/reference/select_kappa_star.md)

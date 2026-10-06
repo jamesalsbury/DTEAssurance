@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">DTEAssurance</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.2.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.3.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -42,13 +42,6 @@
 
       <dl><dt>
 
-          <code><a href="BPP_func.html">BPP_func()</a></code>
-
-        </dt>
-        <dd>Calculate Bayesian Predictive Probability given interim data and posterior samples</dd>
-
-        <dt>
-
           <code><a href="INTEREST.html">INTEREST</a></code>
 
         </dt>
@@ -60,6 +53,13 @@
 
         </dt>
         <dd>MCMC_sample</dd>
+
+        <dt>
+
+          <code><a href="PP_func.html">PP_func()</a></code>
+
+        </dt>
+        <dd>Calculate the predictive probability (PP) given interim data and posterior samples</dd>
 
         <dt>
 
@@ -81,6 +81,20 @@
 
         </dt>
         <dd>Add recruitment time to a survival dataset</dd>
+
+        <dt>
+
+          <code><a href="apply_GSD_to_trial.html">apply_GSD_to_trial()</a></code>
+
+        </dt>
+        <dd>Apply a group-sequential design to one simulated trial</dd>
+
+        <dt>
+
+          <code><a href="apply_design_rule.html">apply_design_rule()</a></code>
+
+        </dt>
+        <dd>Apply a design rule to paired replicate output</dd>
 
         <dt>
 
@@ -112,17 +126,17 @@
 
         <dt>
 
-          <code><a href="calibrate_BPP_threshold.html">calibrate_BPP_threshold()</a></code>
+          <code><a href="calibrate_PP_threshold.html">calibrate_PP_threshold()</a></code>
 
         </dt>
-        <dd>Function to calculate the 'optimal' BPP threshold value</dd>
+        <dd>Function to calculate the 'optimal' PP threshold value</dd>
 
         <dt>
 
-          <code><a href="calibrate_BPP_timing.html">calibrate_BPP_timing()</a></code>
+          <code><a href="calibrate_PP_timing.html">calibrate_PP_timing()</a></code>
 
         </dt>
-        <dd>Function to calculate the 'optimal' information fraction to calculate BPP</dd>
+        <dd>Function to calculate the 'optimal' information fraction to calculate PP</dd>
 
         <dt>
 
@@ -140,17 +154,38 @@
 
         <dt>
 
-          <code><a href="run_calibration_grid.html">run_calibration_grid()</a></code>
+          <code><a href="compute_relative_floors.html">compute_relative_floors()</a></code>
 
         </dt>
-        <dd>Simulate BPP values and true trial outcomes for BPP-threshold calibration</dd>
+        <dd>Relative power floors for kappa selection</dd>
 
         <dt>
 
-          <code><a href="select_lambda_star.html">select_lambda_star()</a></code>
+          <code><a href="make_gsd_design.html">make_gsd_design()</a></code> <code><a href="make_gsd_design.html">make_rpact_design_from_GSD_model()</a></code>
 
         </dt>
-        <dd>Select the BPP futility threshold minimising null expected sample size</dd>
+        <dd>Build the group-sequential design for a GSD_model</dd>
+
+        <dt>
+
+          <code><a href="run_calibration_grid.html">run_calibration_grid()</a></code>
+
+        </dt>
+        <dd>Simulate PP values and true trial outcomes for PP-threshold calibration</dd>
+
+        <dt>
+
+          <code><a href="run_paired_scenario.html">run_paired_scenario()</a></code>
+
+        </dt>
+        <dd>Run paired replicates for one scenario, with checkpointing</dd>
+
+        <dt>
+
+          <code><a href="select_kappa_star.html">select_kappa_star()</a></code>
+
+        </dt>
+        <dd>Select the PP futility threshold minimising null expected sample size</dd>
 
         <dt>
 
@@ -161,10 +196,17 @@
 
         <dt>
 
-          <code><a href="summarize_grid_by_lambda.html">summarize_grid_by_lambda()</a></code>
+          <code><a href="single_paired_rep.html">single_paired_rep()</a></code>
 
         </dt>
-        <dd>Summarise calibration-grid output over a grid of BPP futility thresholds</dd>
+        <dd>Simulate one paired replicate for post hoc design evaluation</dd>
+
+        <dt>
+
+          <code><a href="summarize_grid_by_kappa.html">summarize_grid_by_kappa()</a></code>
+
+        </dt>
+        <dd>Summarise calibration output over a grid of PP futility thresholds</dd>
 
         <dt>
 

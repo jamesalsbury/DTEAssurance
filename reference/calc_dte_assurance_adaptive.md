@@ -17,8 +17,8 @@ calc_dte_assurance_adaptive(
   recruitment_model,
   GSD_model,
   analysis_model = NULL,
-  update_priors_sims = 1000,
-  n_BPP_sims = 1000,
+  update_priors_sims = NULL,
+  PP_sims = NULL,
   n_sims = 1000
 )
 ```
@@ -81,25 +81,28 @@ calc_dte_assurance_adaptive(
 
   - `events`: Total number of events
 
-  - `alpha_spending`: Cumulative alpha spending vector
+  - `alpha_spending`: User-specified *cumulative* alpha spent by each
+    efficacy look (one value per element of `alpha_IF`; the design uses
+    `rpact`'s `typeOfDesign = "asUser"`). Futility looks are added to
+    the design with zero alpha spent, so they do not change the efficacy
+    critical values.
 
   - `alpha_IF`: Information Fraction(s) at which we look for efficacy
 
   - `futility_type`: One of `"none"`, `"Beta"` (pre-specified
-    beta-spending, via `rpact`), `"BPP"` (Bayesian Predictive
-    Probability futility, D3-style), or `"MatchedZ"` (a fixed,
-    externally-calibrated Z-statistic cutoff, non-binding – D4/D5-style;
-    see
+    beta-spending, via `rpact`), `"PP"` (predictive probability
+    futility, D3-style), or `"MatchedZ"` (a fixed, externally-calibrated
+    Z-statistic cutoff, D4/D5-style; the rule is applied as binding,
+    i.e. the simulated trial stops when Z falls below the cutoff; see
     [`calibrate_matched_futility_boundary`](https://jamesalsbury.github.io/DTEAssurance/reference/calibrate_matched_futility_boundary.md)
     for how to obtain `futility_boundary_Z`).
 
   - `futility_IF`: Information Fraction at which we look for futility
-    (required for `"BPP"` and `"MatchedZ"`).
+    (required for `"PP"` and `"MatchedZ"`).
 
   - `beta_spending`: Cumulative beta spending vector (`"Beta"` only).
 
-  - `BPP_threshold`: BPP value below which we stop for futility (`"BPP"`
-    only).
+  - `kappa`: PP value below which we stop for futility (`"PP"` only).
 
   - `futility_boundary_Z`: Z-statistic value below which we stop for
     futility (`"MatchedZ"` only).
@@ -120,17 +123,16 @@ calc_dte_assurance_adaptive(
 
 - update_priors_sims:
 
-  Number of posterior samples per interim dataset, passed to
-  [`update_priors`](https://jamesalsbury.github.io/DTEAssurance/reference/update_priors.md)
-  (default 1000). Only used when `GSD_model$futility_type == "BPP"`;
-  harmless (ignored) otherwise.
+  Number of posterior samples per chain for each interim dataset, passed
+  to
+  [`update_priors`](https://jamesalsbury.github.io/DTEAssurance/reference/update_priors.md).
+  Required when `GSD_model$futility_type == "PP"`; ignored otherwise.
 
-- n_BPP_sims:
+- PP_sims:
 
   Number of predictive simulations per interim dataset, passed to
-  [`BPP_func`](https://jamesalsbury.github.io/DTEAssurance/reference/BPP_func.md)
-  (default 1000). Only used when `GSD_model$futility_type == "BPP"`;
-  harmless (ignored) otherwise.
+  [`PP_func`](https://jamesalsbury.github.io/DTEAssurance/reference/PP_func.md).
+  Required when `GSD_model$futility_type == "PP"`; ignored otherwise.
 
 - n_sims:
 
@@ -164,34 +166,28 @@ A data frame with one row per simulated trial and the following columns:
 
   Logical recode of `Decision` for convenience: `TRUE` if
   `Decision %in% c("Stop for efficacy", "Successful at final")`, `FALSE`
-  otherwise. Derived directly and only from `Decision` – see "Bug fix"
-  below.
+  otherwise.
 
 - Converged:
 
-  For `"BPP"` designs, whether the interim MCMC fit converged (see
+  For `"PP"` designs, whether the interim MCMC fit converged (see
   [`update_priors`](https://jamesalsbury.github.io/DTEAssurance/reference/update_priors.md));
   `NA` for other futility types, which involve no MCMC step.
 
-Class: `data.frame`
+- PP_val:
 
-## Bug fix (this version)
+  For `"PP"` designs, the predictive probability at the futility look;
+  `NA` otherwise (or if the trial stopped for efficacy before the
+  futility look).
 
-previous versions of this function independently recomputed a separate
-`Final_Decision` field from a hardcoded Cox proportional-hazards Wald
-statistic at a flat `qnorm(0.975)` threshold, regardless of
-`analysis_model$method` or the design's actual group-sequential
-boundaries. This was a second, separate copy of the same bug fixed in
-`apply_GSD_to_trial()` (see its documentation), and could silently
-disagree with the trial's own `Decision`. This version removes that
-duplicate computation entirely: `Success` is now derived only from
-`Decision`, which is itself computed once, correctly, inside
-`apply_GSD_to_trial()`, via `analysis_model$method` and the design's
-real boundaries. This also collapses what were previously three
-near-duplicate branches (one per futility type) into a single call path,
-since `apply_GSD_to_trial()` already dispatches correctly on
-`GSD_model$futility_type` – removing the code duplication that allowed
-the two copies of the bug to drift apart in the first place.
+- P_Z1, P_Z2, P_Z3:
+
+  For `"PP"` designs, the posterior probabilities of the three latent
+  states at the futility look; `NA` otherwise.
+
+Class: `data.frame`, with attribute `settings`: a list of all arguments,
+plus the package, R, rjags and JAGS versions, the git commit of the
+working directory, the hostname and a timestamp.
 
 ## Examples
 
@@ -215,11 +211,174 @@ result <- calc_dte_assurance_adaptive(n_c = 300, n_t = 300,
                         GSD_model = GSD_model,
                         n_sims = 10)
 str(result)
-#> 'data.frame':    10 obs. of  6 variables:
+#> 'data.frame':    10 obs. of  10 variables:
 #>  $ Trial     : int  1 2 3 4 5 6 7 8 9 10
 #>  $ Decision  : chr  "Stop for efficacy" "Successful at final" "Stop for efficacy" "Stop for efficacy" ...
 #>  $ StopTime  : num  12.5 13.6 12 12.4 12 ...
 #>  $ SampleSize: int  600 600 600 600 600 600 600 600 600 600
 #>  $ Success   : logi  TRUE TRUE TRUE TRUE TRUE TRUE ...
 #>  $ Converged : logi  NA NA NA NA NA NA ...
+#>  $ PP_val    : logi  NA NA NA NA NA NA ...
+#>  $ P_Z1      : num  NA NA NA NA NA NA NA NA NA NA
+#>  $ P_Z2      : num  NA NA NA NA NA NA NA NA NA NA
+#>  $ P_Z3      : num  NA NA NA NA NA NA NA NA NA NA
+#>  - attr(*, "settings")=List of 17
+#>   ..$ n_c               : num 300
+#>   ..$ n_t               : num 300
+#>   ..$ control_model     :List of 4
+#>   .. ..$ dist          : chr "Exponential"
+#>   .. ..$ parameter_mode: chr "Fixed"
+#>   .. ..$ fixed_type    : chr "Parameters"
+#>   .. ..$ lambda        : num 0.1
+#>   ..$ effect_model      :List of 6
+#>   .. ..$ P_S        : num 1
+#>   .. ..$ P_DTE      : num 0
+#>   .. ..$ HR_SHELF   :List of 16
+#>   .. .. ..$ Normal         :'data.frame':    1 obs. of  2 variables:
+#>   .. .. .. ..$ mean: num 0.65
+#>   .. .. .. ..$ sd  : num 0.0741
+#>   .. .. ..$ Student.t      :'data.frame':    1 obs. of  3 variables:
+#>   .. .. .. ..$ location: num 0.65
+#>   .. .. .. ..$ scale   : num 0.0654
+#>   .. .. .. ..$ df      : num 3
+#>   .. .. ..$ Skewnormal     :'data.frame':    1 obs. of  3 variables:
+#>   .. .. .. ..$ location: num 0.65
+#>   .. .. .. ..$ scale   : num 0.0741
+#>   .. .. .. ..$ slant   : num 0
+#>   .. .. ..$ Gamma          :'data.frame':    1 obs. of  2 variables:
+#>   .. .. .. ..$ shape: num 76.9
+#>   .. .. .. ..$ rate : num 118
+#>   .. .. ..$ Log.normal     :'data.frame':    1 obs. of  2 variables:
+#>   .. .. .. ..$ mean.log.X: num -0.432
+#>   .. .. .. ..$ sd.log.X  : num 0.114
+#>   .. .. ..$ Log.Student.t  :'data.frame':    1 obs. of  3 variables:
+#>   .. .. .. ..$ location.log.X: num -0.432
+#>   .. .. .. ..$ scale.log.X   : num 0.101
+#>   .. .. .. ..$ df.log.X      : num 3
+#>   .. .. ..$ Beta           :'data.frame':    1 obs. of  2 variables:
+#>   .. .. .. ..$ shape1: num 52
+#>   .. .. .. ..$ shape2: num 108
+#>   .. .. ..$ mirrorgamma    :'data.frame':    1 obs. of  2 variables:
+#>   .. .. .. ..$ shape: num 332
+#>   .. .. .. ..$ rate : num 245
+#>   .. .. ..$ mirrorlognormal:'data.frame':    1 obs. of  2 variables:
+#>   .. .. .. ..$ mean.log.X: num 0.3
+#>   .. .. .. ..$ sd.log.X  : num 0.0549
+#>   .. .. ..$ mirrorlogt     :'data.frame':    1 obs. of  3 variables:
+#>   .. .. .. ..$ location.log.X: num 0.3
+#>   .. .. .. ..$ scale.log.X   : num 0.0484
+#>   .. .. .. ..$ df.log.X      : num 3
+#>   .. .. ..$ ssq            :'data.frame':    1 obs. of  10 variables:
+#>   .. .. .. ..$ normal         : num 4.07e-31
+#>   .. .. .. ..$ t              : num 5.77e-12
+#>   .. .. .. ..$ skewnormal     : num 2.96e-31
+#>   .. .. .. ..$ gamma          : num 2.67e-05
+#>   .. .. .. ..$ lognormal      : num 6e-05
+#>   .. .. .. ..$ logt           : num 5.8e-05
+#>   .. .. .. ..$ beta           : num 7.2e-06
+#>   .. .. .. ..$ mirrorgamma    : num 6.18e-06
+#>   .. .. .. ..$ mirrorlognormal: num 1.39e-05
+#>   .. .. .. ..$ mirrorlogt     : num 1.34e-05
+#>   .. .. ..$ best.fitting   :'data.frame':    1 obs. of  1 variable:
+#>   .. .. .. ..$ best.fit: chr "skewnormal"
+#>   .. .. ..$ vals           : num [1, 1:3] 0.6 0.65 0.7
+#>   .. .. .. ..- attr(*, "dimnames")=List of 2
+#>   .. .. .. .. ..$ : NULL
+#>   .. .. .. .. ..$ : NULL
+#>   .. .. ..$ probs          : num [1, 1:3] 0.25 0.5 0.75
+#>   .. .. .. ..- attr(*, "dimnames")=List of 2
+#>   .. .. .. .. ..$ : NULL
+#>   .. .. .. .. ..$ : NULL
+#>   .. .. ..$ limits         :'data.frame':    1 obs. of  2 variables:
+#>   .. .. .. ..$ lower: num 0
+#>   .. .. .. ..$ upper: num 2
+#>   .. .. ..$ notes          : NULL
+#>   .. .. ..- attr(*, "class")= chr "elicitation"
+#>   .. ..$ HR_dist    : chr "gamma"
+#>   .. ..$ delay_SHELF:List of 16
+#>   .. .. ..$ Normal         :'data.frame':    1 obs. of  2 variables:
+#>   .. .. .. ..$ mean: num 4
+#>   .. .. .. ..$ sd  : num 1.48
+#>   .. .. ..$ Student.t      :'data.frame':    1 obs. of  3 variables:
+#>   .. .. .. ..$ location: num 4
+#>   .. .. .. ..$ scale   : num 1.31
+#>   .. .. .. ..$ df      : num 3
+#>   .. .. ..$ Skewnormal     :'data.frame':    1 obs. of  3 variables:
+#>   .. .. .. ..$ location: num 4
+#>   .. .. .. ..$ scale   : num 1.48
+#>   .. .. .. ..$ slant   : num 0
+#>   .. .. ..$ Gamma          :'data.frame':    1 obs. of  2 variables:
+#>   .. .. .. ..$ shape: num 7.29
+#>   .. .. .. ..$ rate : num 1.76
+#>   .. .. ..$ Log.normal     :'data.frame':    1 obs. of  2 variables:
+#>   .. .. .. ..$ mean.log.X: num 1.37
+#>   .. .. .. ..$ sd.log.X  : num 0.381
+#>   .. .. ..$ Log.Student.t  :'data.frame':    1 obs. of  3 variables:
+#>   .. .. .. ..$ location.log.X: num 1.37
+#>   .. .. .. ..$ scale.log.X   : num 0.335
+#>   .. .. .. ..$ df.log.X      : num 3
+#>   .. .. ..$ Beta           :'data.frame':    1 obs. of  2 variables:
+#>   .. .. .. ..$ shape1: num 4.5
+#>   .. .. .. ..$ shape2: num 6.63
+#>   .. .. ..$ mirrorgamma    :'data.frame':    1 obs. of  2 variables:
+#>   .. .. .. ..$ shape: num 16.4
+#>   .. .. .. ..$ rate : num 2.69
+#>   .. .. ..$ mirrorlognormal:'data.frame':    1 obs. of  2 variables:
+#>   .. .. .. ..$ mean.log.X: num 1.78
+#>   .. .. .. ..$ sd.log.X  : num 0.25
+#>   .. .. ..$ mirrorlogt     :'data.frame':    1 obs. of  3 variables:
+#>   .. .. .. ..$ location.log.X: num 1.78
+#>   .. .. .. ..$ scale.log.X   : num 0.22
+#>   .. .. .. ..$ df.log.X      : num 3
+#>   .. .. ..$ ssq            :'data.frame':    1 obs. of  10 variables:
+#>   .. .. .. ..$ normal         : num 7.7e-34
+#>   .. .. .. ..$ t              : num 6.35e-12
+#>   .. .. .. ..$ skewnormal     : num 3.08e-33
+#>   .. .. .. ..$ gamma          : num 0.00029
+#>   .. .. .. ..$ lognormal      : num 0.000644
+#>   .. .. .. ..$ logt           : num 0.000623
+#>   .. .. .. ..$ beta           : num 3.4e-05
+#>   .. .. .. ..$ mirrorgamma    : num 0.000127
+#>   .. .. .. ..$ mirrorlognormal: num 0.000283
+#>   .. .. .. ..$ mirrorlogt     : num 0.000274
+#>   .. .. ..$ best.fitting   :'data.frame':    1 obs. of  1 variable:
+#>   .. .. .. ..$ best.fit: chr "normal"
+#>   .. .. ..$ vals           : num [1, 1:3] 3 4 5
+#>   .. .. .. ..- attr(*, "dimnames")=List of 2
+#>   .. .. .. .. ..$ : NULL
+#>   .. .. .. .. ..$ : NULL
+#>   .. .. ..$ probs          : num [1, 1:3] 0.25 0.5 0.75
+#>   .. .. .. ..- attr(*, "dimnames")=List of 2
+#>   .. .. .. .. ..$ : NULL
+#>   .. .. .. .. ..$ : NULL
+#>   .. .. ..$ limits         :'data.frame':    1 obs. of  2 variables:
+#>   .. .. .. ..$ lower: num 0
+#>   .. .. .. ..$ upper: num 10
+#>   .. .. ..$ notes          : NULL
+#>   .. .. ..- attr(*, "class")= chr "elicitation"
+#>   .. ..$ delay_dist : chr "gamma"
+#>   ..$ recruitment_model :List of 3
+#>   .. ..$ method: chr "power"
+#>   .. ..$ period: num 12
+#>   .. ..$ power : num 1
+#>   ..$ GSD_model         :List of 4
+#>   .. ..$ events        : num 300
+#>   .. ..$ alpha_spending: num [1:2] 0.0125 0.025
+#>   .. ..$ alpha_IF      : num [1:2] 0.75 1
+#>   .. ..$ futility_type : chr "none"
+#>   ..$ analysis_model    :List of 3
+#>   .. ..$ method                : chr "LRT"
+#>   .. ..$ alpha                 : num 0.025
+#>   .. ..$ alternative_hypothesis: chr "one.sided"
+#>   ..$ update_priors_sims: NULL
+#>   ..$ PP_sims           : NULL
+#>   ..$ n_sims            : num 10
+#>   ..$ package_version   : chr "1.3.0"
+#>   ..$ r_version         : chr "R version 4.6.1 (2026-06-24)"
+#>   ..$ rjags_version     : chr "4.17"
+#>   ..$ jags_version      :Classes 'package_version', 'numeric_version'  hidden list of 1
+#>   .. ..$ : int [1:3] 4 3 2
+#>   ..$ git_commit        : chr "c6f664163295cd45631b96bcff1355f66501572d"
+#>   ..$ hostname          : chr "runnervm8df0l"
+#>   ..$ timestamp         : chr "2026-10-06 09:58:23.551781"
 ```

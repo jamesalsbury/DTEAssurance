@@ -22,7 +22,7 @@
 
     <a class="navbar-brand me-2" href="index.html">DTEAssurance</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.2.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.3.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -221,6 +221,114 @@ It uses elicited prior distributions—via the <a href="https://CRAN.R-project.o
 <span><span class="va">design_summary</span></span>
 <span><span class="co">#&gt;   Assurance Pr(Early Fut.) Pr(Early Eff.) Average Duration Average Sample Size</span></span>
 <span><span class="co">#&gt; 1       0.7              0          0.516            22.47                 600</span></span></code></pre></div>
+</div>
+</div>
+<div class="section level2">
+<h2 id="notation">Notation<a class="anchor" aria-label="anchor" href="#notation"></a>
+</h2>
+<p>The package identifiers map onto the notation of the adaptive-design manuscript (Salsbury et al., <a href="doi:10.48550/arXiv.2509.07602" class="uri">doi:10.48550/arXiv.2509.07602</a>) as follows.</p>
+<table class="table">
+<colgroup>
+<col width="50%">
+<col width="50%">
+</colgroup>
+<thead><tr>
+<th>Manuscript</th>
+<th>Package</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>PP, <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mover><mrow><mi>P</mi><mi>P</mi></mrow><mo accent="true">̂</mo></mover><annotation encoding="application/x-tex">\hat{PP}</annotation></semantics></math> (predictive probability)</td>
+<td>
+<code>PP_val</code>, <code><a href="reference/PP_func.html">PP_func()</a></code>
+</td>
+</tr>
+<tr>
+<td>
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>κ</mi><annotation encoding="application/x-tex">\kappa</annotation></semantics></math> (futility threshold)</td>
+<td>
+<code>kappa</code>, <code>GSD_model$kappa</code>, <code>kappa_grid</code>, <code>kappa_star</code>
+</td>
+</tr>
+<tr>
+<td><math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msup><mi>κ</mi><mo>*</mo></msup><annotation encoding="application/x-tex">\kappa^*</annotation></semantics></math></td>
+<td><code><a href="reference/select_kappa_star.html">select_kappa_star()</a></code></td>
+</tr>
+<tr>
+<td>
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>λ</mi><mi>c</mi></msub><annotation encoding="application/x-tex">\lambda_c</annotation></semantics></math>, <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>γ</mi><mi>c</mi></msub><annotation encoding="application/x-tex">\gamma_c</annotation></semantics></math> (Weibull rate, shape)</td>
+<td>
+<code>lambda_c</code>, <code>gamma_c</code>
+</td>
+</tr>
+<tr>
+<td><math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>H</mi><msup><mi>R</mi><mo>*</mo></msup></mrow><annotation encoding="application/x-tex">HR^*</annotation></semantics></math></td>
+<td>
+<code>post_delay_HR</code> (truth), <code>HR</code> (posterior column)</td>
+</tr>
+<tr>
+<td>
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>T</mi><annotation encoding="application/x-tex">T</annotation></semantics></math> (delay)</td>
+<td><code>delay_time</code></td>
+</tr>
+<tr>
+<td>
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>Z</mi><annotation encoding="application/x-tex">Z</annotation></semantics></math> (latent state)</td>
+<td>
+<code>Z</code>, <code>P_Z1</code>, <code>P_Z2</code>, <code>P_Z3</code>
+</td>
+</tr>
+<tr>
+<td>
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>P</mi><mi>S</mi></msub><annotation encoding="application/x-tex">P_S</annotation></semantics></math>, <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>P</mi><mrow><mi>D</mi><mi>T</mi><mi>E</mi></mrow></msub><annotation encoding="application/x-tex">P_{DTE}</annotation></semantics></math>
+</td>
+<td>
+<code>P_S</code>, <code>P_DTE</code>
+</td>
+</tr>
+<tr>
+<td>
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>M</mi><annotation encoding="application/x-tex">M</annotation></semantics></math> (posterior-predictive draws)</td>
+<td><code>PP_sims</code></td>
+</tr>
+<tr>
+<td>retained MCMC draws</td>
+<td>
+<code>update_priors_sims</code> (per chain; total = <code>n.chains</code> x this)</td>
+</tr>
+<tr>
+<td>IF (information fraction)</td>
+<td>
+<code>futility_IF</code>, <code>alpha_IF</code>
+</td>
+</tr>
+<tr>
+<td>D1, …, D5</td>
+<td>built post hoc from <code><a href="reference/run_paired_scenario.html">run_paired_scenario()</a></code> output (see below)</td>
+</tr>
+</tbody>
+</table>
+<div class="section level3">
+<h3 id="designs-d1-d5-from-paired-replicates">Designs D1-D5 from paired replicates<a class="anchor" aria-label="anchor" href="#designs-d1-d5-from-paired-replicates"></a>
+</h3>
+<p><code><a href="reference/run_paired_scenario.html">run_paired_scenario()</a></code> is the single entry point for the simulation tables in the manuscript. It simulates each trial once, computes the PP at the futility look once, and records the test statistics at the interim (<code>Z_int_*</code>), the efficacy look (<code>Z_eff_*</code>) and the final analysis (<code>Z_fin_*</code>) without stopping the trial. Every design is then a summary of the same replicates. With <code>c_eff</code> and <code>c_fin</code> the critical values of the group-sequential design at the efficacy look and the final analysis:</p>
+<ul>
+<li>
+<strong>D1</strong> (fixed design): success if <code>Z_fin_LRT</code> exceeds the final-only critical value.</li>
+<li>
+<strong>D2</strong> (efficacy look only): success if <code>Z_eff_LRT &gt; c_eff</code>, otherwise <code>Z_fin_LRT &gt; c_fin</code>. This is <code>continuation_success</code>.</li>
+<li>
+<strong>D3</strong> (D2 plus PP futility): stop for futility if <code>PP_val &lt; kappa</code>; <code><a href="reference/summarize_grid_by_kappa.html">summarize_grid_by_kappa()</a></code> evaluates a grid of kappa and <code><a href="reference/select_kappa_star.html">select_kappa_star()</a></code> picks kappa*.</li>
+<li>
+<strong>D4, D5</strong> (D2 plus Z futility): stop for futility if an interim statistic (<code>Z_int_LRT</code> or <code>Z_int_MW_t*</code>) is below a cutoff.</li>
+</ul>
+<p><code>apply_design_rule(raw, rule)</code> returns the decision, success, early stopping, sample size and duration of each replicate under one of these rules, using the critical values from <code><a href="reference/make_gsd_design.html">make_gsd_design()</a></code>.</p>
+</div>
+<div class="section level3">
+<h3 id="computing-environment">Computing environment<a class="anchor" aria-label="anchor" href="#computing-environment"></a>
+</h3>
+<p>The manuscript simulations were run on an HPC cluster with the module <code>rjags/4-13-foss-2022a-R-4.2.1</code>. The <code>settings</code> element returned by the simulation functions records the package, R, rjags and JAGS versions, the git commit, the hostname and a timestamp for each run.</p>
+<p>The PP futility rule is selected with <code>GSD_model$futility_type = "PP"</code> and <code>GSD_model$kappa</code>. The names <code><a href="reference/DTEAssurance-deprecated.html">BPP_func()</a></code>, <code><a href="reference/DTEAssurance-deprecated.html">calibrate_BPP_threshold()</a></code>, <code><a href="reference/DTEAssurance-deprecated.html">calibrate_BPP_timing()</a></code>, <code><a href="reference/DTEAssurance-deprecated.html">summarize_grid_by_lambda()</a></code>, <code><a href="reference/DTEAssurance-deprecated.html">select_lambda_star()</a></code>, <code>futility_type = "BPP"</code> and <code>GSD_model$BPP_threshold</code> are deprecated and will be removed in the next release.</p>
 </div>
 </div>
 </div>

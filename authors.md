@@ -8,13 +8,13 @@
 ## Citation
 
 Salsbury J (2026). *DTEAssurance: Assurance Methods for Clinical Trials
-with a Delayed Treatment Effect*. R package version 1.2.0,
+with a Delayed Treatment Effect*. R package version 1.3.0,
 <https://jamesalsbury.github.io/DTEAssurance/>.
 
     @Manual{,
       title = {DTEAssurance: Assurance Methods for Clinical Trials with a Delayed Treatment Effect},
       author = {James Salsbury},
       year = {2026},
-      note = {R package version 1.2.0},
+      note = {R package version 1.3.0},
       url = {https://jamesalsbury.github.io/DTEAssurance/},
     }

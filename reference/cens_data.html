@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">DTEAssurance</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.2.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.3.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -87,6 +87,17 @@
 
 
 </dl></div>
+    <div class="section level2">
+    <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
+    <p>This is the single routine used throughout the package to cut a trial at
+an analysis. The cut is made at calendar time <code>t</code>, the calendar time
+of the <code>k</code>-th event (<code>"Events"</code>); patients recruited before
+<code>t</code> are included, and a patient has an event if
+<code>pseudo_time &lt;= t</code>. Cutting at <code>k</code> events therefore leaves
+exactly <code>k</code> events in the data (assuming no tied event times).
+<code>cens_events</code> is floored with a small tolerance, so a non-integer
+such as <code>840 * 0.3</code> is treated as 252.</p>
+    </div>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
