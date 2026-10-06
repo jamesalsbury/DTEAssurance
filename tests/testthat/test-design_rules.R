@@ -23,10 +23,13 @@ test_that("apply_design_rule: decisions, labels and outputs on known inputs", {
   expect_equal(d2$duration, c(2, 2, 3, 3, 3, NA))
   expect_equal(d2$early_eff, c(TRUE, TRUE, FALSE, FALSE, FALSE, NA))
 
-  d3 <- apply_design_rule(raw, c(type = "D3", kappa = 0.1, b))
+  # row 5 has NA PP_val without an error, so D3 refuses it
+  expect_error(apply_design_rule(raw, c(type = "D3", kappa = 0.1, b)),
+               "D3 needs PP_val, but it is NA for 1 replicate")
+  d3 <- apply_design_rule(raw[-5, ], c(type = "D3", kappa = 0.1, b))
   expect_equal(d3$decision[1:4], c("Stop for futility", "Stop for efficacy",
                                    "Successful at final", "Unsuccessful at final"))
-  expect_true(all(is.na(d3[5:6, ])))   # NA PP_val and the error row
+  expect_true(all(is.na(d3[5, ])))   # the error row
   expect_equal(d3$sample_size[1], 10)
   expect_false(d3$success[1])
 
@@ -47,6 +50,24 @@ test_that("apply_design_rule: decisions, labels and outputs on known inputs", {
   expect_error(apply_design_rule(raw, c(type = "D5", z_fut = 0, mw_t_star = 2, b)),
                "Z_int_MW_t2 not found")
   expect_error(apply_design_rule(raw, list(type = "D9")), "D1-D5")
+})
+
+test_that("apply_design_rule: D1, D2, D4, D5 ignore PP_val; D3 needs it", {
+  raw <- synthetic_raw()
+  raw_noPP <- raw
+  raw_noPP$PP_val <- NA_real_
+  b <- list(crit_eff = 2.24, crit_fin = 2)
+  rules <- list(list(type = "D1", crit_final = 1.96),
+                c(type = "D2", b),
+                c(type = "D4", z_fut = 0, b),
+                c(type = "D5", z_fut = 0, mw_t_star = 6, b))
+  for (rule in rules) {
+    expect_identical(apply_design_rule(raw_noPP, rule), apply_design_rule(raw, rule))
+  }
+  expect_error(apply_design_rule(raw_noPP, c(type = "D3", kappa = 0.1, b)),
+               "NA for 5 replicate.*compute_PP = FALSE")
+  # NA PP_val on a failed replicate alone is fine
+  expect_silent(apply_design_rule(raw[-5, ], c(type = "D3", kappa = 0.1, b)))
 })
 
 # Item 6: the post hoc rules must reproduce apply_GSD_to_trial() on the same

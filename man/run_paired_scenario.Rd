@@ -8,6 +8,7 @@ run_paired_scenario(
   n_sims,
   seed,
   ...,
+  compute_PP = TRUE,
   n_cores = 1,
   checkpoint_file = NULL,
   chunk_size = 100
@@ -19,6 +20,11 @@ run_paired_scenario(
 \item{seed}{Base seed (see \code{\link{single_paired_rep}}).}
 
 \item{...}{Further arguments passed to \code{\link{single_paired_rep}}.}
+
+\item{compute_PP}{Passed to \code{\link{single_paired_rep}}: if
+\code{FALSE}, the PP columns are \code{NA} and \code{update_priors_sims}
+and \code{PP_sims} are not needed. A checkpoint is only resumed with the
+same \code{compute_PP}. Default \code{TRUE}.}
 
 \item{n_cores}{Number of cores (default 1).}
 

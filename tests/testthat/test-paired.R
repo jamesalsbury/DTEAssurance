@@ -56,6 +56,47 @@ test_that("run_paired_scenario: columns, no NAs, reproducible, resumable (spec t
   unlink(ck)
 })
 
+test_that("compute_PP = FALSE leaves every non-PP column unchanged", {
+  skip_if_not_installed("rjags")
+  s <- paired_test_setup()
+  pp_cols <- c("PP_val", "converged", "rhat_max", "n_nonfinite_rhat",
+               "P_Z1", "P_Z2", "P_Z3")
+
+  with_pp <- run_tiny(s, n_sims = 5)
+  no_pp <- run_tiny(s, n_sims = 5, compute_PP = FALSE)
+  expect_true(all(is.na(with_pp$raw$error)))
+  expect_true(all(is.na(no_pp$raw$error)))
+  expect_equal(names(no_pp$raw), names(with_pp$raw))
+
+  other <- setdiff(names(with_pp$raw), pp_cols)
+  expect_identical(no_pp$raw[other], with_pp$raw[other])
+  expect_true(all(is.na(no_pp$raw[pp_cols])))
+  expect_false(anyNA(with_pp$raw[pp_cols]))
+  expect_identical(with_pp$settings$compute_PP, TRUE)
+  expect_identical(no_pp$settings$compute_PP, FALSE)
+
+  # update_priors_sims / PP_sims are not needed without PP
+  row <- single_paired_rep(
+    i = 1, seed = 7, n_c = s$n_c, n_t = s$n_t, total_events = s$total_events,
+    futility_IF = s$futility_IF, efficacy_IF = s$efficacy_IF, design = s$design,
+    control_model = s$control_model, effect_model = s$effect_model,
+    recruitment_model = s$recruitment_model, truth = s$truth,
+    analysis_model_LRT = s$analysis_model_LRT, compute_PP = FALSE)
+  expect_identical(row[other], no_pp$raw[1, other])
+
+  # D2 decisions agree; D3 refuses PP-free output
+  b <- list(type = "D2", crit_eff = crit_at(s$design, 0.75), crit_fin = crit_at(s$design, 1))
+  expect_identical(apply_design_rule(no_pp$raw, b), apply_design_rule(with_pp$raw, b))
+  expect_error(apply_design_rule(no_pp$raw, c(b[-1], type = "D3", kappa = 0.1)),
+               "compute_PP = FALSE")
+
+  # a checkpoint is not resumed with a different compute_PP
+  ck <- tempfile(fileext = ".rds")
+  run_tiny(s, n_sims = 2, compute_PP = FALSE, checkpoint_file = ck)
+  expect_error(run_tiny(s, n_sims = 4, checkpoint_file = ck), "compute_PP = FALSE")
+  unlink(ck)
+})
+
 test_that("summarize_grid_by_kappa(raw, 0) reproduces D2 power from the Z columns (spec test 8)", {
   skip_if_not_installed("rjags")
   s <- paired_test_setup()

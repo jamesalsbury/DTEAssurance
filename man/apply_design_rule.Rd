@@ -35,13 +35,18 @@ crosses a boundary (as in \code{\link{apply_GSD_to_trial}}).
 \code{Z_eff_LRT > crit_eff}, otherwise the final analysis with
 \code{Z_fin_LRT > crit_fin}.}
 \item{D3}{D2 plus PP futility: \code{"Stop for futility"} if
-\code{PP_val < kappa}.}
+\code{PP_val < kappa}. Stops with an error if \code{PP_val} is
+\code{NA} for any replicate that did not fail (e.g. output from
+\code{compute_PP = FALSE}).}
 \item{D4}{D2 plus Z futility: \code{"Stop for futility"} if
 \code{Z_int_LRT < z_fut}.}
 \item{D5}{As D4 with the modestly weighted statistics
 \code{Z_int_MW_t<t>}, \code{Z_eff_MW_t<t>}, \code{Z_fin_MW_t<t>} for
 \code{t = mw_t_star}.}
 }
+
+D1, D2, D4 and D5 do not use \code{PP_val}, so they also work on output
+from \code{run_paired_scenario(compute_PP = FALSE)}.
 }
 \seealso{
 \code{\link{run_paired_scenario}}, \code{\link{summarize_grid_by_kappa}}
