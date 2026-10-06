@@ -11,7 +11,8 @@ update_priors(
   n.chains = 2,
   n_burnin = 500,
   n_samples = 1000,
-  rhat_threshold = 1.1
+  rhat_threshold = 1.1,
+  jags_seed = NULL
 )
 }
 \arguments{
@@ -45,31 +46,44 @@ update_priors(
 
 \item{n_burnin}{Number of burn-in samples for the MCMC chain(s) (default is 500)}
 
-\item{n_samples}{Number of posterior samples to generate (default is 1000)}
+\item{n_samples}{Number of posterior samples retained \strong{per chain}
+after burn-in (default is 1000). The returned data frame has
+\code{n.chains * n_samples} rows (2,000 with the defaults).}
 
 \item{rhat_threshold}{Convergence threshold on the Gelman-Rubin
 potential scale reduction factor (default 1.1). Used only to compute
 the \code{"converged"} attribute on the return value; does not affect
 sampling.}
+
+\item{jags_seed}{Optional integer seed for JAGS. If supplied, chain
+\code{ch} is initialised with the \code{"base::Wichmann-Hill"} RNG and
+seed \code{jags_seed + ch}, so repeated calls with the same
+\code{jags_seed} return identical draws. If \code{NULL} (default), JAGS
+seeds its chains itself and the draws are not reproducible with
+\code{set.seed()}.}
 }
 \value{
 A data frame containing Monte Carlo samples from the updated
 (posterior) distribution of the model parameters, with columns
 \code{lambda_c}, \code{delay_time}, \code{HR}, \code{gamma_c} (Weibull
 only), and \code{Z} (the latent scenario indicator: 1 = no separation,
-2 = immediate separation, 3 = delayed separation). Column access
-(\code{posterior_df$lambda_c}, etc.) is unchanged from previous
-versions of this function -- existing calling code does not need to be
-modified. In addition, three attributes are attached to the returned
-data frame for diagnostic purposes:
+2 = immediate separation, 3 = delayed separation). The following
+attributes are attached for diagnostic purposes:
 \describe{
 \item{\code{rhat}}{A named numeric vector of per-parameter
 Gelman-Rubin point estimates (accessed via
 \code{attr(posterior_df, "rhat")}).}
-\item{\code{converged}}{\code{TRUE} if every monitored parameter's
-Rhat is below \code{rhat_threshold}, \code{FALSE} if not, or
-\code{NA} if the diagnostic could not be computed (accessed via
-\code{attr(posterior_df, "converged")}).}
+\item{\code{converged}}{\code{TRUE} if every \emph{finite} R-hat
+is below \code{rhat_threshold}, \code{FALSE} if not, or \code{NA}
+if there are no finite R-hat values (or the diagnostic could not be
+computed). Non-finite values (\code{NaN} arises for parameters that
+are constant across draws, e.g. \code{delay_time} when \code{Z != 3}
+throughout) are not treated as failures; they are counted in
+\code{n_nonfinite_rhat}.}
+\item{\code{rhat_max}}{The largest finite R-hat (\code{NA} if none).}
+\item{\code{n_nonfinite_rhat}}{The number of non-finite R-hat values.}
+\item{\code{n_retained_total}}{The number of retained draws over all
+chains, \code{n.chains * n_samples}.}
 \item{\code{Z_probs}}{A named numeric vector
 \code{c(P_Z1=, P_Z2=, P_Z3=)}, the posterior probability of each
 latent state, i.e. \code{table(posterior_df$Z) / nrow(posterior_df)}
@@ -86,6 +100,13 @@ parametric prior distributions) using interim survival data under a
 delayed-effect, piecewise-exponential model for the treatment arm and an
 exponential or Weibull model for the control arm.
 }
+\section{Deprecated}{
+
+The exponential control arm (\code{control_model$dist = "Exponential"})
+is deprecated and will be removed in a future release; use
+\code{"Weibull"}.
+}
+
 \examples{
 set.seed(123)
 interim_data = data.frame(survival_time = runif(10, min = 0, max = 10),

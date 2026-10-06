@@ -35,6 +35,16 @@ A list containing:
 \description{
 Applies administrative censoring to a survival dataset using one of three methods: fixed time, fixed number of events, or fixed information fraction. The input data must contain columns for pseudo survival time, recruitment time, and observed time.
 }
+\details{
+This is the single routine used throughout the package to cut a trial at
+an analysis. The cut is made at calendar time \code{t}, the calendar time
+of the \code{k}-th event (\code{"Events"}); patients recruited before
+\code{t} are included, and a patient has an event if
+\code{pseudo_time <= t}. Cutting at \code{k} events therefore leaves
+exactly \code{k} events in the data (assuming no tied event times).
+\code{cens_events} is floored with a small tolerance, so a non-integer
+such as \code{840 * 0.3} is treated as 252.
+}
 \examples{
 set.seed(123)
 df <- data.frame(

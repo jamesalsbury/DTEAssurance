@@ -65,9 +65,9 @@ test_that("calc_dte_assurance_adaptive returns expected structure and values", {
     events = 100,
     alpha_spending = c(0.0125, 0.025),
     alpha_IF = c(0.75, 1),
-    futility_type = "BPP",
+    futility_type = "PP",
     futility_IF = 0.5,
-    BPP_threshold = 0.2)
+    kappa = 0.2)
 
   analysis_model = list(
     method = "LRT",
@@ -84,6 +84,8 @@ test_that("calc_dte_assurance_adaptive returns expected structure and values", {
     recruitment_model = recruitment_model,
     GSD_model = GSD_model,
     analysis_model = analysis_model,
+    update_priors_sims = 100,
+    PP_sims = 20,
     n_sims = 2
   )
 

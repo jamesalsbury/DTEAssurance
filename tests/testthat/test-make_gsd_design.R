@@ -1,4 +1,4 @@
-test_that("make_rpact_design_from_GSD_model works for futility = 'none'", {
+test_that("make_gsd_design works for futility = 'none'", {
 
   GSD_model <- list(
     alpha_IF       = c(0.3, 0.6, 1.0),
@@ -6,7 +6,7 @@ test_that("make_rpact_design_from_GSD_model works for futility = 'none'", {
     futility_type  = "none"
   )
 
-  out <- make_rpact_design_from_GSD_model(GSD_model)
+  out <- make_gsd_design(GSD_model)
 
   expect_true(is.list(out))
   expect_true(inherits(out$design, "TrialDesignGroupSequential"))
@@ -18,7 +18,7 @@ test_that("make_rpact_design_from_GSD_model works for futility = 'none'", {
   expect_equal(out$beta_spending_full, c(0, 0, 0))
 })
 
-test_that("make_rpact_design_from_GSD_model works for futility = 'Beta'", {
+test_that("make_gsd_design works for futility = 'Beta'", {
 
   GSD_model <- list(
     alpha_IF        = c(0.75, 1.0),
@@ -28,7 +28,7 @@ test_that("make_rpact_design_from_GSD_model works for futility = 'Beta'", {
     beta_spending   = c(0.05, 0.15)
   )
 
-  out <- make_rpact_design_from_GSD_model(GSD_model)
+  out <- make_gsd_design(GSD_model)
 
   expect_true(is.list(out))
   expect_true(inherits(out$design, "TrialDesignGroupSequential"))
@@ -43,22 +43,22 @@ test_that("make_rpact_design_from_GSD_model works for futility = 'Beta'", {
   expect_equal(out$beta_spending_full, c(0.05, 0.05, 0.15))
 })
 
-test_that("make_rpact_design_from_GSD_model works for futility = 'BPP'", {
+test_that("make_gsd_design works for futility = 'PP'", {
 
   GSD_model <- list(
     alpha_IF        = c(0.4, 1.0),
     alpha_spending  = c(0.012, 0.025),
-    futility_type   = "BPP",
+    futility_type   = "PP",
     futility_IF     = 0.5,
-    BPP_threshold = 0.2
+    kappa = 0.2
   )
 
-  out <- make_rpact_design_from_GSD_model(GSD_model)
+  out <- make_gsd_design(GSD_model)
 
   expect_true(is.list(out))
   expect_true(inherits(out$design, "TrialDesignGroupSequential"))
 
-  # For BPP: fut_IF included, but beta spending all zero
+  # For PP: fut_IF included, but beta spending all zero
   expect_equal(out$IF_all, c(0.4, 0.5, 1.0))
 
   expect_equal(out$alpha_spending_full, c(0.012, 0.012, 0.025))
@@ -66,7 +66,7 @@ test_that("make_rpact_design_from_GSD_model works for futility = 'BPP'", {
   expect_equal(out$beta_spending_full, c(0, 0, 0))
 })
 
-test_that("make_rpact_design_from_GSD_model errors on unknown futility type", {
+test_that("make_gsd_design errors on unknown futility type", {
 
   GSD_model <- list(
     alpha_IF        = c(0.5, 1.0),
@@ -75,7 +75,7 @@ test_that("make_rpact_design_from_GSD_model errors on unknown futility type", {
   )
 
   expect_error(
-    make_rpact_design_from_GSD_model(GSD_model),
+    make_gsd_design(GSD_model),
     "Unknown futility type"
   )
 })
@@ -83,7 +83,7 @@ test_that("make_rpact_design_from_GSD_model errors on unknown futility type", {
 
 
 
-test_that("make_rpact_design_from_GSD_model works for futility = 'MatchedZ'", {
+test_that("make_gsd_design works for futility = 'MatchedZ'", {
 
   GSD_model <- list(
     alpha_IF            = c(0.75, 1.0),
@@ -93,10 +93,16 @@ test_that("make_rpact_design_from_GSD_model works for futility = 'MatchedZ'", {
     futility_boundary_Z = 0
   )
 
-  out <- make_rpact_design_from_GSD_model(GSD_model)
+  out <- make_gsd_design(GSD_model)
 
   expect_true(inherits(out$design, "TrialDesignGroupSequential"))
   expect_equal(out$IF_all, c(0.5, 0.75, 1.0))
   expect_equal(out$alpha_spending_full, c(0, 0.0125, 0.025))
   expect_equal(out$beta_spending_full, c(0, 0, 0))
+})
+
+test_that("make_rpact_design_from_GSD_model is an alias of make_gsd_design", {
+  expect_identical(make_rpact_design_from_GSD_model, make_gsd_design)
+  expect_true("make_gsd_design" %in% getNamespaceExports("DTEAssurance"))
+  expect_true("apply_GSD_to_trial" %in% getNamespaceExports("DTEAssurance"))
 })

@@ -335,7 +335,7 @@ ui <- fluidPage(
                             rhandsontable::rHandsontableOutput("alpha_spending_table"),
                      )
                    ),
-                   selectInput("fut_method", "Type of Futility", choices = c("None"="none", "Beta-Spending"="Beta", "BPP" = "BPP"), selected = "none"),
+                   selectInput("fut_method", "Type of Futility", choices = c("None"="none", "Beta-Spending"="Beta", "PP" = "PP"), selected = "none"),
                    conditionalPanel(
                      condition = "input.fut_method == 'Beta'",
                      fluidRow(
@@ -348,13 +348,13 @@ ui <- fluidPage(
                      )
                    ),
                    conditionalPanel(
-                     condition = "input.fut_method == 'BPP'",
+                     condition = "input.fut_method == 'PP'",
                      fluidRow(
                        column(6,
-                              numericInput("BPP_timing", label =  "BPP timing", value = 0.5)
+                              numericInput("PP_timing", label =  "PP timing", value = 0.5)
                        ),
                        column(6,
-                              numericInput("BPP_threshold", label =  "BPP threshold", value = 0.2)
+                              numericInput("kappa", label =  "Futility threshold (kappa)", value = 0.2)
                        )
                      )
                    ),
@@ -420,53 +420,53 @@ ui <- fluidPage(
       )
                )
       ),
-      # BPP - Timing UI ---------------------------------
+      # PP - Timing UI ---------------------------------
 
-      tabPanel("BPP - Timing",
+      tabPanel("PP - Timing",
                sidebarLayout(
                  sidebarPanel = sidebarPanel(
                    fluidRow(
                      column(6,
-                            numericInput("total_events_BPP_timing", "Number of Events", value = 300)
+                            numericInput("total_events_PP_timing", "Number of Events", value = 300)
                             ),
                     column(6,
-                           numericInput("BPP_Timing_IF", "IF timing to look at", value = 0.5)
+                           numericInput("PP_Timing_IF", "IF timing to look at", value = 0.5)
                            )
                    ),
-                   numericInput("n_sims_BPP_Timing", "Number of simulations", value=10),
-                   actionButton("calc_BPP_Timing", label  = "Calculate"),
-                   shinyjs::hidden(numericInput("n_breaks_BPP_timing", "Number of bins", value=10)),
+                   numericInput("n_sims_PP_Timing", "Number of simulations", value=10),
+                   actionButton("calc_PP_Timing", label  = "Calculate"),
+                   shinyjs::hidden(numericInput("n_breaks_PP_timing", "Number of bins", value=10)),
                    fluidRow(
                             column(6,
-                                   shinyjs::hidden(numericInput("lower_bound_BPP_timing", "Lower bound", value=0.1))
+                                   shinyjs::hidden(numericInput("lower_bound_PP_timing", "Lower bound", value=0.1))
                             ),
                             column(6,
-                                   shinyjs::hidden(numericInput("upper_bound_BPP_timing", "Upper bound", value=0.9))
+                                   shinyjs::hidden(numericInput("upper_bound_PP_timing", "Upper bound", value=0.9))
                             )
                             )
 
                  ),
                  mainPanel = mainPanel(
                    tags$h4(
-                     id = "toggleHeader_BPP_Timing",
+                     id = "toggleHeader_PP_Timing",
                      style = "cursor: pointer; display: flex; align-items: center; justify-content: space-between;",
                      div(
                        style = "display: flex; align-items: center;",
-                       tags$span(id = "arrow_BPP_Timing", "►"),  # Arrow icon
+                       tags$span(id = "arrow_PP_Timing", "►"),  # Arrow icon
                        " Show/hide the function"
                      ),
                      actionButton(
-                       inputId = "copy_btn_BPP_Timing",
+                       inputId = "copy_btn_PP_Timing",
                        label = "📋 Copy",
                        class = "btn btn-sm btn-outline-primary"
                      )
                    ),
 
                    tags$div(
-                     id = "collapseText_BPP_Timing",
+                     id = "collapseText_PP_Timing",
                      class = "collapse",
                      shinyAce::aceEditor(
-                       outputId = "display_func_BPP_Timing",
+                       outputId = "display_func_PP_Timing",
                        value = "",
                        mode = "r",
                        theme = "monokai",
@@ -477,10 +477,10 @@ ui <- fluidPage(
 
                    tags$script(HTML("
     // Toggle collapse + arrow
-    $(document).on('click', '#toggleHeader_BPP_Timing', function(e) {
-      if (!$(e.target).is('#copy_btn_BPP_Timing')) {   // avoid toggle when clicking copy
-        $('#collapseText_BPP_Timing').collapse('toggle');
-        var arrow = $('#arrow_BPP_Timing');
+    $(document).on('click', '#toggleHeader_PP_Timing', function(e) {
+      if (!$(e.target).is('#copy_btn_PP_Timing')) {   // avoid toggle when clicking copy
+        $('#collapseText_PP_Timing').collapse('toggle');
+        var arrow = $('#arrow_PP_Timing');
         if (arrow.text() == '►') {
           arrow.text('▼');
         } else {
@@ -490,14 +490,14 @@ ui <- fluidPage(
     });
 
     // Copy-to-clipboard
-    $(document).on('click', '#copy_btn_BPP_Timing', function() {
-      var editorText = ace.edit('display_func_BPP_Timing').getValue();
+    $(document).on('click', '#copy_btn_PP_Timing', function() {
+      var editorText = ace.edit('display_func_PP_Timing').getValue();
       navigator.clipboard.writeText(editorText);
     });
   ")),
 
-                   plotOutput("BPP_timing_hist"),
-                   textOutput("BPP_Timing_text")
+                   plotOutput("PP_timing_hist"),
+                   textOutput("PP_Timing_text")
 
 
 
@@ -506,17 +506,17 @@ ui <- fluidPage(
                )
       ),
 
-      # BPP - Threshold UI ---------------------------------
+      # PP - Threshold UI ---------------------------------
 
-      tabPanel("BPP - Threshold",
+      tabPanel("PP - Threshold",
                sidebarLayout(
                  sidebarPanel = sidebarPanel(
                    fluidRow(
                      column(6,
-                            numericInput("total_events_BPP_threshold", "Number of Events", value = 300)
+                            numericInput("total_events_PP_threshold", "Number of Events", value = 300)
                      ),
                      column(6,
-                            numericInput("BPP_Threshold_IF", "IF timing to look at", value = 0.5)
+                            numericInput("PP_Threshold_IF", "IF timing to look at", value = 0.5)
                      )
                    ),
                    fluidRow(
@@ -545,11 +545,11 @@ ui <- fluidPage(
                        )
                      )
                    ),
-                   numericInput("n_sims_BPP_Threshold", "Number of simulations", value=10),
-                   actionButton("calc_BPP_Threshold", label  = "Calculate"),
+                   numericInput("n_sims_PP_Threshold", "Number of simulations", value=10),
+                   actionButton("calc_PP_Threshold", label  = "Calculate"),
                    fluidRow(
                      column(6,
-                            shinyjs::hidden(numericInput("n_breaks_BPP_threshold", "Number of bins", value=10))
+                            shinyjs::hidden(numericInput("n_breaks_PP_threshold", "Number of bins", value=10))
                             ),
                      column(6,
                             shinyjs::hidden(numericInput("threshold_value", "Threshold Value", value=0.2))
@@ -560,25 +560,25 @@ ui <- fluidPage(
                  ),
                  mainPanel = mainPanel(
                    tags$h4(
-                     id = "toggleHeader_BPP_Threshold",
+                     id = "toggleHeader_PP_Threshold",
                      style = "cursor: pointer; display: flex; align-items: center; justify-content: space-between;",
                      div(
                        style = "display: flex; align-items: center;",
-                       tags$span(id = "arrow_BPP_Threshold", "►"),  # Arrow icon
+                       tags$span(id = "arrow_PP_Threshold", "►"),  # Arrow icon
                        " Show/hide the function"
                      ),
                      actionButton(
-                       inputId = "copy_btn_BPP_Threshold",
+                       inputId = "copy_btn_PP_Threshold",
                        label = "📋 Copy",
                        class = "btn btn-sm btn-outline-primary"
                      )
                    ),
 
                    tags$div(
-                     id = "collapseText_BPP_Threshold",
+                     id = "collapseText_PP_Threshold",
                      class = "collapse",
                      shinyAce::aceEditor(
-                       outputId = "display_func_BPP_Threshold",
+                       outputId = "display_func_PP_Threshold",
                        value = "",
                        mode = "r",
                        theme = "monokai",
@@ -589,10 +589,10 @@ ui <- fluidPage(
 
                    tags$script(HTML("
     // Toggle collapse + arrow
-    $(document).on('click', '#toggleHeader_BPP_Threshold', function(e) {
-      if (!$(e.target).is('#copy_btn_BPP_Threshold')) {   // avoid toggle when clicking copy
-        $('#collapseText_BPP_Threshold').collapse('toggle');
-        var arrow = $('#arrow_BPP_Threshold');
+    $(document).on('click', '#toggleHeader_PP_Threshold', function(e) {
+      if (!$(e.target).is('#copy_btn_PP_Threshold')) {   // avoid toggle when clicking copy
+        $('#collapseText_PP_Threshold').collapse('toggle');
+        var arrow = $('#arrow_PP_Threshold');
         if (arrow.text() == '►') {
           arrow.text('▼');
         } else {
@@ -602,13 +602,13 @@ ui <- fluidPage(
     });
 
     // Copy-to-clipboard
-    $(document).on('click', '#copy_btn_BPP_Threshold', function() {
-      var editorText = ace.edit('display_func_BPP_Threshold').getValue();
+    $(document).on('click', '#copy_btn_PP_Threshold', function() {
+      var editorText = ace.edit('display_func_PP_Threshold').getValue();
       navigator.clipboard.writeText(editorText);
     });
   ")),
-                   plotOutput("BPP_Threshold_hist"),
-                   textOutput("BPP_Threshold_text")
+                   plotOutput("PP_Threshold_hist"),
+                   textOutput("PP_Threshold_text")
 
 
 
@@ -689,7 +689,7 @@ ui <- fluidPage(
                                                      selected = c(""),
                                                      multiple = TRUE))),
                      column(4, shinyjs::hidden(selectizeInput("checkBayesianOptionsPlots", "Selected Plots",
-                                                     choices = c("BPP Plot", "Target Effectiveness Plot", "BPP vs TE Plot"),
+                                                     choices = c("PP Plot", "Target Effectiveness Plot", "PP vs TE Plot"),
                                                      selected = c(""),
                                                      multiple = TRUE)))
                    )
@@ -867,7 +867,7 @@ server <- function(input, output, session) {
       alpha_vector <- df$`alpha.spending`
       IF_vector <- df$IF
 
-      if (input$fut_method %in% c("none", "BPP")){
+      if (input$fut_method %in% c("none", "PP")){
         design <- rpact::getDesignGroupSequential(
           typeOfDesign = "asUser",
           informationRates = IF_vector,
@@ -1219,18 +1219,18 @@ server <- function(input, output, session) {
       )
     }
 
-    if (input$fut_method == "BPP") {
+    if (input$fut_method == "PP") {
 
       base_call <- paste0(
         base_call,
         ", \n   futility_IF = ",
-        input$BPP_timing
+        input$PP_timing
       )
 
       base_call <- paste0(
         base_call,
-        ", \n   BPP_threshold = ",
-        input$BPP_threshold
+        ", \n   kappa = ",
+        input$kappa
       )
 
       base_call <- paste0(
@@ -1243,10 +1243,13 @@ server <- function(input, output, session) {
       )
     }
 
-    # Close GSD_model and finish
+    # Close GSD_model and finish. PP designs must state the MCMC and
+    # predictive simulation sizes explicitly (the previous defaults).
     base_call <- paste0(
       base_call,
-      "\n ), \n n_sims = ",
+      "\n ), \n ",
+      if (input$fut_method == "PP") "update_priors_sims = 1000, \n PP_sims = 1000, \n " else "",
+      "n_sims = ",
       input$n_sims_simulate,
       ")"
     )
@@ -1469,13 +1472,13 @@ server <- function(input, output, session) {
     # })
 
 
-  # BPP - Timing Logic ---------------------------------
+  # PP - Timing Logic ---------------------------------
 
 
-      function_call_BPP_Timing <- reactive({
+      function_call_PP_Timing <- reactive({
 
 
-        base_call <- paste0("calibrate_BPP_timing(n_c = ",
+        base_call <- paste0("calibrate_PP_timing(n_c = ",
                             input$n_c,
                             ", \n n_t = ",
                             input$n_t,
@@ -1607,8 +1610,8 @@ server <- function(input, output, session) {
 
 
         base_call <- paste0(base_call, "), \n IA_model = list(events = ",
-                            input$total_events_BPP_timing,
-                            ", \n IF = ", input$BPP_Timing_IF)
+                            input$total_events_PP_timing,
+                            ", \n IF = ", input$PP_Timing_IF)
 
 
         df <- rhandsontable::hot_to_r(input$alpha_spending_table)
@@ -1623,7 +1626,7 @@ server <- function(input, output, session) {
 
         base_call <- paste0(base_call,
                             "), \n n_sims = ",
-                            input$n_sims_BPP_Timing,
+                            input$n_sims_PP_Timing,
                             ")")
 
 
@@ -1634,61 +1637,61 @@ server <- function(input, output, session) {
       })
 
     observe({
-      shinyAce::updateAceEditor(session, "display_func_BPP_Timing", value = function_call_BPP_Timing())
+      shinyAce::updateAceEditor(session, "display_func_PP_Timing", value = function_call_PP_Timing())
     })
 
-    calculate_BPP_Timing <- eventReactive(input$calc_BPP_Timing, {
-      call_string <- function_call_BPP_Timing()
+    calculate_PP_Timing <- eventReactive(input$calc_PP_Timing, {
+      call_string <- function_call_PP_Timing()
       result <- eval(parse(text = call_string))
-      shinyjs::show("n_breaks_BPP_timing")
-      shinyjs::show("lower_bound_BPP_timing")
-      shinyjs::show("upper_bound_BPP_timing")
+      shinyjs::show("n_breaks_PP_timing")
+      shinyjs::show("lower_bound_PP_timing")
+      shinyjs::show("upper_bound_PP_timing")
       return(result)
     })
 
-    output$BPP_timing_hist <- renderPlot({
+    output$PP_timing_hist <- renderPlot({
 
-      outcome <- calculate_BPP_Timing()
+      outcome <- calculate_PP_Timing()
 
-      hist(outcome$outcome_list[[1]]$BPP_values,
-           breaks = input$n_breaks_BPP_timing,
+      hist(outcome$outcome_list[[1]]$PP_values,
+           breaks = input$n_breaks_PP_timing,
            xlim = c(0,1),
            freq = F,
-           xlab = "BPP",
-           main = paste0("Distribution of BPP values at IF = ", input$BPP_Timing_IF))
+           xlab = "PP",
+           main = paste0("Distribution of PP values at IF = ", input$PP_Timing_IF))
 
           })
 
 
-    output$BPP_Timing_text <- renderText({
+    output$PP_Timing_text <- renderText({
 
-      outcome <- calculate_BPP_Timing()
+      outcome <- calculate_PP_Timing()
       dat     <- outcome$outcome_list[[1]]
 
       # Mean censoring time
       mean_cens <- mean(dat$cens_time)
 
       # Informativeness metric
-      BPP_outcome <- dat$BPP_values
-      inform_metric <- mean(BPP_outcome < input$lower_bound_BPP_timing |
-                              BPP_outcome > input$upper_bound_BPP_timing)
+      PP_outcome <- dat$PP_values
+      inform_metric <- mean(PP_outcome < input$lower_bound_PP_timing |
+                              PP_outcome > input$upper_bound_PP_timing)
 
       paste0(
         "The mean time of censoring is ", round(mean_cens, 2), ". ",
-        "The informativeness metric P(BPP < ", input$lower_bound_BPP_timing,
-        " OR BPP > ", input$upper_bound_BPP_timing, ") = ",
+        "The informativeness metric P(PP < ", input$lower_bound_PP_timing,
+        " OR PP > ", input$upper_bound_PP_timing, ") = ",
         round(inform_metric, 3), "."
       )
     })
 
 
-    # BPP - Threshold Logic ---------------------------------
+    # PP - Threshold Logic ---------------------------------
 
-    function_call_BPP_Threshold <- reactive({
+    function_call_PP_Threshold <- reactive({
 
 
       base_call <- paste0(
-        "calibrate_BPP_threshold(n_c = ", input$n_c,
+        "calibrate_PP_threshold(n_c = ", input$n_c,
         ", \n n_t = ", input$n_t,
         base_call <- paste0(
           ", \n control_model = list(\n   dist = \"", input$ControlDist, "\""
@@ -1847,8 +1850,8 @@ server <- function(input, output, session) {
 
       base_call <- paste0(
         base_call,
-        ", \n IA_model = list(\n    events = ", input$total_events_BPP_threshold,
-        ", \n   IF = ", input$BPP_Threshold_IF, ")"
+        ", \n IA_model = list(\n    events = ", input$total_events_PP_threshold,
+        ", \n   IF = ", input$PP_Threshold_IF, ")"
       )
 
 
@@ -1876,7 +1879,7 @@ server <- function(input, output, session) {
 
       base_call <- paste0(
         base_call,
-        ", \n n_sims = ", input$n_sims_BPP_Threshold,
+        ", \n n_sims = ", input$n_sims_PP_Threshold,
         ")"
       )
 
@@ -1886,29 +1889,29 @@ server <- function(input, output, session) {
 
 
     observe({
-      shinyAce::updateAceEditor(session, "display_func_BPP_Threshold", value = function_call_BPP_Threshold())
+      shinyAce::updateAceEditor(session, "display_func_PP_Threshold", value = function_call_PP_Threshold())
     })
 
-    calculate_BPP_Threshold <- eventReactive(input$calc_BPP_Threshold, {
-      call_string <- function_call_BPP_Threshold()
+    calculate_PP_Threshold <- eventReactive(input$calc_PP_Threshold, {
+      call_string <- function_call_PP_Threshold()
       result <- eval(parse(text = call_string))
       shinyjs::show("threshold_value")
-      shinyjs::show("n_breaks_BPP_threshold")
+      shinyjs::show("n_breaks_PP_threshold")
       return(result)
     })
 
-    output$BPP_Threshold_hist <- renderPlot({
+    output$PP_Threshold_hist <- renderPlot({
 
-      outcome <- calculate_BPP_Threshold()
+      outcome <- calculate_PP_Threshold()
 
       print(outcome)
 
-      hist(outcome$BPP_vec,
-           breaks = input$n_breaks_BPP_threshold,
+      hist(outcome$PP_vec,
+           breaks = input$n_breaks_PP_threshold,
            xlim = c(0,1),
            freq = F,
-           xlab = "BPP",
-           main = paste0("Distribution of BPP values at IF = ", input$BPP_Threshold_IF))
+           xlab = "PP",
+           main = paste0("Distribution of PP values at IF = ", input$PP_Threshold_IF))
       abline(v = input$threshold_value, col = "red", lty = 2)
 
 
@@ -1916,15 +1919,15 @@ server <- function(input, output, session) {
 
 
 
-    output$BPP_Threshold_text <- renderText({
+    output$PP_Threshold_text <- renderText({
 
-      outcome <- calculate_BPP_Threshold()
+      outcome <- calculate_PP_Threshold()
 
       # Informativeness metric
-      BPP_cutoff <- mean(outcome$BPP_vec < input$threshold_value)
+      PP_cutoff <- mean(outcome$PP_vec < input$threshold_value)
 
       paste0(
-        "P(BPP < ", input$threshold_value, ") = ", round(BPP_cutoff, 2))
+        "P(PP < ", input$threshold_value, ") = ", round(PP_cutoff, 2))
 
     })
 
@@ -2044,7 +2047,7 @@ server <- function(input, output, session) {
         params <- c(params,
                     list(checkBayesianOptionsTables = input$checkBayesianOptionsTables,
                          checkBayesianOptionsPlots = input$checkBayesianOptionsPlots,
-                         BPPVec = bayesianFunc()))
+                         PPVec = bayesianFunc()))
 
       }
 

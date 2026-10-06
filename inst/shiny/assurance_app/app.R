@@ -1,5 +1,12 @@
 library(DTEAssurance)
 
+# Weibull rate and shape from two landmark survival probabilities,
+# S(t) = exp(-(rate * t)^shape), S(t1) = s1, S(t2) = s2 (vectorised).
+weib_from_landmarks <- function(s1, s2, t1, t2) {
+  shape <- log(log(s1) / log(s2)) / log(t1 / t2)
+  list(rate = (-log(s1))^(1 / shape) / t1, shape = shape)
+}
+
 
 ui <- fluidPage(
 
@@ -628,18 +635,11 @@ ui <- fluidPage(
             result$type <- "single"
           } else {
 
-            # Solve for lambda and gamma
-            WeibFunc <- function(params) {
-              lambda <- params[1]
-              k <- params[2]
-              c(exp(-(input$WeibullTime1*lambda)^k) - input$WeibullSurv1,
-                exp(-(input$WeibullTime2*lambda)^k) - input$WeibullSurv2)
-            }
-
-            solution <- nleqslv(c(1, 1), fn = WeibFunc)
-
-            lambda <- solution$x[1]
-            gamma <- solution$x[2]
+            # Weibull rate and shape from the two landmarks (closed form)
+            wb <- weib_from_landmarks(input$WeibullSurv1, input$WeibullSurv2,
+                                      input$WeibullTime1, input$WeibullTime2)
+            lambda <- wb$rate
+            gamma <- wb$shape
 
             finalSurvTime <- (1 / lambda) * (-log(0.01))^(1 / gamma)
             controlTime <- seq(0, finalSurvTime, length.out = 100)
@@ -661,18 +661,13 @@ ui <- fluidPage(
           sampledDelta1 <- rbeta(n, input$WeibullDistDelta1BetaA, input$WeibullDistDelta1BetaB)
           sampledS1toPrime <- sampledS1to - sampledDelta1
 
-          # Solve for lambda and gamma in a vectorized manner
-          solutions <- lapply(1:n, function(i) {
-            nleqslv(c(10, 1), function(params) {
-              lambda <- params[1]
-              k <- params[2]
-              c(exp(-(input$WeibullDistT1 / lambda)^k) - sampledS1to[i],
-                exp(-(input$WeibullDistT2 / lambda)^k) - sampledS1toPrime[i])
-            })$x
-          })
-
-          lambdas <- sapply(solutions, `[`, 1)
-          gammas <- sapply(solutions, `[`, 2)
+          # Weibull scale (1 / rate) and shape for each draw (closed form);
+          # draws with S(t2) <= 0 do not define a survival curve and are dropped.
+          valid <- sampledS1toPrime > 0
+          wb <- weib_from_landmarks(sampledS1to[valid], sampledS1toPrime[valid],
+                                    input$WeibullDistT1, input$WeibullDistT2)
+          lambdas <- 1 / wb$rate
+          gammas <- wb$shape
 
           # Vectorized survival curve calculation
           survivalMatrix <- exp(-outer(1 / lambdas, controlTime, function(lambda, t) (lambda * t)^gammas))
@@ -946,20 +941,18 @@ ui <- fluidPage(
 
 
           for (i in 1:nSamples) {
-            sampledS1to <- rbeta(1, input$WeibullDistS1BetaA, input$WeibullDistS1BetaB)
-            sampledDelta1 <- rbeta(1, input$WeibullDistDelta1BetaA, input$WeibullDistDelta1BetaB)
-            sampledS1toPrime <- sampledS1to - sampledDelta1
+            # Redraw until S(t2) > 0 so the landmarks define a Weibull curve
+            repeat {
+              sampledS1to <- rbeta(1, input$WeibullDistS1BetaA, input$WeibullDistS1BetaB)
+              sampledDelta1 <- rbeta(1, input$WeibullDistDelta1BetaA, input$WeibullDistDelta1BetaB)
+              sampledS1toPrime <- sampledS1to - sampledDelta1
+              if (sampledS1toPrime > 0) break
+            }
 
-            # Solve for lambda and gamma using sampled values
-            solution <- nleqslv(c(10, 1), function(params) {
-              lambda <- params[1]
-              k <- params[2]
-              c(exp(-(input$WeibullDistT1 / lambda)^k) - sampledS1to,
-                exp(-(input$WeibullDistT2 / lambda)^k) - sampledS1toPrime)
-            })
-
-            lambdaVec[i] <- 1 / solution$x[1]
-            gammaVec[i] <- solution$x[2]
+            wb <- weib_from_landmarks(sampledS1to, sampledS1toPrime,
+                                      input$WeibullDistT1, input$WeibullDistT2)
+            lambdaVec[i] <- wb$rate
+            gammaVec[i] <- wb$shape
           }
 
 

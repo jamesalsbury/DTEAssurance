@@ -24,11 +24,11 @@ data_generating_model = list(lambda_c = log(2)/12,
                              post_delay_HR = 0.75)
 
 
-test_that("calibrate_BPP_threshold runs end-to-end with real simulations", {
+test_that("calibrate_PP_threshold runs end-to-end with real simulations", {
   set.seed(123)
 
 
-  out <- calibrate_BPP_threshold(
+  out <- calibrate_PP_threshold(
     n_c = 5,
     n_t = 5,
     control_model = control_model,
@@ -41,25 +41,25 @@ test_that("calibrate_BPP_threshold runs end-to-end with real simulations", {
   )
 
   expect_type(out, "list")
-  expect_true("BPP_vec" %in% names(out))
-  expect_length(out$BPP_vec, 3)
-  expect_false(any(is.na(out$BPP_vec)))
+  expect_true("PP_vec" %in% names(out))
+  expect_length(out$PP_vec, 3)
+  expect_false(any(is.na(out$PP_vec)))
 })
 
 
-test_that("calibrate_BPP_threshold loop logic works via light mocking", {
+test_that("calibrate_PP_threshold loop logic works via light mocking", {
 
   local_mocked_bindings(
     sim_dte = function(...) data.frame(time = 1:2, status = c(1,1), arm = c(0,1)),
     add_recruitment_time = function(data, ...) cbind(data, rec_time = 0),
     cens_data = function(data, ...) list(data = data, cens_time = 1),
     update_priors = function(...) list(dummy = "posterior"),
-    BPP_func = function(...) {
-      list(BPP_df = data.frame(success = c(TRUE, FALSE)))
+    PP_func = function(...) {
+      list(PP_df = data.frame(success = c(TRUE, FALSE)))
     }
   )
 
-  out <- calibrate_BPP_threshold(
+  out <- calibrate_PP_threshold(
     n_c = 2, n_t = 2,
     control_model = control_model,
     effect_model = effect_model,
@@ -70,5 +70,5 @@ test_that("calibrate_BPP_threshold loop logic works via light mocking", {
     n_df_sims = 4
   )
 
-  expect_equal(out$BPP_vec, rep(0.5, 4))
+  expect_equal(out$PP_vec, rep(0.5, 4))
 })

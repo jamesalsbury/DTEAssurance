@@ -42,7 +42,7 @@ A one-row data frame with column \code{Z}.
 \description{
 Single replicate used by \code{\link{calibrate_matched_futility_boundary}}:
 simulates one trial under a fixed data-generating scenario, censors it at
-\code{ceiling(futility_IF * total_events)} events, and returns the test
+\code{floor(futility_IF * total_events)} events, and returns the test
 statistic from \code{\link{survival_test}} (positive Z favours treatment).
 }
 \keyword{internal}

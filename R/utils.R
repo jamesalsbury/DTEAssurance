@@ -27,16 +27,7 @@ simulate_one_trial <- function(i, j,
   }
 
   # --- Run statistical test ---
-  test_result <- survival_test(
-    censored$data,
-    analysis_method = analysis_model$method,
-    alpha = analysis_model$alpha,
-    alternative = analysis_model$alternative_hypothesis,
-    rho = analysis_model$rho,
-    gamma = analysis_model$gamma,
-    t_star = analysis_model$t_star,
-    s_star = analysis_model$s_star
-  )
+  test_result <- run_test(censored$data, analysis_model, return_HR = TRUE)
 
   # --- Output ---
   list(
@@ -49,10 +40,27 @@ simulate_one_trial <- function(i, j,
 
 
 
+# Simulate one trial (survival times plus recruitment) with control and
+# treatment-effect parameters drawn from the priors.
+#
+# force_state: NULL (default) draws the latent state from P_S / P_DTE as
+# before. Otherwise 1 = no separation (T = 0, HR = 1), 2 = immediate
+# separation (T = 0, HR ~ HR_SHELF) or 3 = delayed separation
+# (T ~ delay_SHELF, HR ~ HR_SHELF), and the state draw is skipped.
+#
+# The returned data carries attr(, "truth"): list(lambda_c, gamma_c,
+# delay_time, post_delay_HR, state), with gamma_c = 1 for an exponential
+# control arm.
 simulate_trial_with_recruitment <- function(n_c, n_t,
                                 control_model,
                                 effect_model,
-                                recruitment_model) {
+                                recruitment_model,
+                                force_state = NULL) {
+
+  if (!is.null(force_state) && !force_state %in% 1:3) {
+    stop("force_state must be NULL, 1, 2 or 3.")
+  }
+
   # --- Sample control parameters ---
   lambda_c_i <- NA
   gamma_c_i <- NA
@@ -76,28 +84,18 @@ simulate_trial_with_recruitment <- function(n_c, n_t,
         lambda_c_i <- control_model$lambda
         gamma_c_i <- control_model$gamma
       } else if (control_model$fixed_type == "Landmark") {
-        WeibFunc <- function(params) {
-          lambda <- params[1]
-          k <- params[2]
-          c(exp(-(control_model$t1 * lambda)^k) - control_model$surv_t1,
-            exp(-(control_model$t2 * lambda)^k) - control_model$surv_t2)
-        }
-        solution <- nleqslv::nleqslv(c(1, 1), fn = WeibFunc)
-        lambda_c_i <- solution$x[1]
-        gamma_c_i <- solution$x[2]
+        wb <- weibull_from_landmarks(control_model$surv_t1, control_model$surv_t2,
+                                     control_model$t1, control_model$t2)
+        lambda_c_i <- wb$lambda
+        gamma_c_i <- wb$gamma
       }
     } else if (control_model$parameter_mode == "Distribution") {
       sampledS1 <- stats::rbeta(1, control_model$t1_Beta_a, control_model$t1_Beta_b)
       sampledDelta <- stats::rbeta(1, control_model$diff_Beta_a, control_model$diff_Beta_b)
-      sampledS2 <- sampledS1 - sampledDelta
-      solution <- nleqslv::nleqslv(c(10, 1), function(params) {
-        lambda <- params[1]
-        k <- params[2]
-        c(exp(-(control_model$t1 / lambda)^k) - sampledS1,
-          exp(-(control_model$t2 / lambda)^k) - sampledS2)
-      })
-      lambda_c_i <- 1 / solution$x[1]
-      gamma_c_i <- solution$x[2]
+      wb <- weibull_from_landmarks(sampledS1, sampledS1 - sampledDelta,
+                                   control_model$t1, control_model$t2)
+      lambda_c_i <- wb$lambda
+      gamma_c_i <- wb$gamma
     }
   }
 
@@ -107,10 +105,20 @@ simulate_trial_with_recruitment <- function(n_c, n_t,
 
   # --- Sample treatment effect ---
 
-  if (stats::runif(1) > effect_model$P_S) {
+  state <- if (!is.null(force_state)) {
+    force_state
+  } else if (stats::runif(1) > effect_model$P_S) {
+    1L
+  } else if (stats::runif(1) > effect_model$P_DTE) {
+    2L
+  } else {
+    3L
+  }
+
+  if (state == 1) {
     delay_time <- 0
     post_delay_HR <- 1
-  } else if (stats::runif(1) > effect_model$P_DTE) {
+  } else if (state == 2) {
     delay_time <- 0
     post_delay_HR <- SHELF::sampleFit(effect_model$HR_SHELF, n = 1)[, effect_model$HR_dist]
   } else {
@@ -130,10 +138,55 @@ simulate_trial_with_recruitment <- function(n_c, n_t,
                                rec_rate = recruitment_model$rate,
                                rec_duration = recruitment_model$duration)
 
+  attr(data, "truth") <- list(lambda_c = lambda_c_i,
+                              gamma_c = if (is.null(gamma_c_i)) 1 else gamma_c_i,
+                              delay_time = delay_time,
+                              post_delay_HR = post_delay_HR,
+                              state = as.integer(state))
+
   return(data)
 }
 
 
+#' Apply a group-sequential design to one simulated trial
+#'
+#' Runs the looks of a group-sequential design on one simulated trial, in
+#' order, stopping at the first look whose rule is met: efficacy if Z exceeds
+#' the efficacy critical value, futility under the design's futility rule
+#' (\code{"Beta"}: Z below the beta-spending bound; \code{"MatchedZ"}: Z
+#' below \code{GSD_model$futility_boundary_Z}; \code{"PP"}: predictive
+#' probability below \code{GSD_model$kappa}), and otherwise the final
+#' analysis. Each look cuts the trial with \code{\link{cens_data}} at
+#' \code{floor(IF * total_events)} events. This is the engine of
+#' \code{\link{calc_dte_assurance_adaptive}}. For simulation studies, use
+#' \code{\link{run_paired_scenario}} and \code{\link{apply_design_rule}},
+#' which evaluate all designs on the same replicates.
+#'
+#' @param n_c,n_t Planned number of patients in the control / treatment arm.
+#' @param trial_data A simulated trial with columns \code{time}, \code{group},
+#'   \code{rec_time} and \code{pseudo_time}.
+#' @param design The \code{rpact} design, from \code{\link{make_gsd_design}}.
+#' @param total_events Maximum planned number of events.
+#' @param GSD_model The design specification (see
+#'   \code{\link{calc_dte_assurance_adaptive}}).
+#' @param control_model,effect_model,recruitment_model Analysis prior and
+#'   recruitment model, used only for \code{"PP"} futility (recruitment must
+#'   be \code{method = "power"} with \code{power = 1}).
+#' @param analysis_model Test specification (\code{method}, \code{alpha},
+#'   \code{alternative_hypothesis}, and \code{rho}, \code{gamma},
+#'   \code{t_star}, \code{s_star} as needed); defaults to a one-sided LRT
+#'   at 0.025.
+#' @param update_priors_sims,PP_sims MCMC samples per chain and predictive
+#'   draws; required for \code{"PP"} futility.
+#' @param .PP_val Internal, for testing: a precomputed predictive
+#'   probability to use at the PP futility look instead of computing it.
+#'
+#' @return A list with \code{decision} (\code{"Stop for efficacy"},
+#'   \code{"Stop for futility"}, \code{"Successful at final"} or
+#'   \code{"Unsuccessful at final"}), \code{stop_time}, \code{sample_size},
+#'   \code{PP_val}, \code{converged} and \code{Z_probs}.
+#'
+#' @export
 apply_GSD_to_trial <- function(n_c,
                                n_t,
                                trial_data,
@@ -144,77 +197,71 @@ apply_GSD_to_trial <- function(n_c,
                                effect_model = NULL,
                                recruitment_model = NULL,
                                analysis_model = NULL,
-                               update_priors_sims = 1000,
-                               n_BPP_sims = 1000) {
+                               update_priors_sims = NULL,
+                               PP_sims = NULL,
+                               .PP_val = NULL) {
 
   if (is.null(analysis_model)) {
     analysis_model <- list(method = "LRT", alpha = 0.025,
                            alternative_hypothesis = "one.sided")
   }
 
-  compute_Z <- function(eligible_df) {
-    survival_test(eligible_df,
-                  analysis_method = analysis_model$method,
-                  alpha           = analysis_model$alpha,
-                  alternative     = analysis_model$alternative_hypothesis,
-                  rho             = analysis_model$rho,
-                  gamma           = analysis_model$gamma,
-                  t_star          = analysis_model$t_star,
-                  s_star          = analysis_model$s_star)$Z
+  if (identical(GSD_model$futility_type, "PP") && is.null(.PP_val)) {
+    if (is.null(update_priors_sims) || is.null(PP_sims)) {
+      stop("apply_GSD_to_trial: 'update_priors_sims' and 'PP_sims' must be ",
+           "supplied when GSD_model$futility_type is \"PP\".", call. = FALSE)
+    }
+    check_uniform_recruitment(recruitment_model, "apply_GSD_to_trial")
   }
 
-  trial_data <- trial_data[order(trial_data$pseudo_time),]
+  compute_Z <- function(eligible_df) run_test(eligible_df, analysis_model)$Z
 
   if (GSD_model$futility_type %in% c("Beta", "none")) {
-    info_rates <- design$informationRates
-  } else if (GSD_model$futility_type %in% c("BPP", "MatchedZ")) {
-    info_rates <- sort(unique(c(GSD_model$alpha_IF, GSD_model$futility_IF)))
+    info_rates <- round(design$informationRates, 6)
+  } else if (GSD_model$futility_type %in% c("PP", "MatchedZ")) {
+    info_rates <- sort(unique(round(c(GSD_model$alpha_IF, GSD_model$futility_IF), 6)))
   }
+  futility_IFs <- if (is.null(GSD_model$futility_IF)) numeric(0) else round(GSD_model$futility_IF, 6)
 
-  event_thresholds  <- ceiling(info_rates * total_events)
   n_interims        <- length(info_rates)
   decision          <- "Continue"
   stop_time         <- NA
-  BPP_val           <- NA
+  sample_size       <- NA
+  PP_val            <- NA
   converged         <- NA
   Z_probs           <- rep(NA_real_, 3)
   names(Z_probs)    <- c("P_Z1", "P_Z2", "P_Z3")
 
   for (i in seq_len(n_interims - 1)) {
     IF_here   <- info_rates[i]
-    n_events  <- event_thresholds[i]
-    t_interim <- trial_data$pseudo_time[n_events]
-
-    eligible_df <- trial_data %>%
-      dplyr::filter(.data$rec_time <= t_interim)
-
-    eligible_df$status <- eligible_df$pseudo_time < t_interim
-    eligible_df$survival_time <- ifelse(
-      eligible_df$status, eligible_df$time, t_interim - eligible_df$rec_time
-    )
+    cut       <- cens_data(trial_data, cens_method = "Events",
+                           cens_events = n_events_at(total_events, IF_here))
+    t_interim   <- cut$cens_time
+    eligible_df <- cut$data
 
     z_stat_here <- compute_Z(eligible_df)
 
-    eff_idx <- which(abs(design$informationRates - IF_here) < 1e-8)
-    eff_bound <- if (length(eff_idx) == 1) design$criticalValues[eff_idx] else NA
+    eff_bound <- crit_at(design, IF_here)
 
     # 1) Efficacy check
     if (!is.na(eff_bound) && !is.na(z_stat_here) && z_stat_here > eff_bound) {
-      decision  <- "Stop for efficacy"
-      stop_time <- t_interim
+      decision    <- "Stop for efficacy"
+      stop_time   <- t_interim
+      sample_size <- cut$sample_size
       break
     }
 
     # 2) Beta-spending futility
     if (!is.null(GSD_model) && GSD_model$futility_type == "Beta") {
-      fut_idx <- which(abs(design$informationRates - IF_here) < 1e-8)
+      fut_idx <- which(round(design$informationRates, 6) == IF_here)
       fut_bound <- if (length(fut_idx) == 1 && fut_idx <= length(design$futilityBounds)) {
         design$futilityBounds[fut_idx]
       } else NA
 
       if (!is.na(fut_bound) && !is.na(z_stat_here) && z_stat_here < fut_bound) {
-        decision  <- "Stop for futility"
-        stop_time <- t_interim
+        decision    <- "Stop for futility"
+        stop_time   <- t_interim
+        sample_size <- cut$sample_size
         break
       }
     }
@@ -222,65 +269,64 @@ apply_GSD_to_trial <- function(n_c,
     # 3a) MatchedZ futility (D4/D5)
     if (!is.null(GSD_model) &&
         GSD_model$futility_type == "MatchedZ" &&
-        IF_here %in% GSD_model$futility_IF) {
+        IF_here %in% futility_IFs) {
 
       if (!is.na(z_stat_here) && z_stat_here < GSD_model$futility_boundary_Z) {
-        decision  <- "Stop for futility"
-        stop_time <- t_interim
+        decision    <- "Stop for futility"
+        stop_time   <- t_interim
+        sample_size <- cut$sample_size
         break
       }
     }
 
-    # 3b) BPP futility (D3)
+    # 3b) PP futility (D3)
     if (!is.null(GSD_model) &&
-        GSD_model$futility_type == "BPP" &&
-        IF_here %in% GSD_model$futility_IF) {
+        GSD_model$futility_type == "PP" &&
+        IF_here %in% futility_IFs) {
 
-      remaining_futility_IFs <- GSD_model$futility_IF[GSD_model$futility_IF > IF_here]
+      remaining_futility_IFs <- futility_IFs[futility_IFs > IF_here]
       if (length(remaining_futility_IFs) > 0) {
-        stop("apply_GSD_to_trial: multiple sequential BPP futility looks are ",
+        stop("apply_GSD_to_trial: multiple sequential PP futility looks are ",
              "not supported by this implementation (would require nested ",
              "posterior-predictive simulation at each look). See manuscript ",
              "Limitations (Section 6.3).")
       }
 
-      future_IFs <- sort(info_rates[info_rates > IF_here])
-      future_boundaries <- lapply(future_IFs, function(x) {
-        idx <- which(abs(design$informationRates - x) < 1e-8)
-        list(
-          events = ceiling(x * total_events),
-          crit   = if (length(idx) == 1) design$criticalValues[idx] else NA
+      if (!is.null(.PP_val)) {
+        PP_val <- .PP_val
+      } else {
+        future_boundaries <- make_future_boundaries(design, total_events, IF_here)
+
+        posterior_samples <- update_priors(
+          eligible_df,
+          control_model = control_model,
+          effect_model  = effect_model,
+          n_samples     = update_priors_sims
         )
-      })
 
-      posterior_samples <- DTEAssurance::update_priors(
-        eligible_df,
-        control_model = control_model,
-        effect_model  = effect_model,
-        n_samples     = update_priors_sims
-      )
+        converged <- attr(posterior_samples, "converged")
+        Z_probs_attr <- attr(posterior_samples, "Z_probs")
+        if (!is.null(Z_probs_attr)) Z_probs <- Z_probs_attr
 
-      converged <- attr(posterior_samples, "converged")
-      Z_probs_attr <- attr(posterior_samples, "Z_probs")
-      if (!is.null(Z_probs_attr)) Z_probs <- Z_probs_attr
+        PP_out <- PP_func(
+          eligible_df, posterior_samples,
+          control_distribution = control_model$dist,
+          n_c_planned       = n_c,
+          n_t_planned       = n_t,
+          rec_time_planned  = recruitment_model$period,
+          df_cens_time      = t_interim,
+          analysis_model    = analysis_model,
+          future_boundaries = future_boundaries,
+          n_sims            = PP_sims
+        )
 
-      BPP_out <- DTEAssurance::BPP_func(
-        eligible_df, posterior_samples,
-        control_distribution = control_model$dist,
-        n_c_planned       = n_c,
-        n_t_planned       = n_t,
-        rec_time_planned  = recruitment_model$period,
-        df_cens_time      = t_interim,
-        analysis_model    = analysis_model,
-        future_boundaries = future_boundaries,
-        n_sims            = n_BPP_sims
-      )
+        PP_val <- mean(PP_out$PP_df$success)
+      }
 
-      BPP_val <- mean(BPP_out$BPP_df$success)
-
-      if (BPP_val < GSD_model$BPP_threshold) {
-        decision  <- "Stop for futility"
-        stop_time <- t_interim
+      if (PP_val < GSD_model$kappa) {
+        decision    <- "Stop for futility"
+        stop_time   <- t_interim
+        sample_size <- cut$sample_size
         break
       }
     }
@@ -288,39 +334,30 @@ apply_GSD_to_trial <- function(n_c,
 
   # Final analysis
   if (is.na(stop_time)) {
-    eff_idx   <- length(design$criticalValues)
-    eff_bound <- design$criticalValues[eff_idx]
-    n_events  <- event_thresholds[length(info_rates)]
-    t_interim <- trial_data$pseudo_time[n_events]
+    eff_bound <- design$criticalValues[length(design$criticalValues)]
+    cut <- cens_data(trial_data, cens_method = "Events",
+                     cens_events = n_events_at(total_events, info_rates[n_interims]))
 
-    eligible_df <- trial_data %>%
-      dplyr::filter(.data$rec_time <= t_interim)
+    z_stat_final <- compute_Z(cut$data)
 
-    eligible_df$status <- eligible_df$pseudo_time < t_interim
-    eligible_df$survival_time <- ifelse(
-      eligible_df$status, eligible_df$time, t_interim - eligible_df$rec_time
-    )
-
-    z_stat_final <- compute_Z(eligible_df)
-
-    decision  <- ifelse(!is.na(z_stat_final) && z_stat_final > eff_bound,
-                        "Successful at final", "Unsuccessful at final")
-    stop_time <- t_interim
+    decision    <- ifelse(!is.na(z_stat_final) && z_stat_final > eff_bound,
+                          "Successful at final", "Unsuccessful at final")
+    stop_time   <- cut$cens_time
+    sample_size <- cut$sample_size
   }
-
-  sample_size <- sum(trial_data$rec_time <= stop_time)
 
   return(list(
     decision    = decision,
     stop_time   = stop_time,
     sample_size = sample_size,
-    BPP_val     = BPP_val,
+    PP_val      = PP_val,
     converged   = converged,
     Z_probs     = Z_probs
   ))
 }
 
 
+# Deprecated (to be removed in a future release).
 summarize_gsd_results <- function(gsd_outcomes) {
   n <- length(gsd_outcomes)
 
@@ -385,6 +422,8 @@ make_prior_name_jags <- function(fit, dist) {
 
 
 
+# Deprecated with calibrate_PP_threshold() (to be removed in a future release);
+# still used by calibrate_PP_timing().
 single_calibration_rep <- function(i,
                                    n_c, n_t,
                                    control_model,
@@ -401,7 +440,7 @@ single_calibration_rep <- function(i,
   if (!is.null(seed)) set.seed(seed * 10000 + i)
 
   if (!is.null(future_boundaries)) {
-    candidate_events <- total_events * IF
+    candidate_events <- n_events_at(total_events, IF)
     bad <- vapply(future_boundaries, function(fb) fb$events <= candidate_events, logical(1))
     if (any(bad)) {
       stop("single_calibration_rep: candidate IF = ", IF, " (", candidate_events,
@@ -421,7 +460,8 @@ single_calibration_rep <- function(i,
     recruitment_model = recruitment_model
   )
 
-  censored_data <- cens_data(data, cens_method = "Events", cens_events = total_events * IF)
+  censored_data <- cens_data(data, cens_method = "Events",
+                             cens_events = n_events_at(total_events, IF))
   data <- censored_data$data
 
   posterior_samples <- update_priors(data,
@@ -429,7 +469,7 @@ single_calibration_rep <- function(i,
                                      effect_model  = effect_model,
                                      n_samples     = update_priors_sims)
 
-  BPP_outcome <- BPP_func(
+  PP_outcome <- PP_func(
     data,
     posterior_samples,
     control_distribution = control_model$dist,
@@ -447,27 +487,80 @@ single_calibration_rep <- function(i,
     n_sims               = PP_sims
   )
 
-  return(list(BPP_outcome = BPP_outcome, cens_time = censored_data$cens_time))
+  return(list(PP_outcome = PP_outcome, cens_time = censored_data$cens_time))
 }
 
 
 
-make_rpact_design_from_GSD_model <- function(GSD_model) {
+# Map the deprecated futility_type = "BPP" / GSD_model$BPP_threshold
+# spellings onto "PP" / GSD_model$kappa, with a warning. To be removed in
+# the next release.
+normalise_futility_spec <- function(GSD_model) {
+  if (identical(GSD_model$futility_type, "BPP")) {
+    warning("'BPP' is deprecated; use 'PP'", call. = FALSE)
+    GSD_model$futility_type <- "PP"
+  }
+  if (!is.null(GSD_model$BPP_threshold)) {
+    warning("GSD_model$BPP_threshold is deprecated; use GSD_model$kappa",
+            call. = FALSE)
+    if (is.null(GSD_model$kappa)) GSD_model$kappa <- GSD_model$BPP_threshold
+    GSD_model$BPP_threshold <- NULL
+  }
+  GSD_model
+}
 
-  alpha_IF       <- GSD_model$alpha_IF
+
+#' Build the group-sequential design for a GSD_model
+#'
+#' Builds the \code{rpact} group-sequential design used by
+#' \code{\link{calc_dte_assurance_adaptive}}, \code{\link{apply_GSD_to_trial}}
+#' and \code{\link{single_paired_rep}}. \code{GSD_model$alpha_spending} is
+#' the user-specified \emph{cumulative} alpha spent at each efficacy look
+#' \code{GSD_model$alpha_IF} (\code{rpact}'s \code{typeOfDesign = "asUser"}).
+#' For \code{"PP"} and \code{"MatchedZ"} futility, the futility look
+#' (\code{futility_IF}) is added to the information-rate grid with zero
+#' alpha spent, so its critical value is \code{Inf} and the efficacy critical
+#' values are exactly those of the efficacy-only design. For \code{"Beta"}
+#' futility, \code{GSD_model$beta_spending} is the cumulative beta spent at
+#' each \code{futility_IF} (\code{typeBetaSpending = "bsUser"}).
+#' Information fractions are rounded to 6 dp before they are compared.
+#'
+#' \code{make_rpact_design_from_GSD_model()} is the previous name, kept as an
+#' alias for one release.
+#'
+#' @param GSD_model A named list with \code{alpha_IF}, \code{alpha_spending},
+#'   \code{futility_type} (\code{"none"}, \code{"Beta"}, \code{"PP"} or
+#'   \code{"MatchedZ"}) and, for futility designs, \code{futility_IF} (and
+#'   \code{beta_spending} for \code{"Beta"}). See
+#'   \code{\link{calc_dte_assurance_adaptive}}.
+#'
+#' @return A list with \code{design} (the \code{rpact} design object;
+#'   \code{design$informationRates} and \code{design$criticalValues} give
+#'   the looks and their Z critical values), \code{IF_all},
+#'   \code{alpha_spending_full} and \code{beta_spending_full}.
+#'
+#' @examples
+#' # Efficacy look at 75% information and final analysis, with a PP futility
+#' # look at 50% information (zero alpha spent there)
+#' gsd <- make_gsd_design(list(alpha_IF = c(0.75, 1),
+#'                             alpha_spending = c(0.0125, 0.025),
+#'                             futility_type = "PP", futility_IF = 0.5))
+#' gsd$design$informationRates
+#' gsd$design$criticalValues
+#'
+#' @export
+make_gsd_design <- function(GSD_model) {
+
+  GSD_model      <- normalise_futility_spec(GSD_model)
+  # Information fractions are rounded to 6 dp before they are compared.
+  alpha_IF       <- round(GSD_model$alpha_IF, 6)
   alpha_spending <- GSD_model$alpha_spending
   fut_type       <- GSD_model$futility_type
 
-  # FIX: "MatchedZ" (D4/D5) needs futility_IF included in the information-
-  # rate grid, with zero alpha spent there, exactly like "BPP" (D3) already
-  # does -- this is what lets the futility look sit as a pure monitoring
-  # point without affecting the efficacy boundaries (confirmed empirically
-  # earlier: design objects built with vs. without this extra point give
-  # identical criticalValues). Previously only "Beta" and "BPP" were
-  # recognized here; "MatchedZ" fell through to the "Unknown futility type"
-  # error below.
-  if (fut_type %in% c("Beta", "BPP", "MatchedZ")) {
-    fut_IF <- GSD_model$futility_IF
+  # Futility looks join the information-rate grid (with zero alpha spent
+  # for "PP" and "MatchedZ").
+  if (fut_type %in% c("Beta", "PP", "MatchedZ")) {
+    fut_IF <- round(GSD_model$futility_IF, 6)
     IF_all <- sort(unique(c(alpha_IF, fut_IF)))
   } else if (fut_type == "none") {
     IF_all <- sort(unique(alpha_IF))
@@ -476,14 +569,6 @@ make_rpact_design_from_GSD_model <- function(GSD_model) {
   }
 
   K <- length(IF_all)
-
-  # ... rest of the function is UNCHANGED -- the later beta_spending_full
-  # and design-building logic already fall through correctly to the
-  # generic "no beta spending, typeBetaSpending='none'" path for any
-  # fut_type other than "Beta", so MatchedZ needs no further changes there.
-
-  # [unchanged: steps 4-6 exactly as before]
-
 
   #==================================================
   # 4. Expand alpha spending to the full IF grid
@@ -504,7 +589,7 @@ make_rpact_design_from_GSD_model <- function(GSD_model) {
   #==================================================
   if (fut_type == "Beta") {
 
-    beta_IF       <- GSD_model$futility_IF
+    beta_IF       <- round(GSD_model$futility_IF, 6)
     beta_spending <- GSD_model$beta_spending
 
     beta_spending_full <- numeric(K)
@@ -519,7 +604,7 @@ make_rpact_design_from_GSD_model <- function(GSD_model) {
     }
 
   } else {
-    # For "none" and "BPP", no frequentist futility spending in rpact
+    # For "none" and "PP", no frequentist futility spending in rpact
     beta_spending_full <- rep(0, K)
   }
 
@@ -536,7 +621,7 @@ make_rpact_design_from_GSD_model <- function(GSD_model) {
       userBetaSpending  = beta_spending_full
     )
 
-  } else {  # fut_type == "none" or "BPP"
+  } else {  # fut_type == "none", "PP" or "MatchedZ"
 
     design <- rpact::getDesignGroupSequential(
       typeOfDesign      = "asUser",
@@ -544,6 +629,27 @@ make_rpact_design_from_GSD_model <- function(GSD_model) {
       userAlphaSpending = alpha_spending_full,
       typeBetaSpending  = "none"
     )
+
+    # A futility look with zero alpha spent cannot change the efficacy
+    # critical values, but rpact's numerical integration can move them
+    # slightly when the futility look is close to an efficacy look (about
+    # 8e-5 for looks at 0.7 and 0.75). Use the efficacy-only design's values
+    # so that adding the look leaves them exactly unchanged.
+    if (K > length(alpha_IF)) {
+      crit_eff <- if (length(alpha_IF) == 1) {
+        stats::qnorm(1 - alpha_spending)
+      } else {
+        rpact::getDesignGroupSequential(
+          typeOfDesign      = "asUser",
+          informationRates  = alpha_IF,
+          userAlphaSpending = alpha_spending,
+          typeBetaSpending  = "none"
+        )$criticalValues
+      }
+      crit <- design$criticalValues
+      crit[match(alpha_IF, IF_all)] <- crit_eff
+      design$criticalValues <- crit
+    }
   }
 
   return(list(
@@ -553,6 +659,10 @@ make_rpact_design_from_GSD_model <- function(GSD_model) {
     beta_spending_full  = beta_spending_full
   ))
 }
+
+#' @rdname make_gsd_design
+#' @export
+make_rpact_design_from_GSD_model <- make_gsd_design
 
 single_grid_rep <- function(i,
                             n_c, n_t,
@@ -568,56 +678,31 @@ single_grid_rep <- function(i,
                             PP_sims = 2000,
                             seed = NULL) {
 
+  check_uniform_recruitment(recruitment_model, "single_grid_rep")
+
   if (!is.null(seed)) set.seed(seed * 10000 + i)
 
   # --- Simulate the true underlying trial ---
-  if (is.null(data_generating_model$gamma_c)) {
-    trial_data <- sim_dte(n_c, n_t,
-                          data_generating_model$lambda_c,
-                          delay_time = data_generating_model$delay_time,
-                          post_delay_HR = data_generating_model$post_delay_HR,
-                          dist = "Exponential")
-  } else {
-    trial_data <- sim_dte(n_c, n_t,
-                          data_generating_model$lambda_c,
-                          delay_time = data_generating_model$delay_time,
-                          post_delay_HR = data_generating_model$post_delay_HR,
-                          dist = "Weibull",
-                          gamma_c = data_generating_model$gamma_c)
-  }
+  trial_data <- simulate_trial_from_truth(data_generating_model, n_c, n_t,
+                                          recruitment_model)
 
-  trial_data <- add_recruitment_time(trial_data,
-                                     rec_method   = recruitment_model$method,
-                                     rec_period   = recruitment_model$period,
-                                     rec_power    = recruitment_model$power,
-                                     rec_rate     = recruitment_model$rate,
-                                     rec_duration = recruitment_model$duration)
-
-  trial_data <- trial_data[order(trial_data$pseudo_time), ]
-
-  # --- Interim look: compute BPP (independent of any lambda) ---
-  n_events_interim <- ceiling(futility_IF * total_events)
-  t_interim <- trial_data$pseudo_time[n_events_interim]
-
-  eligible_df <- trial_data %>% dplyr::filter(.data$rec_time <= t_interim)
-  eligible_df$status <- eligible_df$pseudo_time < t_interim
-  eligible_df$survival_time <- ifelse(eligible_df$status, eligible_df$time,
-                                      t_interim - eligible_df$rec_time)
-
-  sample_size_interim <- sum(trial_data$rec_time <= t_interim)
+  # --- Interim look: compute PP (independent of any kappa) ---
+  cut <- cens_data(trial_data, cens_method = "Events",
+                   cens_events = n_events_at(total_events, futility_IF))
+  t_interim <- cut$cens_time
+  eligible_df <- cut$data
+  sample_size_interim <- cut$sample_size
 
   posterior_samples <- update_priors(eligible_df,
                                      control_model = control_model,
                                      effect_model  = effect_model,
                                      n_samples     = update_priors_sims)
 
-  # FIX: capture the convergence / latent-state diagnostics update_priors()
-  # now computes, instead of discarding posterior_samples' attributes.
   converged <- attr(posterior_samples, "converged")
   Zp <- attr(posterior_samples, "Z_probs")
   if (is.null(Zp)) Zp <- c(P_Z1 = NA_real_, P_Z2 = NA_real_, P_Z3 = NA_real_)
 
-  BPP_out <- BPP_func(
+  PP_out <- PP_func(
     eligible_df, posterior_samples,
     control_distribution = control_model$dist,
     n_c_planned       = n_c,
@@ -628,7 +713,7 @@ single_grid_rep <- function(i,
     future_boundaries = future_boundaries,
     n_sims            = PP_sims
   )
-  BPP_val <- mean(BPP_out$BPP_df$success)
+  PP_val <- mean(PP_out$PP_df$success)
 
   # --- True continuation: what ACTUALLY happens to this real trial if it
   #     is never stopped for futility here. Applies the same
@@ -643,14 +728,7 @@ single_grid_rep <- function(i,
     is_last <- (k == length(future_boundaries))
 
     censored_k <- cens_data(trial_data, cens_method = "Events", cens_events = fb$events)
-    test_k <- survival_test(censored_k$data,
-                            analysis_method = analysis_model$method,
-                            alpha = analysis_model$alpha,
-                            alternative = analysis_model$alternative_hypothesis,
-                            rho = analysis_model$rho,
-                            gamma = analysis_model$gamma,
-                            t_star = analysis_model$t_star,
-                            s_star = analysis_model$s_star)
+    test_k <- run_test(censored_k$data, analysis_model)
 
     if (!is.na(test_k$Z) && test_k$Z > fb$crit) {
       continuation_success <- 1
@@ -667,29 +745,29 @@ single_grid_rep <- function(i,
   }
 
   data.frame(
-    BPP_val = BPP_val,
+    PP_val = PP_val,
     t_interim = t_interim,
     sample_size_interim = sample_size_interim,
     continuation_success = continuation_success,
     continuation_stop_time = continuation_stop_time,
     continuation_sample_size = continuation_sample_size,
-    converged = converged,          # NEW
-    P_Z1 = unname(Zp["P_Z1"]),      # NEW
-    P_Z2 = unname(Zp["P_Z2"]),      # NEW
-    P_Z3 = unname(Zp["P_Z3"])       # NEW
+    converged = converged,
+    P_Z1 = unname(Zp["P_Z1"]),
+    P_Z2 = unname(Zp["P_Z2"]),
+    P_Z3 = unname(Zp["P_Z3"])
   )
 }
 
 
-#' Simulate BPP values and true trial outcomes for BPP-threshold calibration
+#' Simulate PP values and true trial outcomes for PP-threshold calibration
 #'
 #' For a single fixed data-generating scenario, simulates \code{n_sims}
-#' trials, computes the Bayesian predictive probability (BPP) at the
+#' trials, computes the predictive probability (PP) at the
 #' futility look, and records what actually happens to each trial if it is
 #' allowed to continue through the remaining fixed decision points in
-#' \code{future_boundaries}. Because the BPP value does not depend on the
-#' futility threshold \eqn{\lambda}, the output can be summarised over a
-#' whole grid of thresholds afterwards via \code{\link{summarize_grid_by_lambda}}
+#' \code{future_boundaries}. Because the PP value does not depend on the
+#' futility threshold \eqn{\kappa}, the output can be summarised over a
+#' whole grid of thresholds afterwards via \code{\link{summarize_grid_by_kappa}}
 #' without re-simulating.
 #'
 #' @param n_c,n_t Planned number of patients in the control / treatment group.
@@ -703,10 +781,10 @@ single_grid_rep <- function(i,
 #'   simulate data: \code{lambda_c}, \code{delay_time}, \code{post_delay_HR},
 #'   and optionally \code{gamma_c} (Weibull control arm if supplied,
 #'   exponential otherwise).
-#' @param futility_IF Information fraction of the BPP futility look.
+#' @param futility_IF Information fraction of the PP futility look.
 #' @param total_events Maximum planned number of events.
 #' @param future_boundaries List of future fixed decision points, each a list
-#'   with \code{events} and \code{crit} (see \code{\link{BPP_func}}).
+#'   with \code{events} and \code{crit} (see \code{\link{PP_func}}).
 #' @param analysis_model Analysis specification (see \code{\link{survival_test}}).
 #' @param update_priors_sims Number of posterior samples per interim dataset.
 #' @param PP_sims Number of posterior-predictive simulations per interim dataset.
@@ -718,14 +796,16 @@ single_grid_rep <- function(i,
 #' @return A list with elements
 #'   \describe{
 #'     \item{\code{raw}}{A data frame with one row per simulated trial and
-#'       columns \code{BPP_val}, \code{t_interim}, \code{sample_size_interim},
+#'       columns \code{PP_val}, \code{t_interim}, \code{sample_size_interim},
 #'       \code{continuation_success}, \code{continuation_stop_time},
 #'       \code{continuation_sample_size}, \code{converged}, \code{P_Z1},
 #'       \code{P_Z2}, \code{P_Z3}.}
-#'     \item{\code{settings}}{The settings used, package version and a timestamp.}
+#'     \item{\code{settings}}{All arguments, plus the package, R, rjags and
+#'       JAGS versions, the git commit of the working directory, the
+#'       hostname and a timestamp.}
 #'   }
 #'
-#' @seealso \code{\link{summarize_grid_by_lambda}}, \code{\link{select_lambda_star}}
+#' @seealso \code{\link{summarize_grid_by_kappa}}, \code{\link{select_kappa_star}}
 #' @export
 run_calibration_grid <- function(n_c, n_t,
                                  control_model,
@@ -779,128 +859,159 @@ run_calibration_grid <- function(n_c, n_t,
 
   raw <- do.call(rbind, result)
 
-  settings <- list(
+  settings <- make_settings(
+    n_c = n_c, n_t = n_t, control_model = control_model,
+    effect_model = effect_model, recruitment_model = recruitment_model,
     data_generating_model = data_generating_model,
-    futility_IF = futility_IF,
-    total_events = total_events,
-    future_boundaries = future_boundaries,
-    update_priors_sims = update_priors_sims,
-    PP_sims = PP_sims,
-    n_sims = n_sims,
-    n_cores = n_cores,
-    seed = seed,
-    package_version = tryCatch(as.character(utils::packageVersion("DTEAssurance")),
-                               error = function(e) NA_character_),
-    timestamp = as.character(Sys.time())
+    futility_IF = futility_IF, total_events = total_events,
+    future_boundaries = future_boundaries, analysis_model = analysis_model,
+    update_priors_sims = update_priors_sims, PP_sims = PP_sims,
+    n_sims = n_sims, n_cores = n_cores, seed = seed
   )
 
   list(raw = raw, settings = settings)
 }
 
 
-#' Summarise calibration-grid output over a grid of BPP futility thresholds
+#' Summarise calibration output over a grid of PP futility thresholds
 #'
-#' Applies each candidate BPP futility threshold \eqn{\lambda} to the raw
-#' output of \code{\link{run_calibration_grid}}: a trial stops for futility
-#' if its interim BPP is below \eqn{\lambda}, otherwise it takes its
-#' simulated continuation outcome.
+#' Applies each candidate PP futility threshold \eqn{\kappa} to raw
+#' replicate output (from \code{\link{run_paired_scenario}} or
+#' \code{\link{run_calibration_grid}}): a trial stops for futility if its
+#' interim PP is below \eqn{\kappa}, otherwise it takes its continuation
+#' (D2) outcome. At \code{kappa = 0} no trial stops, so the result is the D2
+#' operating characteristics.
 #'
-#' @param raw The \code{raw} element returned by \code{\link{run_calibration_grid}}.
-#' @param lambda_grid Numeric vector of candidate BPP thresholds.
-#' @param conf_level Confidence level for the one-sided lower confidence
-#'   bound on power (Clopper-Pearson; default 0.90).
+#' @param raw A data frame with columns \code{PP_val},
+#'   \code{continuation_success}, \code{continuation_sample_size},
+#'   \code{continuation_stop_time}, \code{sample_size_interim},
+#'   \code{t_interim} and (if \code{exclude_nonconverged = TRUE})
+#'   \code{converged}.
+#' @param kappa_grid Numeric vector of candidate PP thresholds.
+#' @param lcb_level Confidence level of the one-sided exact
+#'   (Clopper-Pearson) lower bound on power (default 0.95).
+#' @param exclude_nonconverged If \code{TRUE}, drop replicates whose interim
+#'   MCMC did not converge (\code{converged} \code{FALSE} or \code{NA}).
+#'   Default \code{FALSE}.
 #'
-#' @return A data frame with one row per \eqn{\lambda} and columns
-#'   \code{lambda}, \code{P_early_fut}, \code{power_or_typeI},
-#'   \code{power_LCB}, \code{ESS} (expected sample size) and
-#'   \code{duration} (expected trial duration).
+#' @return A data frame with one row per \eqn{\kappa} and columns
+#'   \code{kappa}, \code{n} (replicates used), \code{n_NA_dropped}
+#'   (replicates dropped because \code{PP_val} was \code{NA}, with a
+#'   warning), \code{P_early_fut}, \code{power_or_typeI}, \code{power_SE},
+#'   \code{power_LCB} (one-sided exact lower bound at level
+#'   \code{lcb_level}, 95\% by default), \code{ESS} (expected sample
+#'   size), \code{ESS_SE} and \code{duration} (expected trial duration).
 #'
-#' @seealso \code{\link{run_calibration_grid}}, \code{\link{select_lambda_star}}
+#' @seealso \code{\link{select_kappa_star}}, \code{\link{compute_relative_floors}}
 #' @export
-summarize_grid_by_lambda <- function(raw, lambda_grid, conf_level = 0.90) {
-
+summarize_grid_by_kappa <- function(raw, kappa_grid, lcb_level = 0.95,
+                                    exclude_nonconverged = FALSE) {
+  if (exclude_nonconverged) raw <- raw[!is.na(raw$converged) & raw$converged, ]
+  n_na <- sum(is.na(raw$PP_val))
+  if (n_na > 0) {
+    warning(n_na, " replicates have NA PP_val; dropping them. Investigate.")
+    raw <- raw[!is.na(raw$PP_val), ]
+  }
   n <- nrow(raw)
-
-  out <- lapply(lambda_grid, function(lam) {
-    stop_for_fut <- raw$BPP_val < lam
-
+  out <- lapply(kappa_grid, function(kappa) {
+    stop_for_fut <- raw$PP_val < kappa
     success  <- ifelse(stop_for_fut, 0, raw$continuation_success)
     sample_n <- ifelse(stop_for_fut, raw$sample_size_interim, raw$continuation_sample_size)
     duration <- ifelse(stop_for_fut, raw$t_interim, raw$continuation_stop_time)
-
     n_success <- sum(success)
     phat <- n_success / n
-    lcb <- stats::binom.test(n_success, n, conf.level = conf_level)$conf.int[1]
-
-    data.frame(
-      lambda = lam,
-      P_early_fut = mean(stop_for_fut),
-      power_or_typeI = phat,
-      power_LCB = lcb,
-      ESS = mean(sample_n),
-      duration = mean(duration)
-    )
+    bt <- stats::binom.test(n_success, n, alternative = "greater", conf.level = lcb_level)
+    data.frame(kappa = kappa, n = n, n_NA_dropped = n_na,
+               P_early_fut = mean(stop_for_fut),
+               power_or_typeI = phat, power_SE = sqrt(phat * (1 - phat) / n),
+               power_LCB = bt$conf.int[1],          # one-sided exact (Clopper-Pearson) lower bound
+               ESS = mean(sample_n), ESS_SE = stats::sd(sample_n) / sqrt(n),
+               duration = mean(duration))
   })
-
   do.call(rbind, out)
 }
 
 
-#' Select the BPP futility threshold minimising null expected sample size
+#' Relative power floors for kappa selection
 #'
-#' Among candidate thresholds for which the lower confidence bound on power
-#' is at least \code{power_floor} under every alternative scenario, selects
-#' the one with the smallest expected sample size under the null scenario.
+#' For each alternative scenario, the D2 power (the power with no futility
+#' stopping, i.e. at \code{kappa = 0}) minus \code{margin}. Pass the result
+#' as \code{power_floor} to \code{\link{select_kappa_star}}.
 #'
-#' @param summary_by_scenario A named list of data frames, one per scenario,
-#'   each as returned by \code{\link{summarize_grid_by_lambda}} over the same
-#'   \code{lambda_grid}.
-#' @param power_floor Minimum acceptable lower confidence bound on power.
-#' @param null_scenario Name of the null scenario in \code{summary_by_scenario}.
+#' @param raw_by_scenario A named list of raw replicate data frames (each
+#'   with a \code{continuation_success} column).
 #' @param alt_scenarios Character vector of alternative scenario names.
+#' @param margin Allowed loss of power relative to D2 (default 0.05).
 #'
-#' @return A list with \code{lambda_star} (the selected threshold, or
-#'   \code{NA} with a warning if none is feasible) and
-#'   \code{feasibility_table}.
+#' @return A named numeric vector with one floor per alternative scenario.
 #'
-#' @seealso \code{\link{run_calibration_grid}}, \code{\link{summarize_grid_by_lambda}}
+#' @seealso \code{\link{select_kappa_star}}
 #' @export
-select_lambda_star <- function(summary_by_scenario, power_floor, null_scenario, alt_scenarios) {
-
-  lambda_grid <- summary_by_scenario[[null_scenario]]$lambda
-
-  feasible <- rep(TRUE, length(lambda_grid))
-  for (s in alt_scenarios) {
-    stopifnot(identical(summary_by_scenario[[s]]$lambda, lambda_grid))
-    feasible <- feasible & (summary_by_scenario[[s]]$power_LCB >= power_floor)
-  }
-
-  null_ESS <- summary_by_scenario[[null_scenario]]$ESS
-
-  feasibility_table <- data.frame(
-    lambda = lambda_grid,
-    null_ESS = null_ESS,
-    feasible = feasible
-  )
-  for (s in alt_scenarios) {
-    feasibility_table[[paste0("power_LCB_", s)]] <- summary_by_scenario[[s]]$power_LCB
-  }
-
-  if (!any(feasible)) {
-    warning("select_lambda_star: no candidate lambda satisfies power_LCB >= ",
-            power_floor, " under all of: ", paste(alt_scenarios, collapse = ", "),
-            ". Returning lambda_star = NA; widen the lambda grid, lower the ",
-            "power floor, or increase n_sims (the LCB may be overly ",
-            "conservative with too few replicates).")
-    return(list(lambda_star = NA_real_, feasibility_table = feasibility_table))
-  }
-
-  lambda_star <- lambda_grid[feasible][which.min(null_ESS[feasible])]
-
-  list(lambda_star = lambda_star, feasibility_table = feasibility_table)
+compute_relative_floors <- function(raw_by_scenario, alt_scenarios, margin = 0.05) {
+  vapply(alt_scenarios, function(s) mean(raw_by_scenario[[s]]$continuation_success) - margin, numeric(1))
 }
 
 
+#' Select the PP futility threshold minimising null expected sample size
+#'
+#' Among candidate thresholds for which the one-sided 95\% exact lower
+#' confidence bound on power (\code{power_LCB} from
+#' \code{\link{summarize_grid_by_kappa}}) is at least the floor under every
+#' alternative scenario, selects the one with the smallest expected sample
+#' size under the null scenario. A threshold with an \code{NA} lower bound in
+#' any alternative scenario is infeasible. Ties in null expected sample size
+#' (within 1e-8) are broken in favour of the \emph{larger} kappa.
+#'
+#' @param summary_by_scenario A named list of data frames, one per scenario,
+#'   each as returned by \code{\link{summarize_grid_by_kappa}} over the same
+#'   \code{kappa_grid}.
+#' @param power_floor Minimum acceptable lower confidence bound on power:
+#'   a scalar applied to every alternative scenario, or a named numeric
+#'   vector with one entry per alternative scenario (e.g. from
+#'   \code{\link{compute_relative_floors}}).
+#' @param null_scenario Name of the null scenario in \code{summary_by_scenario}.
+#' @param alt_scenarios Character vector of alternative scenario names.
+#'
+#' @return A list with \code{kappa_star} (the selected threshold, or
+#'   \code{NA} with a warning if none is feasible) and
+#'   \code{feasibility_table} (\code{kappa}, \code{null_ESS},
+#'   \code{feasible} and, per alternative scenario, \code{power_<s>},
+#'   \code{power_LCB_<s>} and \code{floor_<s>}).
+#'
+#' @seealso \code{\link{summarize_grid_by_kappa}}, \code{\link{compute_relative_floors}}
+#' @export
+select_kappa_star <- function(summary_by_scenario, power_floor, null_scenario, alt_scenarios) {
+  stopifnot(null_scenario %in% names(summary_by_scenario),
+            all(alt_scenarios %in% names(summary_by_scenario)))
+  kappa_grid <- summary_by_scenario[[null_scenario]]$kappa
+  null_ESS   <- summary_by_scenario[[null_scenario]]$ESS
+  floors <- if (length(power_floor) == 1) stats::setNames(rep(power_floor, length(alt_scenarios)), alt_scenarios) else power_floor
+  stopifnot(all(alt_scenarios %in% names(floors)))
+  feasible <- rep(TRUE, length(kappa_grid))
+  for (s in alt_scenarios) {
+    stopifnot(isTRUE(all.equal(summary_by_scenario[[s]]$kappa, kappa_grid)))
+    ok <- summary_by_scenario[[s]]$power_LCB >= floors[[s]]
+    feasible <- feasible & !is.na(ok) & ok                      # NA => infeasible
+  }
+  tab <- data.frame(kappa = kappa_grid, null_ESS = null_ESS, feasible = feasible)
+  for (s in alt_scenarios) {
+    sm <- summary_by_scenario[[s]]
+    tab[[paste0("power_", s)]]     <- sm$power_or_typeI
+    tab[[paste0("power_LCB_", s)]] <- sm$power_LCB
+    tab[[paste0("floor_", s)]]     <- floors[[s]]
+  }
+  if (!any(feasible)) {
+    warning("select_kappa_star: no feasible kappa. Returning NA.")
+    return(list(kappa_star = NA_real_, feasibility_table = tab))
+  }
+  k_feas <- kappa_grid[feasible]; ess_feas <- null_ESS[feasible]
+  tied <- ess_feas <= min(ess_feas) + 1e-8
+  list(kappa_star = max(k_feas[tied]),                          # ties -> LARGER kappa
+       feasibility_table = tab)
+}
+
+
+# Deprecated (to be removed in a future release).
 summarize_convergence <- function(posterior_list) {
 
   converged_vec <- vapply(posterior_list, function(x) {
@@ -933,7 +1044,7 @@ summarize_convergence <- function(posterior_list) {
 #'
 #' Single replicate used by \code{\link{calibrate_matched_futility_boundary}}:
 #' simulates one trial under a fixed data-generating scenario, censors it at
-#' \code{ceiling(futility_IF * total_events)} events, and returns the test
+#' \code{floor(futility_IF * total_events)} events, and returns the test
 #' statistic from \code{\link{survival_test}} (positive Z favours treatment).
 #'
 #' @param i Replicate index (used with \code{seed}).
@@ -958,37 +1069,13 @@ single_matched_futility_rep <- function(i, n_c, n_t, data_generating_model,
 
   if (!is.null(seed)) set.seed(seed * 10000 + i)
 
-  if (is.null(data_generating_model$gamma_c)) {
-    trial_data <- sim_dte(n_c, n_t, data_generating_model$lambda_c,
-                          delay_time = data_generating_model$delay_time,
-                          post_delay_HR = data_generating_model$post_delay_HR,
-                          dist = "Exponential")
-  } else {
-    trial_data <- sim_dte(n_c, n_t, data_generating_model$lambda_c,
-                          delay_time = data_generating_model$delay_time,
-                          post_delay_HR = data_generating_model$post_delay_HR,
-                          dist = "Weibull", gamma_c = data_generating_model$gamma_c)
-  }
+  trial_data <- simulate_trial_from_truth(data_generating_model, n_c, n_t,
+                                          recruitment_model)
 
-  trial_data <- add_recruitment_time(trial_data,
-                                     rec_method   = recruitment_model$method,
-                                     rec_period   = recruitment_model$period,
-                                     rec_power    = recruitment_model$power,
-                                     rec_rate     = recruitment_model$rate,
-                                     rec_duration = recruitment_model$duration)
+  censored <- cens_data(trial_data, cens_method = "Events",
+                        cens_events = n_events_at(total_events, futility_IF))
 
-  n_events_interim <- ceiling(futility_IF * total_events)
-  censored <- cens_data(trial_data[order(trial_data$pseudo_time), ],
-                        cens_method = "Events", cens_events = n_events_interim)
-
-  Z <- survival_test(censored$data,
-                     analysis_method = analysis_model$method,
-                     alpha           = analysis_model$alpha,
-                     alternative     = analysis_model$alternative_hypothesis,
-                     rho             = analysis_model$rho,
-                     gamma           = analysis_model$gamma,
-                     t_star          = analysis_model$t_star,
-                     s_star          = analysis_model$s_star)$Z
+  Z <- run_test(censored$data, analysis_model)$Z
 
   data.frame(Z = Z)
 }
@@ -1021,7 +1108,9 @@ single_matched_futility_rep <- function(i, n_c, n_t, data_generating_model,
 #' @param seed Optional integer seed.
 #'
 #' @return A list with \code{boundary}, \code{scenario_futility_rates},
-#'   \code{raw_Z_by_scenario} and \code{settings}.
+#'   \code{raw_Z_by_scenario} and \code{settings} (all arguments, plus the
+#'   package, R, rjags and JAGS versions, the git commit of the working
+#'   directory, the hostname and a timestamp).
 #'
 #' @examples
 #' scenarios <- list(
@@ -1088,17 +1177,12 @@ calibrate_matched_futility_boundary <- function(n_c, n_t,
     mean(Z < boundary, na.rm = TRUE)
   }, numeric(1))
 
-  settings <- list(
-    futility_IF = futility_IF,
-    total_events = total_events,
+  settings <- make_settings(
+    n_c = n_c, n_t = n_t, recruitment_model = recruitment_model,
+    futility_IF = futility_IF, total_events = total_events,
     analysis_model = analysis_model,
     target_null_futility_rate = target_null_futility_rate,
-    n_sims = n_sims,
-    n_cores = n_cores,
-    seed = seed,
-    package_version = tryCatch(as.character(utils::packageVersion("DTEAssurance")),
-                               error = function(e) NA_character_),
-    timestamp = as.character(Sys.time())
+    scenarios = scenarios, n_sims = n_sims, n_cores = n_cores, seed = seed
   )
 
   list(boundary = boundary,

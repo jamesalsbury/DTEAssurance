@@ -16,12 +16,12 @@ test_that("single_calibration_rep returns correctly structured output", {
     HR = rep(0.7, 5)
   )
 
-  fake_BPP <- list(BPP_df = data.frame(success = 1, Z_val = 2))
+  fake_PP <- list(PP_df = data.frame(success = 1, Z_val = 2))
 
   local_mocked_bindings(
     simulate_trial_with_recruitment = function(...) fake_data,
     update_priors = function(...) fake_posterior,
-    BPP_func = function(...) fake_BPP
+    PP_func = function(...) fake_PP
   )
 
   control_model <- list(dist = "Exponential", parameter_mode = "Fixed",
@@ -46,9 +46,9 @@ test_that("single_calibration_rep returns correctly structured output", {
 
   # --- structural checks ---
   expect_type(out, "list")
-  expect_true("BPP_outcome" %in% names(out))
+  expect_true("PP_outcome" %in% names(out))
   expect_true("cens_time" %in% names(out))
 
-  expect_true(is.list(out$BPP_outcome))
+  expect_true(is.list(out$PP_outcome))
   expect_true(is.numeric(out$cens_time))
 })

@@ -8,11 +8,12 @@ survival_test(
   data,
   analysis_method = "LRT",
   alternative = "one.sided",
-  alpha = 0.05,
+  alpha,
   rho = 0,
   gamma = 0,
   t_star = NULL,
-  s_star = NULL
+  s_star = NULL,
+  return_HR = TRUE
 )
 }
 \arguments{
@@ -20,9 +21,11 @@ survival_test(
 
 \item{analysis_method}{Method of analysis: \code{"LRT"} (default) for standard log-rank test, \code{"WLRT"} for a Fleming-Harrington-family weighted log-rank test, or \code{"MW"} for the modestly-weighted log-rank test.}
 
-\item{alternative}{String specifying the alternative hypothesis. Must be one of \code{"one.sided"} or \code{"two.sided"} (default).}
+\item{alternative}{String specifying the alternative hypothesis: \code{"one.sided"} (default) or \code{"two.sided"}.}
 
-\item{alpha}{Type I error threshold for significance testing.}
+\item{alpha}{Type I error level for the significance test (required, no
+default). Pass \code{NULL} if only \code{Z} is needed; \code{Signif} is
+then \code{NA}.}
 
 \item{rho}{Rho parameter for the Fleming-Harrington weighted log-rank test.}
 
@@ -31,49 +34,33 @@ survival_test(
 \item{t_star}{Parameter \eqn{t^*} used in the modestly weighted test.}
 
 \item{s_star}{Parameter \eqn{s^*} used in the modestly weighted test.}
+
+\item{return_HR}{If \code{TRUE} (default), fit a Cox model and return the
+estimated hazard ratio as \code{observed_HR}. If \code{FALSE}, the Cox
+fit is skipped (it does not affect \code{Signif} or \code{Z}) and
+\code{observed_HR} is \code{NA}. The group-sequential and predictive
+probability code uses \code{FALSE}.}
 }
 \value{
 A list containing:
 \describe{
-\item{Signif}{Logical indicator of statistical significance based on the chosen test and alpha level.}
-\item{observed_HR}{Estimated hazard ratio from a Cox proportional hazards model.}
-\item{Z}{Signed test statistic, oriented so that positive values favour
-the arm coded as "Treatment" (or the second factor level of
-\code{group}, alphabetically, if levels are unlabelled) -- i.e.
-positive Z corresponds to a hazard ratio below 1 (benefit). This
-convention is consistent across all three methods (verified by
-diagnostic: see notes below) and is what group-sequential boundary
-comparisons in \code{apply_GSD_to_trial}/\code{BPP_func} rely on.}
+\item{Signif}{Logical: whether the test is significant at level
+\code{alpha}. \code{FALSE} if \code{Z} is \code{NA}; \code{NA} if
+\code{alpha} is \code{NULL}.}
+\item{observed_HR}{Estimated hazard ratio from a Cox proportional hazards
+model, or \code{NA} if \code{return_HR = FALSE}.}
+\item{Z}{Signed test statistic. For all three methods, positive values
+favour the arm coded as "Treatment" (the second factor level of
+\code{group}), i.e. positive Z corresponds to a hazard ratio below 1.}
 }
 }
 \description{
 Performs a survival analysis using the standard log-rank test (LRT), a
 weighted log-rank test in the Fleming-Harrington family (WLRT), or the
-modestly-weighted log-rank test of Magirr and Burman (MW). The function
-estimates the hazard ratio and determines whether the result is
-statistically significant based on the specified alpha level and
-alternative hypothesis.
+modestly-weighted log-rank test of Magirr and Burman (MW), and determines
+whether the result is statistically significant at the specified alpha
+level and alternative hypothesis.
 }
-\section{Sign convention notes (verified by diagnostic, 2026)}{
-
-\itemize{
-\item \strong{LRT}: uses \code{survival::survdiff()}'s own
-\code{(exp[2] - obs[2])} construction, correctly signed by
-construction (positive = benefit).
-\item \strong{WLRT}: uses \code{nph::logrank.test()}'s native
-\code{$test$z} directly. Confirmed correctly signed against LRT on
-an unambiguous large-benefit case (HR = 0.21: LRT Z = 13.20,
-WLRT(rho=0,gamma=1) Z = 13.96 -- same sign, comparable magnitude).
-\item \strong{MW}: \code{nphRCT::wlrt()}'s \code{$z} uses the
-OPPOSITE sign convention to \code{survdiff()} (confirmed by
-diagnostic: on the same unambiguous large-benefit case, HR = 0.245,
-LRT gave Z = +12.27 while raw \code{wlrt()$z} gave -12.30 -- same
-magnitude, flipped sign). The sign is therefore negated below
-(\code{Z <- -test$z}) so that positive Z consistently means benefit
-across all three methods.
-}
-}
-
 \examples{
 set.seed(123)
 df <- data.frame(

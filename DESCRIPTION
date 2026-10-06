@@ -1,7 +1,7 @@
 Package: DTEAssurance
 Type: Package
 Title: Assurance Methods for Clinical Trials with a Delayed Treatment Effect
-Version: 1.2.0
+Version: 1.3.0
 Authors@R: 
     person("James", "Salsbury", email = "jsalsbury1@sheffield.ac.uk",
            role = c("aut", "cre"),
@@ -25,7 +25,6 @@ Imports:
     SHELF,
     stats,
     survival,
-    nleqslv,
     nph,
     nphRCT,
     dplyr,
@@ -35,6 +34,7 @@ Imports:
     future.apply
 Suggests:
     testthat (>= 3.0.0),
+    nleqslv,
     rjags,
     coda,
     shiny,

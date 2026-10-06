@@ -1,6 +1,6 @@
 # Regression checks: every supported futility type runs end-to-end through
 # apply_GSD_to_trial() and calc_dte_assurance_adaptive(), and the
-# Converged column is populated only for BPP designs.
+# Converged column is populated only for PP designs.
 
 futility_setup <- function() {
   control_model <- list(dist = "Exponential", parameter_mode = "Distribution",
@@ -21,8 +21,8 @@ futility_setup <- function() {
                alpha_IF = c(0.75, 1))
   GSD_models <- list(
     none     = c(base, list(futility_type = "none")),
-    BPP      = c(base, list(futility_type = "BPP", futility_IF = 0.5,
-                            BPP_threshold = 0.2)),
+    PP       = c(base, list(futility_type = "PP", futility_IF = 0.5,
+                            kappa = 0.2)),
     MatchedZ = c(base, list(futility_type = "MatchedZ", futility_IF = 0.5,
                             futility_boundary_Z = 0))
   )
@@ -31,14 +31,14 @@ futility_setup <- function() {
        analysis_model = analysis_model, GSD_models = GSD_models)
 }
 
-test_that("apply_GSD_to_trial runs for none, BPP and MatchedZ", {
+test_that("apply_GSD_to_trial runs for none, PP and MatchedZ", {
   skip_if_not_installed("rjags")
   s <- futility_setup()
   set.seed(42)
 
   for (nm in names(s$GSD_models)) {
     G <- s$GSD_models[[nm]]
-    design <- make_rpact_design_from_GSD_model(G)$design
+    design <- make_gsd_design(G)$design
     converged <- vapply(seq_len(3), function(i) {
       trial <- simulate_trial_with_recruitment(75, 75, s$control_model,
                                                s$effect_model,
@@ -46,14 +46,14 @@ test_that("apply_GSD_to_trial runs for none, BPP and MatchedZ", {
       out <- apply_GSD_to_trial(75, 75, trial, design, G$events, G,
                                 s$control_model, s$effect_model,
                                 s$recruitment_model, s$analysis_model,
-                                update_priors_sims = 100, n_BPP_sims = 20)
+                                update_priors_sims = 100, PP_sims = 20)
       expect_true(out$decision %in% c("Stop for efficacy", "Stop for futility",
                                       "Successful at final",
                                       "Unsuccessful at final"))
       as.logical(out$converged)
     }, logical(1))
 
-    if (nm == "BPP") {
+    if (nm == "PP") {
       expect_false(anyNA(converged), info = nm)
     } else {
       expect_true(all(is.na(converged)), info = nm)
@@ -65,7 +65,7 @@ test_that("apply_GSD_to_trial stops for futility under MatchedZ when Z is below 
   s <- futility_setup()
   G <- s$GSD_models$MatchedZ
   G$futility_boundary_Z <- 100  # impossible to exceed -> always stop at the futility look
-  design <- make_rpact_design_from_GSD_model(G)$design
+  design <- make_gsd_design(G)$design
   set.seed(7)
   trial <- simulate_trial_with_recruitment(75, 75, s$control_model,
                                            s$effect_model, s$recruitment_model)
@@ -74,7 +74,7 @@ test_that("apply_GSD_to_trial stops for futility under MatchedZ when Z is below 
   expect_equal(out$decision, "Stop for futility")
 })
 
-test_that("calc_dte_assurance_adaptive runs for none, BPP and MatchedZ", {
+test_that("calc_dte_assurance_adaptive runs for none, PP and MatchedZ", {
   skip_if_not_installed("rjags")
   s <- futility_setup()
   set.seed(42)
@@ -83,13 +83,15 @@ test_that("calc_dte_assurance_adaptive runs for none, BPP and MatchedZ", {
     res <- calc_dte_assurance_adaptive(
       75, 75, s$control_model, s$effect_model, s$recruitment_model,
       s$GSD_models[[nm]], s$analysis_model,
-      update_priors_sims = 100, n_BPP_sims = 20, n_sims = 3
+      update_priors_sims = 100, PP_sims = 20, n_sims = 3
     )
     expect_equal(names(res), c("Trial", "Decision", "StopTime", "SampleSize",
-                               "Success", "Converged"))
+                               "Success", "Converged", "PP_val",
+                               "P_Z1", "P_Z2", "P_Z3"))
+    expect_false(is.null(attr(res, "settings")))
     expect_equal(res$Success,
                  res$Decision %in% c("Stop for efficacy", "Successful at final"))
-    if (nm == "BPP") {
+    if (nm == "PP") {
       expect_false(anyNA(res$Converged), info = nm)
     } else {
       expect_true(all(is.na(res$Converged)), info = nm)

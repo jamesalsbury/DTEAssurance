@@ -45,7 +45,9 @@ futility under the null scenario.}
 }
 \value{
 A list with \code{boundary}, \code{scenario_futility_rates},
-\code{raw_Z_by_scenario} and \code{settings}.
+\code{raw_Z_by_scenario} and \code{settings} (all arguments, plus the
+package, R, rjags and JAGS versions, the git commit of the working
+directory, the hostname and a timestamp).
 }
 \description{
 Finds the Z-statistic futility boundary at \code{futility_IF} such that

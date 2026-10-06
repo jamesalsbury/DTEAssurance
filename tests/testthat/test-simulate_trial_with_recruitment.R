@@ -119,7 +119,7 @@ test_that("simulate_trial_with_recruitment works: Weibull + Distribution", {
     parameter_mode="Distribution",
     t1=3, t2=6,
     t1_Beta_a=5, t1_Beta_b=5,
-    diff_Beta_a=3, diff_Beta_b=3
+    diff_Beta_a=3, diff_Beta_b=17   # S(t2) = S(t1) - diff stays positive in practice
   )
 
   effect_model <- list(
@@ -135,6 +135,12 @@ test_that("simulate_trial_with_recruitment works: Weibull + Distribution", {
   out <- simulate_trial_with_recruitment(12,12,control_model,effect_model,recruitment_model)
 
   expect_equal(nrow(out), 24)
+
+  # landmark draws with S(t2) <= 0 do not define a Weibull: informative error
+  bad <- control_model
+  bad$diff_Beta_a <- 50; bad$diff_Beta_b <- 1   # diff close to 1 > S(t1)
+  expect_error(simulate_trial_with_recruitment(12, 12, bad, effect_model, recruitment_model),
+               "need 1 > s1 > s2 > 0")
 })
 
 

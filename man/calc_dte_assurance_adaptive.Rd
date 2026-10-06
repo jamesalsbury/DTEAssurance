@@ -12,8 +12,8 @@ calc_dte_assurance_adaptive(
   recruitment_model,
   GSD_model,
   analysis_model = NULL,
-  update_priors_sims = 1000,
-  n_BPP_sims = 1000,
+  update_priors_sims = NULL,
+  PP_sims = NULL,
   n_sims = 1000
 )
 }
@@ -51,19 +51,25 @@ calc_dte_assurance_adaptive(
 \item{GSD_model}{A named list specifying the group sequential design:
 \itemize{
 \item \code{events}: Total number of events
-\item \code{alpha_spending}: Cumulative alpha spending vector
+\item \code{alpha_spending}: User-specified \emph{cumulative} alpha
+spent by each efficacy look (one value per element of
+\code{alpha_IF}; the design uses \code{rpact}'s
+\code{typeOfDesign = "asUser"}). Futility looks are added to the
+design with zero alpha spent, so they do not change the efficacy
+critical values.
 \item \code{alpha_IF}: Information Fraction(s) at which we look for efficacy
 \item \code{futility_type}: One of \code{"none"}, \code{"Beta"}
-(pre-specified beta-spending, via \code{rpact}), \code{"BPP"}
-(Bayesian Predictive Probability futility, D3-style), or
+(pre-specified beta-spending, via \code{rpact}), \code{"PP"}
+(predictive probability futility, D3-style), or
 \code{"MatchedZ"} (a fixed, externally-calibrated Z-statistic
-cutoff, non-binding -- D4/D5-style; see
+cutoff, D4/D5-style; the rule is applied as binding, i.e. the
+simulated trial stops when Z falls below the cutoff; see
 \code{\link{calibrate_matched_futility_boundary}} for how to
 obtain \code{futility_boundary_Z}).
 \item \code{futility_IF}: Information Fraction at which we look for futility
-(required for \code{"BPP"} and \code{"MatchedZ"}).
+(required for \code{"PP"} and \code{"MatchedZ"}).
 \item \code{beta_spending}: Cumulative beta spending vector (\code{"Beta"} only).
-\item \code{BPP_threshold}: BPP value below which we stop for futility (\code{"BPP"} only).
+\item \code{kappa}: PP value below which we stop for futility (\code{"PP"} only).
 \item \code{futility_boundary_Z}: Z-statistic value below which we
 stop for futility (\code{"MatchedZ"} only).
 }}
@@ -76,14 +82,13 @@ stop for futility (\code{"MatchedZ"} only).
 \item \code{rho}, \code{gamma}, \code{t_star}, \code{s_star}: additional parameters for WLRT or MW (if applicable).
 }}
 
-\item{update_priors_sims}{Number of posterior samples per interim
-dataset, passed to \code{\link{update_priors}} (default 1000). Only
-used when \code{GSD_model$futility_type == "BPP"}; harmless (ignored)
-otherwise.}
+\item{update_priors_sims}{Number of posterior samples per chain for
+each interim dataset, passed to \code{\link{update_priors}}. Required
+when \code{GSD_model$futility_type == "PP"}; ignored otherwise.}
 
-\item{n_BPP_sims}{Number of predictive simulations per interim dataset,
-passed to \code{\link{BPP_func}} (default 1000). Only used when
-\code{GSD_model$futility_type == "BPP"}; harmless (ignored) otherwise.}
+\item{PP_sims}{Number of predictive simulations per interim dataset,
+passed to \code{\link{PP_func}}. Required when
+\code{GSD_model$futility_type == "PP"}; ignored otherwise.}
 
 \item{n_sims}{Number of simulations to run (default = 1000)}
 }
@@ -100,37 +105,24 @@ directly rather than deriving success/failure independently.}
 \item{SampleSize}{Total sample size at the time of decision}
 \item{Success}{Logical recode of \code{Decision} for convenience:
 \code{TRUE} if \code{Decision \%in\% c("Stop for efficacy",
-    "Successful at final")}, \code{FALSE} otherwise. Derived directly
-and only from \code{Decision} -- see "Bug fix" below.}
-\item{Converged}{For \code{"BPP"} designs, whether the interim MCMC
+    "Successful at final")}, \code{FALSE} otherwise.}
+\item{Converged}{For \code{"PP"} designs, whether the interim MCMC
 fit converged (see \code{\link{update_priors}}); \code{NA} for
 other futility types, which involve no MCMC step.}
+\item{PP_val}{For \code{"PP"} designs, the predictive probability at
+the futility look; \code{NA} otherwise (or if the trial stopped for
+efficacy before the futility look).}
+\item{P_Z1, P_Z2, P_Z3}{For \code{"PP"} designs, the posterior
+probabilities of the three latent states at the futility look;
+\code{NA} otherwise.}
 }
-Class: \code{data.frame}
+Class: \code{data.frame}, with attribute \code{settings}: a list of
+all arguments, plus the package, R, rjags and JAGS versions, the git
+commit of the working directory, the hostname and a timestamp.
 }
 \description{
 Simulates assurance and operating characteristics for a group sequential trial under prior uncertainty about a delayed treatment effect. The function integrates beliefs about control survival, treatment delay, post-delay hazard ratio, recruitment, and group sequential design (GSD) parameters.
 }
-\section{Bug fix (this version)}{
- previous versions of this function
-independently recomputed a separate \code{Final_Decision} field from
-a hardcoded Cox proportional-hazards Wald statistic at a flat
-\code{qnorm(0.975)} threshold, regardless of \code{analysis_model$method}
-or the design's actual group-sequential boundaries. This was a
-second, separate copy of the same bug fixed in
-\code{apply_GSD_to_trial()} (see its documentation), and could
-silently disagree with the trial's own \code{Decision}. This version
-removes that duplicate computation entirely: \code{Success} is now
-derived only from \code{Decision}, which is itself computed once,
-correctly, inside \code{apply_GSD_to_trial()}, via
-\code{analysis_model$method} and the design's real boundaries. This
-also collapses what were previously three near-duplicate branches
-(one per futility type) into a single call path, since
-\code{apply_GSD_to_trial()} already dispatches correctly on
-\code{GSD_model$futility_type} -- removing the code duplication that
-allowed the two copies of the bug to drift apart in the first place.
-}
-
 \examples{
 set.seed(123)
 control_model <- list(dist = "Exponential", parameter_mode = "Fixed",

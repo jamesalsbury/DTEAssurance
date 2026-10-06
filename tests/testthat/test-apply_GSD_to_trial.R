@@ -18,12 +18,12 @@ test_that("apply_GSD_to_trial returns expected structure", {
     futilityBounds   = c(-0.5, NA)
   )
 
-  # --- GSD model (minimal; no BPP mode) ---
+  # --- GSD model (minimal; no PP mode) ---
   GSD_model <- list(
     futility_type = "none"  # avoids futility blocks in function
   )
 
-  # --- mock models so that BPP code paths are skipped safely ---
+  # --- mock models so that PP code paths are skipped safely ---
   control_model    <- NULL
   effect_model     <- NULL
   recruitment_model <- list(period = 12)
@@ -41,13 +41,13 @@ test_that("apply_GSD_to_trial returns expected structure", {
     effect_model = effect_model,
     recruitment_model = recruitment_model,
     analysis_model = analysis_model,
-    n_BPP_sims = 10
+    PP_sims = 10
   )
 
   # --- validation ---
   expect_type(result, "list")
   expect_named(result, c("decision", "stop_time", "sample_size",
-                        "BPP_val", "converged", "Z_probs"))
+                        "PP_val", "converged", "Z_probs"))
 
   expect_type(result$decision, "character")
   expect_true(is.numeric(result$stop_time))
