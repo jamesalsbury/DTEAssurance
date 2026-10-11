@@ -1087,6 +1087,10 @@ conv_diag <- tryCatch({
 })
 
 posterior_df <- as.data.frame(as.matrix(output))
+ess_vec <- tryCatch(coda::effectiveSize(output), error = function(e) NULL)
+fin <- if (!is.null(ess_vec)) is.finite(conv_diag$rhat[names(ess_vec)]) else NULL
+attr(posterior_df, "ess")     <- ess_vec
+attr(posterior_df, "ess_min") <- if (!is.null(ess_vec)) min(ess_vec[fin]) else NA_real_
 
 # Posterior latent-state probabilities from the monitored Z
 Z_tab <- table(factor(posterior_df$Z, levels = c(1, 2, 3)))

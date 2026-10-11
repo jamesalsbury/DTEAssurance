@@ -680,7 +680,8 @@ single_grid_rep <- function(i,
 
   check_uniform_recruitment(recruitment_model, "single_grid_rep")
 
-  if (!is.null(seed)) set.seed(seed * 10000 + i)
+  rep_seed <- if (!is.null(seed)) seed * 1e6 + i else NULL
+  if (!is.null(rep_seed)) set.seed(rep_seed)
 
   # --- Simulate the true underlying trial ---
   trial_data <- simulate_trial_from_truth(data_generating_model, n_c, n_t,
@@ -754,7 +755,10 @@ single_grid_rep <- function(i,
     converged = converged,
     P_Z1 = unname(Zp["P_Z1"]),
     P_Z2 = unname(Zp["P_Z2"]),
-    P_Z3 = unname(Zp["P_Z3"])
+    P_Z3 = unname(Zp["P_Z3"]),
+    rhat_max         = attr(posterior_samples, "rhat_max"),
+    n_nonfinite_rhat = attr(posterior_samples, "n_nonfinite_rhat"),
+    ess_min          = attr(posterior_samples, "ess_min"),
   )
 }
 
