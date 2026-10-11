@@ -758,7 +758,7 @@ single_grid_rep <- function(i,
     P_Z3 = unname(Zp["P_Z3"]),
     rhat_max         = attr(posterior_samples, "rhat_max"),
     n_nonfinite_rhat = attr(posterior_samples, "n_nonfinite_rhat"),
-    ess_min          = attr(posterior_samples, "ess_min"),
+    ess_min          = attr(posterior_samples, "ess_min")
   )
 }
 
