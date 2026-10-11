@@ -174,9 +174,9 @@ posterior_df <- update_priors(
 # Diagnostics, e.g.:
 attr(posterior_df, "rhat")
 #>         HR          Z delay_time   lambda_c 
-#>  1.5051308        NaN        NaN  0.9495813 
+#>   1.051507        NaN        NaN   1.073018 
 attr(posterior_df, "converged")
-#> [1] FALSE
+#> [1] TRUE
 attr(posterior_df, "Z_probs")
 #> P_Z1 P_Z2 P_Z3 
 #>    0    1    0 
