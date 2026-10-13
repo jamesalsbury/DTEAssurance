@@ -1656,6 +1656,9 @@ PP_func <- function(data, posterior_df, control_distribution = "Exponential", n_
 #'   list(events = 40, crit = 2.00)
 #' )
 #'
+#' # Deliberately small settings so the example runs quickly. For a real
+#' # analysis use the defaults (update_priors_sims = 1000, PP_sims = 2000)
+#' # and a larger n_df_sims.
 #' threshold <- calibrate_PP_threshold(n_c = 25, n_t = 25,
 #'                      control_model = control_model,
 #'                      effect_model = effect_model,
@@ -1664,8 +1667,9 @@ PP_func <- function(data, posterior_df, control_distribution = "Exponential", n_
 #'                      analysis_model = analysis_model,
 #'                      data_generating_model = data_generating_model,
 #'                      future_boundaries = future_boundaries,
+#'                      update_priors_sims = 100,
+#'                      PP_sims = 100,
 #'                      n_df_sims = 2)
-#'
 calibrate_PP_threshold <- function(n_c,
                                     n_t,
                                     control_model,
@@ -1825,7 +1829,8 @@ calibrate_PP_threshold <- function(n_c,
 #'
 #' # Sweep candidates from 0.2 to 0.7 only -- all genuinely precede the
 #' # design's own efficacy look at IF = 0.75.
-#' IA_model <- list(events = 40, IF = seq(0.2, 0.7, by = 0.1))
+#' # Two candidate timings, both before the design's efficacy look at IF = 0.75.
+#' IA_model <- list(events = 40, IF = c(0.4, 0.6))
 #'
 #' analysis_model <- list(method = "LRT", alpha = 0.025,
 #'                       alternative_hypothesis = "one.sided")
@@ -1835,6 +1840,9 @@ calibrate_PP_threshold <- function(n_c,
 #'   list(events = 40, crit = 2.00)    # final analysis
 #' )
 #'
+#' # Deliberately small settings so the example runs quickly. For a real
+#' # analysis use the defaults (update_priors_sims = 1000, PP_sims = 2000)
+#' # and a larger n_sims.
 #' timing <- calibrate_PP_timing(n_c = 25, n_t = 25,
 #'                      control_model = control_model,
 #'                      effect_model = effect_model,
@@ -1842,6 +1850,8 @@ calibrate_PP_threshold <- function(n_c,
 #'                      IA_model = IA_model,
 #'                      analysis_model = analysis_model,
 #'                      future_boundaries = future_boundaries,
+#'                      update_priors_sims = 100,
+#'                      PP_sims = 100,
 #'                      n_sims = 2)
 #'
 calibrate_PP_timing <- function(n_c, n_t,

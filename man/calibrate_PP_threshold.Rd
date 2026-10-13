@@ -136,6 +136,9 @@ future_boundaries <- list(
   list(events = 40, crit = 2.00)
 )
 
+# Deliberately small settings so the example runs quickly. For a real
+# analysis use the defaults (update_priors_sims = 1000, PP_sims = 2000)
+# and a larger n_df_sims.
 threshold <- calibrate_PP_threshold(n_c = 25, n_t = 25,
                      control_model = control_model,
                      effect_model = effect_model,
@@ -144,6 +147,7 @@ threshold <- calibrate_PP_threshold(n_c = 25, n_t = 25,
                      analysis_model = analysis_model,
                      data_generating_model = data_generating_model,
                      future_boundaries = future_boundaries,
+                     update_priors_sims = 100,
+                     PP_sims = 100,
                      n_df_sims = 2)
-
 }

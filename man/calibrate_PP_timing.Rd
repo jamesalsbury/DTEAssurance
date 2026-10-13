@@ -108,7 +108,8 @@ recruitment_model <- list(method = "power", period = 12, power = 1)
 
 # Sweep candidates from 0.2 to 0.7 only -- all genuinely precede the
 # design's own efficacy look at IF = 0.75.
-IA_model <- list(events = 40, IF = seq(0.2, 0.7, by = 0.1))
+# Two candidate timings, both before the design's efficacy look at IF = 0.75.
+IA_model <- list(events = 40, IF = c(0.4, 0.6))
 
 analysis_model <- list(method = "LRT", alpha = 0.025,
                       alternative_hypothesis = "one.sided")
@@ -118,6 +119,9 @@ future_boundaries <- list(
   list(events = 40, crit = 2.00)    # final analysis
 )
 
+# Deliberately small settings so the example runs quickly. For a real
+# analysis use the defaults (update_priors_sims = 1000, PP_sims = 2000)
+# and a larger n_sims.
 timing <- calibrate_PP_timing(n_c = 25, n_t = 25,
                      control_model = control_model,
                      effect_model = effect_model,
@@ -125,6 +129,8 @@ timing <- calibrate_PP_timing(n_c = 25, n_t = 25,
                      IA_model = IA_model,
                      analysis_model = analysis_model,
                      future_boundaries = future_boundaries,
+                     update_priors_sims = 100,
+                     PP_sims = 100,
                      n_sims = 2)
 
 }
